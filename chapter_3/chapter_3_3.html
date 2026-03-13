@@ -35,7 +35,7 @@
             const path_to_root = "../";
             const default_light_theme = "light";
             const default_dark_theme = "navy";
-            window.path_to_searchindex_js = "../searchindex-8b624a9b.js";
+            window.path_to_searchindex_js = "../searchindex-192e2cad.js";
         </script>
         <!-- Start loading toc.js asap -->
         <script src="../toc-394d71ec.js"></script>
@@ -176,7 +176,12 @@
                     <main>
                         <h1 id="operator-execution"><a class="header" href="#operator-execution">Operator Execution</a></h1>
 <p>Perhaps the most important statement in a timely dataflow program:</p>
-<pre><code class="language-rust ignore">worker.step()</code></pre>
+<pre class="playground"><code class="language-rust"><span class="boring">extern crate timely;
+</span><span class="boring">fn main() {
+</span><span class="boring">    timely::execute_from_args(std::env::args().take(1), |worker| {
+</span>worker.step()
+<span class="boring">    ;}).unwrap();
+</span><span class="boring">}</span></code></pre>
 <p>This is the method that tells the worker that it is now a good time to schedule each of the operators. If you recall, when designing our dataflow we wrote these operators, each of which were programmed by what they would do when shown their input and output handles. This is where we run that code.</p>
 <p>The <code>worker.step()</code> call is the heart of data processing in timely dataflow. The system will do a swing through each dataflow operator and call in to its closure once. Each operator has the opportunity to drain its input and produce some output, and depending on how they are coded they may do just that.</p>
 <p>Importantly, this is also where we start moving data around. Until we call <code>worker.step()</code> all data are just sitting in queues. The parts of our computation that do clever things like filtering down the data, or projecting out just a few small fields, or pre-aggregating the data before we act on it, these all happen here and don’t happen until we call this.</p>

@@ -35,7 +35,7 @@
             const path_to_root = "../";
             const default_light_theme = "light";
             const default_dark_theme = "navy";
-            window.path_to_searchindex_js = "../searchindex-8b624a9b.js";
+            window.path_to_searchindex_js = "../searchindex-192e2cad.js";
         </script>
         <!-- Start loading toc.js asap -->
         <script src="../toc-394d71ec.js"></script>
@@ -232,7 +232,7 @@ fn main() {
         (1 .. 100_000u64)
             .to_stream(scope)
             // Assign timestamps to records so that not much work is in each time.
-            .delay(|number, time| number / 100 )
+            .delay(|number, time| *number / 100 )
             // Buffer records until all prior timestamps have completed.
             .binary_frontier(cycle, Pipeline, Pipeline, "Buffer", move |capability, info| {
 

@@ -35,7 +35,7 @@
             const path_to_root = "../";
             const default_light_theme = "light";
             const default_dark_theme = "navy";
-            window.path_to_searchindex_js = "../searchindex-8b624a9b.js";
+            window.path_to_searchindex_js = "../searchindex-192e2cad.js";
         </script>
         <!-- Start loading toc.js asap -->
         <script src="../toc-394d71ec.js"></script>
@@ -181,13 +181,33 @@
 <h2 id="an-example"><a class="header" href="#an-example">An example</a></h2>
 <p>Remember from the dataflow section how when we remove the coordination from our <code>examples/hello.rs</code> program, the output was produced in some horrible order? In fact, each of those records had a timestamp associated with it that would reveal the correct order; we just weren’t printing the timestamp because <code>inspect</code> doesn’t have access to it.</p>
 <p>Let’s change the program to print out the timestamp with each record. This shouldn’t be a very thrilling output, because the timestamp is exactly the same as the number itself, but that didn’t have to be the case. We are just going to replace the line</p>
-<pre><code class="language-rust ignore">.inspect(move |x| println!("worker {}:\thello {}", index, x))</code></pre>
+<pre class="playground"><code class="language-rust"><span class="boring">extern crate timely;
+</span><span class="boring">use timely::dataflow::operators::{ToStream, Inspect};
+</span><span class="boring">fn main() {
+</span><span class="boring">timely::example(|scope| {
+</span><span class="boring">    let index = scope.index();
+</span><span class="boring">    (0..10u64).to_stream(scope)
+</span><span class="boring">        .container::&lt;Vec&lt;_&gt;&gt;()
+</span>.inspect(move |x| println!("worker {}:\thello {}", index, x))
+<span class="boring">;
+</span><span class="boring">});
+</span><span class="boring">}</span></code></pre>
 <p>with a slightly more complicated operator, <code>inspect_batch</code>.</p>
-<pre><code class="language-rust ignore">.inspect_batch(move |t,xs| {
+<pre class="playground"><code class="language-rust"><span class="boring">extern crate timely;
+</span><span class="boring">use timely::dataflow::operators::{ToStream, Inspect};
+</span><span class="boring">fn main() {
+</span><span class="boring">timely::example(|scope| {
+</span><span class="boring">    let index = scope.index();
+</span><span class="boring">    (0..10u64).to_stream(scope)
+</span><span class="boring">        .container::&lt;Vec&lt;_&gt;&gt;()
+</span>.inspect_batch(move |t,xs| {
     for x in xs.iter() {
         println!("worker {}:\thello {} @ {:?}", index, x, t)
     }
-})</code></pre>
+})
+<span class="boring">;
+</span><span class="boring">});
+</span><span class="boring">}</span></code></pre>
 <p>The <code>inspect_batch</code> operator gets lower-level access to data in timely dataflow, in particular access to batches of records with the same timestamp. It is intended for diagnosing system-level details, but we can also use it to see what timestamps accompany the data.</p>
 <p>The output we get with two workers is now:</p>
 <pre><code class="language-ignore">    Echidnatron% cargo run --example hello -- -w2

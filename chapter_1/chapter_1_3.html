@@ -35,7 +35,7 @@
             const path_to_root = "../";
             const default_light_theme = "light";
             const default_dark_theme = "navy";
-            window.path_to_searchindex_js = "../searchindex-8b624a9b.js";
+            window.path_to_searchindex_js = "../searchindex-192e2cad.js";
         </script>
         <!-- Start loading toc.js asap -->
         <script src="../toc-394d71ec.js"></script>
@@ -210,8 +210,27 @@ fn main() {
     }).unwrap();
 }</code></pre>
 <p>We’ll put the whole program up here, but there are really just two lines that deal with progress tracking:</p>
-<pre><code class="language-rust ignore">input.advance_to(round + 1);
-worker.step_while(|| probe.less_than(input.time()));</code></pre>
+<pre class="playground"><code class="language-rust"><span class="boring">extern crate timely;
+</span><span class="boring">use timely::dataflow::InputHandle;
+</span><span class="boring">use timely::dataflow::operators::{Input, Exchange, Inspect, Probe};
+</span><span class="boring">fn main() {
+</span><span class="boring">    timely::execute_from_args(std::env::args().take(1), |worker| {
+</span><span class="boring">        let mut input = InputHandle::new();
+</span><span class="boring">        let probe = worker.dataflow(|scope|
+</span><span class="boring">            scope.input_from(&amp;mut input)
+</span><span class="boring">                 .container::&lt;Vec&lt;_&gt;&gt;()
+</span><span class="boring">                 .exchange(|x| *x)
+</span><span class="boring">                 .inspect(move |x| println!("hello {}", x))
+</span><span class="boring">                 .probe()
+</span><span class="boring">                 .0
+</span><span class="boring">        );
+</span><span class="boring">        for round in 0..10 {
+</span><span class="boring">            input.send(round);
+</span>input.advance_to(round + 1);
+worker.step_while(|| probe.less_than(input.time()));
+<span class="boring">        }
+</span><span class="boring">    }).unwrap();
+</span><span class="boring">}</span></code></pre>
 <p>Let’s talk about each of them.</p>
 <h2 id="input-capabilities"><a class="header" href="#input-capabilities">Input capabilities</a></h2>
 <p>The <code>input</code> structure is how we provide data to a timely dataflow computation, and it has a timestamp associated with it. Initially this timestamp is the default value, usually something like <code>0</code> for unsigned integers. Whatever timestamp <code>input</code> has, it can introduce data with that timestamp or greater. We can advance this timestamp, via the <code>advance_to</code> method, which permanently restricts the timestamps we can use to those greater or equal to whatever timestamp is supplied as the argument.</p>

@@ -35,7 +35,7 @@
             const path_to_root = "../";
             const default_light_theme = "light";
             const default_dark_theme = "navy";
-            window.path_to_searchindex_js = "../searchindex-8b624a9b.js";
+            window.path_to_searchindex_js = "../searchindex-192e2cad.js";
         </script>
         <!-- Start loading toc.js asap -->
         <script src="../toc-394d71ec.js"></script>
@@ -180,7 +180,7 @@
 <hr>
 <p>Timely dataflow is a <em>dataflow</em> system, and this means that at its core it likes to move data around. This makes life complicated when you would prefer not to move data, and instead move things like pointers and references to data that otherwise stays put.</p>
 <p>For example, sorting a slice of data is a fundamental task and one that parallelizes. But, the task of sorting is traditionally viewed as transforming the data in a supplied slice, rather than sending the data to multiple workers and then announcing that it got sorted. The data really does need to end up in one place, one single pre-existing memory allocation, and timely dataflow is not great at problems that cannot be recast as the movement of data.</p>
-<p>One could re-imagine the sorting process as moving data around, and indeed this is what happens when large clusters need to be brought to bear on such a task, but that doesn’t help you at all if what you needed was to sort your single allocation. A library like <a href="https://github.com/nikomatsakis/rayon">Rayon</a> would almost surely be better suited to the task.</p>
+<p>One could re-imagine the sorting process as moving data around, and indeed this is what happens when large clusters need to be brought to bear on such a task, but that doesn’t help you at all if what you needed was to sort your single allocation. A library like <a href="https://crates.io/crates/rayon">Rayon</a> would almost surely be better suited to the task.</p>
 <hr>
 <p>Dataflow systems are also fundamentally about breaking apart the execution of your program into independently operating parts. However, many programs are correct only because some things happen <em>before</em> or <em>after</em> other things. A classic example is <a href="https://en.wikipedia.org/wiki/Depth-first_search">depth-first search</a> in a graph: although there is lots of work to do on small bits of data, it is crucial that the exploration of nodes reachable along a graph edge complete before the exploration of nodes reachable along the next graph edge.</p>
 <p>Although there is plenty of active research on transforming algorithms from sequential to parallel, if you aren’t clear on how to express your program as a dataflow program then timely dataflow may not be a great fit. At the very least, the first step would be “fundamentally re-imagine your program”, which can be a fine thing to do, but is perhaps not something you would have to do with your traditional program.</p>

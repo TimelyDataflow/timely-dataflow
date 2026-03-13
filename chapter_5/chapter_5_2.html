@@ -35,7 +35,7 @@
             const path_to_root = "../";
             const default_light_theme = "light";
             const default_dark_theme = "navy";
-            window.path_to_searchindex_js = "../searchindex-8b624a9b.js";
+            window.path_to_searchindex_js = "../searchindex-192e2cad.js";
         </script>
         <!-- Start loading toc.js asap -->
         <script src="../toc-394d71ec.js"></script>
@@ -189,14 +189,14 @@
 </span><span class="boring">fn main() {
 </span>pub struct Source {
     /// Index of the source operator.
-    pub index: usize,
+    pub node: usize,
     /// Number of the output port from the operator.
     pub port: usize,
 }
 
 pub struct Target {
     /// Index of the target operator.
-    pub index: usize,
+    pub node: usize,
     /// Number of the input port to the operator.
     pub port: usize,
 }
@@ -221,11 +221,12 @@ pub struct Target {
 <p>Each worker maintains an accumulation of progress update batches, which explains where capabilities may exist in the dataflow graph. This information is useful, but it is not yet sufficient to make strong statements about the possibility of timestamped messages arriving at <em>other</em> locations in the dataflow graph. Even though a capability for timestamp <code>t</code> may exist, this does not mean that the time may arrive at any location in the dataflow graph. To be precise, we must discuss the paths through the dataflow graph which the timestamp capability could follow.</p>
 <h3 id="path-summaries"><a class="header" href="#path-summaries">Path Summaries</a></h3>
 <p>Progress tracking occurs in the context of a dataflow graph of operators all with a common timestamp type <code>T: Timestamp</code>. The <code>Timestamp</code> trait requires the <code>PartialOrder</code> trait, meaning two timestamps may be ordered but need not be. Each type implementing <code>Timestamp</code> must also specify an associated type <code>Summary</code> implementing <code>PathSummary&lt;Self&gt;</code>.</p>
-<pre><code class="language-rust ignore">pub trait Timestamp: PartialOrder {
-    type Summary : PathSummary&lt;Self&gt;;
+<pre><code class="language-rust ignore">pub trait Timestamp: Clone+Eq+PartialOrder+Debug+Send+Any+Data+Hash+Ord {
+    type Summary : PathSummary&lt;Self&gt; + 'static;
+    fn minimum() -&gt; Self;
 }</code></pre>
 <p>A path summary is informally meant to summarize what <em>must</em> happen to a timestamp as it travels along a path in a timely dataflow. Most paths that you might draw have trivial summaries (“no change guaranteed”), but some paths do force changes on timestamps. For example, a path that goes from the end of a loop back to its head <em>must</em> increment the loop counter coordinate of any timestamp capability passed along it.</p>
-<pre><code class="language-rust ignore">pub trait PathSummary&lt;T&gt; : PartialOrder {
+<pre><code class="language-rust ignore">pub trait PathSummary&lt;T&gt; : Clone+'static+Eq+PartialOrder+Debug+Default {
     fn results_in(&amp;self, src: &amp;T) -&gt; Option&lt;T&gt;;
     fn followed_by(&amp;self, other: &amp;Self) -&gt; Option&lt;Self&gt;;
 }</code></pre>
@@ -247,7 +248,7 @@ path.results_in(&amp;u64::max_value()) == None;</code></pre>
 <p>The second part of progress tracking, communicating the implications of current capabilities, is fundamentally about determining and locking in the minimal collections of path summaries between any two locations (<code>Source</code> or <code>Target</code>) in the dataflow graph. This is the “compiled” representation of the dataflow graph, from which we can derive statements about the possibility of messages at one point in the graph leading to messages at another point.</p>
 <h3 id="operator-summaries"><a class="header" href="#operator-summaries">Operator summaries</a></h3>
 <p>Where do path summaries come from?</p>
-<p>Each operator in timely dataflow must implement the <code>Operate</code> trait. Among other things, that we will get to, the <code>Operate</code> trait requires that the operator summarize <em>itself</em>, providing a collection of path summaries for each of its internal paths, from each of its inputs to each of its outputs. The operator must describe what timestamps could possibly result at each of its output as a function of a timestamped message arriving at each of its inputs.</p>
+<p>Each operator in timely dataflow must implement the <code>Operate</code> builder trait, which consumes the operator during initialization. Among other things, that we will get to, the <code>Operate</code> trait requires that the operator summarize <em>itself</em>, providing a collection of path summaries for each of its internal paths, from each of its inputs to each of its outputs. The operator must describe what timestamps could possibly result at each of its output as a function of a timestamped message arriving at each of its inputs.</p>
 <p>For most operators, this summary is simply: “timestamped data at each of my inputs could result in equivalently timestamped data at each of my outputs”. This is a fairly simple summary, and while it isn’t very helpful in making progress, it is the only guarantee the operator can provide.</p>
 <p>The <code>Feedback</code> operator is where most of our interesting path summaries start: it is the operator found in feedback loops that ensures that a specific coordinate of the timestamp is incremented. All cycles in a timely dataflow graph must pass through such an operator, and in cyclic dataflow we see non-trivial summaries from the outputs of downstream operators to the inputs of upstream operators.</p>
 <p>Another useful summary is the absence of a summary. Sometimes there is no path between two points in a dataflow graph. Perhaps you do some computation on your dataflow inputs, and then introduce them into an iterative computation; there is no path that returns that data to the computation you do on the inputs. Records in-flight in the iterative subcomputation will not block the computation you do on your inputs, because we know that there is no path back from the iteration to the inputs.</p>

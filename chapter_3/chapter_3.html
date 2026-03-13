@@ -35,7 +35,7 @@
             const path_to_root = "../";
             const default_light_theme = "light";
             const default_dark_theme = "navy";
-            window.path_to_searchindex_js = "../searchindex-8b624a9b.js";
+            window.path_to_searchindex_js = "../searchindex-192e2cad.js";
         </script>
         <!-- Start loading toc.js asap -->
         <script src="../toc-394d71ec.js"></script>
@@ -178,13 +178,28 @@
 <p>In this section we will look at driving a timely dataflow computation.</p>
 <p>With a dataflow graph defined, how do we interactively supply data to the computation, and how do we understand what the computation has actually done given that we are not ourselves doing it? These are good questions, and the dataflow execution model is indeed a bit of a departure from how most folks first experience programming.</p>
 <p>The first thing to understand about timely dataflow is that <em>we are programming the worker threads</em>. Part of this program is asking the worker to build up a dataflow graph; we did that when we created an <code>InputHandle</code> and when we called <code>dataflow</code> followed by some <code>filter</code> and <code>map</code> and <code>probe</code> commands. But another part is where we actually start feeding the dataflow graph, advancing the inputs, and letting the worker give each of the operators a chance to run.</p>
-<pre><code class="language-rust ignore">for round in 0..10 {
+<pre class="playground"><code class="language-rust"><span class="boring">extern crate timely;
+</span><span class="boring">use timely::dataflow::InputHandle;
+</span><span class="boring">use timely::dataflow::operators::{Input, Inspect, Probe};
+</span><span class="boring">fn main() {
+</span><span class="boring">    timely::execute_from_args(std::env::args().take(1), |worker| {
+</span><span class="boring">        let mut input = InputHandle::new();
+</span><span class="boring">        let probe = worker.dataflow(|scope|
+</span><span class="boring">            scope.input_from(&amp;mut input)
+</span><span class="boring">                 .container::&lt;Vec&lt;_&gt;&gt;()
+</span><span class="boring">                 .inspect(|x| println!("seen: {:?}", x))
+</span><span class="boring">                 .probe()
+</span><span class="boring">                 .0
+</span><span class="boring">        );
+</span>for round in 0..10 {
     input.send(round);
     input.advance_to(round + 1);
     while probe.less_than(input.time()) {
         worker.step();
     }
-}</code></pre>
+}
+<span class="boring">    }).unwrap();
+</span><span class="boring">}</span></code></pre>
 <p>This is the loop that we’ve seen in several examples. It looks fairly simple, but this is what actually causes work to happen. We do send data and advance the input, but we also call <code>worker.step()</code>, and this is where the actual timely dataflow computation happens. Until you call this, all the data are just building up in queues.</p>
 <p>In this section, we’ll look at these moving parts in more detail.</p>
 

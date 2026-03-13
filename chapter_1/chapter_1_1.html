@@ -35,7 +35,7 @@
             const path_to_root = "../";
             const default_light_theme = "light";
             const default_dark_theme = "navy";
-            window.path_to_searchindex_js = "../searchindex-8b624a9b.js";
+            window.path_to_searchindex_js = "../searchindex-192e2cad.js";
         </script>
         <!-- Start loading toc.js asap -->
         <script src="../toc-394d71ec.js"></script>
@@ -234,13 +234,22 @@ When we remove these constraints we get a more haphazard output.</p>
 <p>What a mess. Nothing in our dataflow program requires that workers zero and one alternate printing to the screen, and you can even see that worker one is <em>done</em> before worker zero even gets to printing <code>hello 4</code>.</p>
 <hr>
 <p>However, this is only a mess if we are concerned about the order, and in many cases we are not. Imagine instead of just printing the number to the screen, we want to find out which numbers are prime and print <em>them</em> to the screen.</p>
-<pre><code class="language-rust ignore">.inspect(|x| {
+<pre class="playground"><code class="language-rust"><span class="boring">#![allow(unused)]
+</span><span class="boring">fn main() {
+</span><span class="boring">use timely::dataflow::operators::*;
+</span><span class="boring">timely::example(|scope| {
+</span><span class="boring">    (0u64..10).to_stream(scope)
+</span><span class="boring">        .container::&lt;Vec&lt;_&gt;&gt;()
+</span>.inspect(|x: &amp;u64| {
     // we only need to test factors up to sqrt(x)
     let limit = (*x as f64).sqrt() as u64;
     if *x &gt; 1 &amp;&amp; (2 .. limit + 1).all(|i| x % i &gt; 0) {
         println!("{} is prime", x);
     }
-})</code></pre>
+})
+<span class="boring">    ;
+</span><span class="boring">});
+</span><span class="boring">}</span></code></pre>
 <p>We don’t really care that much about the order (we just want the results), and we have written such a simple primality test that we are going to be thrilled if we can distribute the work across multiple cores.</p>
 <p>Let’s check out the time to print out the prime numbers up to 10,000 using one worker:</p>
 <pre><code class="language-ignore">    Echidnatron% time cargo run --example hello -- -w1 &gt; output1.txt

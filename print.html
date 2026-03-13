@@ -36,7 +36,7 @@
             const path_to_root = "";
             const default_light_theme = "light";
             const default_dark_theme = "navy";
-            window.path_to_searchindex_js = "searchindex-8b624a9b.js";
+            window.path_to_searchindex_js = "searchindex-192e2cad.js";
         </script>
         <!-- Start loading toc.js asap -->
         <script src="toc-394d71ec.js"></script>
@@ -224,7 +224,7 @@ timely::example(|scope| {
 <h1 id="a-simple-example"><a href="#a-simple-example" class="header">A Simple Example</a></h1>
 <h2 id="an-example"><a class="header" href="#an-example">An example</a></h2>
 <p>Timely dataflow means to capture a large number of idioms, so it is a bit tricky to wrap together one example that shows off all of its features, but let’s look at something that shows off some core functionality to give a taste.</p>
-<p>The following complete program initializes a timely dataflow computation, in which participants can supply a stream of numbers which are exchanged between the workers based on their value. Workers print to the screen when they see numbers. You can also find this as <a href="https://github.com/TimelyDataflow/timely-dataflow/blob/master/examples/hello.rs"><code>examples/hello.rs</code></a> in the <a href="https://github.com/TimelyDataflow/timely-dataflow/tree/master/examples">timely dataflow repository</a>.</p>
+<p>The following complete program initializes a timely dataflow computation, in which participants can supply a stream of numbers which are exchanged between the workers based on their value. Workers print to the screen when they see numbers. You can also find this as <a href="https://github.com/TimelyDataflow/timely-dataflow/blob/master/timely/examples/hello.rs"><code>timely/examples/hello.rs</code></a> in the <a href="https://github.com/TimelyDataflow/timely-dataflow/tree/master/timely/examples">timely dataflow repository</a>.</p>
 <pre class="playground"><code class="language-rust"><span class="boring">#![allow(unused)]
 </span><span class="boring">fn main() {
 </span>extern crate timely;
@@ -380,7 +380,7 @@ timely::execute_from_args(std::env::args(), |worker| {
 <hr>
 <p>Timely dataflow is a <em>dataflow</em> system, and this means that at its core it likes to move data around. This makes life complicated when you would prefer not to move data, and instead move things like pointers and references to data that otherwise stays put.</p>
 <p>For example, sorting a slice of data is a fundamental task and one that parallelizes. But, the task of sorting is traditionally viewed as transforming the data in a supplied slice, rather than sending the data to multiple workers and then announcing that it got sorted. The data really does need to end up in one place, one single pre-existing memory allocation, and timely dataflow is not great at problems that cannot be recast as the movement of data.</p>
-<p>One could re-imagine the sorting process as moving data around, and indeed this is what happens when large clusters need to be brought to bear on such a task, but that doesn’t help you at all if what you needed was to sort your single allocation. A library like <a href="https://github.com/nikomatsakis/rayon">Rayon</a> would almost surely be better suited to the task.</p>
+<p>One could re-imagine the sorting process as moving data around, and indeed this is what happens when large clusters need to be brought to bear on such a task, but that doesn’t help you at all if what you needed was to sort your single allocation. A library like <a href="https://crates.io/crates/rayon">Rayon</a> would almost surely be better suited to the task.</p>
 <hr>
 <p>Dataflow systems are also fundamentally about breaking apart the execution of your program into independently operating parts. However, many programs are correct only because some things happen <em>before</em> or <em>after</em> other things. A classic example is <a href="https://en.wikipedia.org/wiki/Depth-first_search">depth-first search</a> in a graph: although there is lots of work to do on small bits of data, it is crucial that the exploration of nodes reachable along a graph edge complete before the exploration of nodes reachable along the next graph edge.</p>
 <p>Although there is plenty of active research on transforming algorithms from sequential to parallel, if you aren’t clear on how to express your program as a dataflow program then timely dataflow may not be a great fit. At the very least, the first step would be “fundamentally re-imagine your program”, which can be a fine thing to do, but is perhaps not something you would have to do with your traditional program.</p>
@@ -462,13 +462,22 @@ When we remove these constraints we get a more haphazard output.</p>
 <p>What a mess. Nothing in our dataflow program requires that workers zero and one alternate printing to the screen, and you can even see that worker one is <em>done</em> before worker zero even gets to printing <code>hello 4</code>.</p>
 <hr>
 <p>However, this is only a mess if we are concerned about the order, and in many cases we are not. Imagine instead of just printing the number to the screen, we want to find out which numbers are prime and print <em>them</em> to the screen.</p>
-<pre><code class="language-rust ignore">.inspect(|x| {
+<pre class="playground"><code class="language-rust"><span class="boring">#![allow(unused)]
+</span><span class="boring">fn main() {
+</span><span class="boring">use timely::dataflow::operators::*;
+</span><span class="boring">timely::example(|scope| {
+</span><span class="boring">    (0u64..10).to_stream(scope)
+</span><span class="boring">        .container::&lt;Vec&lt;_&gt;&gt;()
+</span>.inspect(|x: &amp;u64| {
     // we only need to test factors up to sqrt(x)
     let limit = (*x as f64).sqrt() as u64;
     if *x &gt; 1 &amp;&amp; (2 .. limit + 1).all(|i| x % i &gt; 0) {
         println!("{} is prime", x);
     }
-})</code></pre>
+})
+<span class="boring">    ;
+</span><span class="boring">});
+</span><span class="boring">}</span></code></pre>
 <p>We don’t really care that much about the order (we just want the results), and we have written such a simple primality test that we are going to be thrilled if we can distribute the work across multiple cores.</p>
 <p>Let’s check out the time to print out the prime numbers up to 10,000 using one worker:</p>
 <pre><code class="language-ignore">    Echidnatron% time cargo run --example hello -- -w1 &gt; output1.txt
@@ -518,13 +527,33 @@ When we remove these constraints we get a more haphazard output.</p>
 <h2 id="an-example-2"><a class="header" href="#an-example-2">An example</a></h2>
 <p>Remember from the dataflow section how when we remove the coordination from our <code>examples/hello.rs</code> program, the output was produced in some horrible order? In fact, each of those records had a timestamp associated with it that would reveal the correct order; we just weren’t printing the timestamp because <code>inspect</code> doesn’t have access to it.</p>
 <p>Let’s change the program to print out the timestamp with each record. This shouldn’t be a very thrilling output, because the timestamp is exactly the same as the number itself, but that didn’t have to be the case. We are just going to replace the line</p>
-<pre><code class="language-rust ignore">.inspect(move |x| println!("worker {}:\thello {}", index, x))</code></pre>
+<pre class="playground"><code class="language-rust"><span class="boring">extern crate timely;
+</span><span class="boring">use timely::dataflow::operators::{ToStream, Inspect};
+</span><span class="boring">fn main() {
+</span><span class="boring">timely::example(|scope| {
+</span><span class="boring">    let index = scope.index();
+</span><span class="boring">    (0..10u64).to_stream(scope)
+</span><span class="boring">        .container::&lt;Vec&lt;_&gt;&gt;()
+</span>.inspect(move |x| println!("worker {}:\thello {}", index, x))
+<span class="boring">;
+</span><span class="boring">});
+</span><span class="boring">}</span></code></pre>
 <p>with a slightly more complicated operator, <code>inspect_batch</code>.</p>
-<pre><code class="language-rust ignore">.inspect_batch(move |t,xs| {
+<pre class="playground"><code class="language-rust"><span class="boring">extern crate timely;
+</span><span class="boring">use timely::dataflow::operators::{ToStream, Inspect};
+</span><span class="boring">fn main() {
+</span><span class="boring">timely::example(|scope| {
+</span><span class="boring">    let index = scope.index();
+</span><span class="boring">    (0..10u64).to_stream(scope)
+</span><span class="boring">        .container::&lt;Vec&lt;_&gt;&gt;()
+</span>.inspect_batch(move |t,xs| {
     for x in xs.iter() {
         println!("worker {}:\thello {} @ {:?}", index, x, t)
     }
-})</code></pre>
+})
+<span class="boring">;
+</span><span class="boring">});
+</span><span class="boring">}</span></code></pre>
 <p>The <code>inspect_batch</code> operator gets lower-level access to data in timely dataflow, in particular access to batches of records with the same timestamp. It is intended for diagnosing system-level details, but we can also use it to see what timestamps accompany the data.</p>
 <p>The output we get with two workers is now:</p>
 <pre><code class="language-ignore">    Echidnatron% cargo run --example hello -- -w2
@@ -584,8 +613,27 @@ fn main() {
     }).unwrap();
 }</code></pre>
 <p>We’ll put the whole program up here, but there are really just two lines that deal with progress tracking:</p>
-<pre><code class="language-rust ignore">input.advance_to(round + 1);
-worker.step_while(|| probe.less_than(input.time()));</code></pre>
+<pre class="playground"><code class="language-rust"><span class="boring">extern crate timely;
+</span><span class="boring">use timely::dataflow::InputHandle;
+</span><span class="boring">use timely::dataflow::operators::{Input, Exchange, Inspect, Probe};
+</span><span class="boring">fn main() {
+</span><span class="boring">    timely::execute_from_args(std::env::args().take(1), |worker| {
+</span><span class="boring">        let mut input = InputHandle::new();
+</span><span class="boring">        let probe = worker.dataflow(|scope|
+</span><span class="boring">            scope.input_from(&amp;mut input)
+</span><span class="boring">                 .container::&lt;Vec&lt;_&gt;&gt;()
+</span><span class="boring">                 .exchange(|x| *x)
+</span><span class="boring">                 .inspect(move |x| println!("hello {}", x))
+</span><span class="boring">                 .probe()
+</span><span class="boring">                 .0
+</span><span class="boring">        );
+</span><span class="boring">        for round in 0..10 {
+</span><span class="boring">            input.send(round);
+</span>input.advance_to(round + 1);
+worker.step_while(|| probe.less_than(input.time()));
+<span class="boring">        }
+</span><span class="boring">    }).unwrap();
+</span><span class="boring">}</span></code></pre>
 <p>Let’s talk about each of them.</p>
 <h2 id="input-capabilities"><a class="header" href="#input-capabilities">Input capabilities</a></h2>
 <p>The <code>input</code> structure is how we provide data to a timely dataflow computation, and it has a timestamp associated with it. Initially this timestamp is the default value, usually something like <code>0</code> for unsigned integers. Whatever timestamp <code>input</code> has, it can introduce data with that timestamp or greater. We can advance this timestamp, via the <code>advance_to</code> method, which permanently restricts the timestamps we can use to those greater or equal to whatever timestamp is supplied as the argument.</p>
@@ -1141,22 +1189,48 @@ fn main() {
         let mut probe = ProbeHandle::new();</code></pre>
 <p>The input handle is how we supply data to the computation, and the probe handle is how we check whether the computation is complete up through certain inputs. Since a streaming computation may never “finish”, <code>probe</code> is the only way to understand how much progress we’ve made.</p>
 <p>The next step is to build a timely dataflow. Here we use <code>input</code> as a source of data, and attach <code>probe</code> to the end so that we can watch for completion of work.</p>
-<pre><code class="language-rust ignore">        // build a new dataflow.
+<pre class="playground"><code class="language-rust"><span class="boring">extern crate timely;
+</span><span class="boring">use timely::dataflow::{InputHandle, ProbeHandle};
+</span><span class="boring">use timely::dataflow::operators::{Input, Inspect, Probe};
+</span><span class="boring">fn main() {
+</span><span class="boring">    timely::execute_from_args(std::env::args().take(1), |worker| {
+</span><span class="boring">        let mut input = InputHandle::new();
+</span><span class="boring">        let mut probe: ProbeHandle&lt;usize&gt; = ProbeHandle::new();
+</span>        // build a new dataflow.
         worker.dataflow(|scope| {
             input.to_stream(scope)
+                 .container::&lt;Vec&lt;_&gt;&gt;()
                  .inspect(|x| println!("seen: {:?}", x))
                  .probe_with(&amp;mut probe);
-        });</code></pre>
+        });
+<span class="boring">        input.send(("round".to_owned(), 1i64));
+</span><span class="boring">    }).unwrap();
+</span><span class="boring">}</span></code></pre>
 <p>This computation is pretty simple: it just prints out the inputs we send at it.</p>
 <p>Having constructed the dataflow, we feed it some data.</p>
-<pre><code class="language-rust ignore">        // feed the dataflow with data.
+<pre class="playground"><code class="language-rust"><span class="boring">extern crate timely;
+</span><span class="boring">use timely::dataflow::{InputHandle, ProbeHandle};
+</span><span class="boring">use timely::dataflow::operators::{Input, Inspect, Probe};
+</span><span class="boring">fn main() {
+</span><span class="boring">    timely::execute_from_args(std::env::args().take(1), |worker| {
+</span><span class="boring">        let mut input = InputHandle::new();
+</span><span class="boring">        let mut probe = ProbeHandle::new();
+</span><span class="boring">        worker.dataflow(|scope| {
+</span><span class="boring">            input.to_stream(scope)
+</span><span class="boring">                 .container::&lt;Vec&lt;_&gt;&gt;()
+</span><span class="boring">                 .inspect(|x| println!("seen: {:?}", x))
+</span><span class="boring">                 .probe_with(&amp;mut probe);
+</span><span class="boring">        });
+</span>        // feed the dataflow with data.
         for round in 0..10 {
             input.send(("round".to_owned(), 1));
             input.advance_to(round + 1);
             while probe.less_than(input.time()) {
                 worker.step();
             }
-        }</code></pre>
+        }
+<span class="boring">    }).unwrap();
+</span><span class="boring">}</span></code></pre>
 <p>There are several things going on here. First, we <code>send</code> some data into the input, which allows the data to circulate through the workers along the dataflow. This data will be of type <code>(String, i64)</code>, because our example wants to send some text and annotate each with the change in the count (we add or remove text with <code>+1</code> or <code>-1</code>, respectively). Second, we <code>advance_to</code> to tell timely dataflow that we have ceased sending data for <code>round</code> and anything before it. At this point timely can start to reason about <code>round</code> becoming complete, once all the associated data make their way through the dataflow. Finally, we repeatedly <code>step</code> the worker until <code>probe</code> reports that it has caught up to <code>round + 1</code>, meaning that data for <code>round</code> are fully flushed from the system (and printed to the screen, one hopes).</p>
 <h2 id="breaking-text-into-words"><a class="header" href="#breaking-text-into-words">Breaking text into words</a></h2>
 <p>Let’s add a simple operator that takes our text strings we supply as input and breaks them into words.</p>
@@ -1382,13 +1456,28 @@ fn main() {
 <p>In this section we will look at driving a timely dataflow computation.</p>
 <p>With a dataflow graph defined, how do we interactively supply data to the computation, and how do we understand what the computation has actually done given that we are not ourselves doing it? These are good questions, and the dataflow execution model is indeed a bit of a departure from how most folks first experience programming.</p>
 <p>The first thing to understand about timely dataflow is that <em>we are programming the worker threads</em>. Part of this program is asking the worker to build up a dataflow graph; we did that when we created an <code>InputHandle</code> and when we called <code>dataflow</code> followed by some <code>filter</code> and <code>map</code> and <code>probe</code> commands. But another part is where we actually start feeding the dataflow graph, advancing the inputs, and letting the worker give each of the operators a chance to run.</p>
-<pre><code class="language-rust ignore">for round in 0..10 {
+<pre class="playground"><code class="language-rust"><span class="boring">extern crate timely;
+</span><span class="boring">use timely::dataflow::InputHandle;
+</span><span class="boring">use timely::dataflow::operators::{Input, Inspect, Probe};
+</span><span class="boring">fn main() {
+</span><span class="boring">    timely::execute_from_args(std::env::args().take(1), |worker| {
+</span><span class="boring">        let mut input = InputHandle::new();
+</span><span class="boring">        let probe = worker.dataflow(|scope|
+</span><span class="boring">            scope.input_from(&amp;mut input)
+</span><span class="boring">                 .container::&lt;Vec&lt;_&gt;&gt;()
+</span><span class="boring">                 .inspect(|x| println!("seen: {:?}", x))
+</span><span class="boring">                 .probe()
+</span><span class="boring">                 .0
+</span><span class="boring">        );
+</span>for round in 0..10 {
     input.send(round);
     input.advance_to(round + 1);
     while probe.less_than(input.time()) {
         worker.step();
     }
-}</code></pre>
+}
+<span class="boring">    }).unwrap();
+</span><span class="boring">}</span></code></pre>
 <p>This is the loop that we’ve seen in several examples. It looks fairly simple, but this is what actually causes work to happen. We do send data and advance the input, but we also call <code>worker.step()</code>, and this is where the actual timely dataflow computation happens. Until you call this, all the data are just building up in queues.</p>
 <p>In this section, we’ll look at these moving parts in more detail.</p>
 <div style="break-before: page; page-break-before: always;"></div>
@@ -1416,13 +1505,34 @@ fn main() {
 </ol>
 <p>Probe handles also have a <code>with_frontier</code> method that allows you to provide a closure that can observe the frontier and return arbitrary results. This is a bit of a song and dance, because the frontier is shared mutable state and cannot be trivially handed back up to your code without peril (you would gain a <code>RefMut</code> that may cause the system to panic if you do not drop before calling <code>worker.step()</code>).</p>
 <p>The most common thing to do with a probe handle is to check whether we are “caught up” to the input times. The following is a very safe idiom for doing this:</p>
-<pre><code class="language-rust ignore">probe.less_than(input.time())</code></pre>
+<pre class="playground"><code class="language-rust"><span class="boring">extern crate timely;
+</span><span class="boring">use timely::dataflow::{InputHandle, ProbeHandle};
+</span><span class="boring">use timely::dataflow::operators::{Input, Inspect, Probe};
+</span><span class="boring">fn main() {
+</span><span class="boring">    timely::execute_from_args(std::env::args().take(1), |worker| {
+</span><span class="boring">        let mut input = InputHandle::new();
+</span><span class="boring">        let probe: ProbeHandle&lt;usize&gt; = worker.dataflow(|scope|
+</span><span class="boring">            scope.input_from(&amp;mut input)
+</span><span class="boring">                 .container::&lt;Vec&lt;_&gt;&gt;()
+</span><span class="boring">                 .inspect(|x| println!("seen: {:?}", x))
+</span><span class="boring">                 .probe()
+</span><span class="boring">                 .0
+</span><span class="boring">        );
+</span><span class="boring">        input.send(0u64);
+</span>probe.less_than(input.time())
+<span class="boring">    ;}).unwrap();
+</span><span class="boring">}</span></code></pre>
 <p>This checks if there are any times strictly less than what the input is positioned to provide next. If so, it means we could keep doing work and making progress, because we know that the system <em>could</em> catch up to <code>input.time()</code> as we can’t produce anything less than this from <code>input</code>.</p>
 <p>However, you are free to use whatever logic you like. Perhaps you just want to check this test a few times, rather than iterating for as long as it is true (which we commonly do). This would give the dataflow a chance to catch up, but it would start work on the next batch of data anyhow, to keep things moving along. There is a trade-off between overloading the system (if you provide data faster than you can retire it) and underloading it by constantly waiting rather than working.</p>
 <div style="break-before: page; page-break-before: always;"></div>
 <h1 id="operator-execution"><a class="header" href="#operator-execution">Operator Execution</a></h1>
 <p>Perhaps the most important statement in a timely dataflow program:</p>
-<pre><code class="language-rust ignore">worker.step()</code></pre>
+<pre class="playground"><code class="language-rust"><span class="boring">extern crate timely;
+</span><span class="boring">fn main() {
+</span><span class="boring">    timely::execute_from_args(std::env::args().take(1), |worker| {
+</span>worker.step()
+<span class="boring">    ;}).unwrap();
+</span><span class="boring">}</span></code></pre>
 <p>This is the method that tells the worker that it is now a good time to schedule each of the operators. If you recall, when designing our dataflow we wrote these operators, each of which were programmed by what they would do when shown their input and output handles. This is where we run that code.</p>
 <p>The <code>worker.step()</code> call is the heart of data processing in timely dataflow. The system will do a swing through each dataflow operator and call in to its closure once. Each operator has the opportunity to drain its input and produce some output, and depending on how they are coded they may do just that.</p>
 <p>Importantly, this is also where we start moving data around. Until we call <code>worker.step()</code> all data are just sitting in queues. The parts of our computation that do clever things like filtering down the data, or projecting out just a few small fields, or pre-aggregating the data before we act on it, these all happen here and don’t happen until we call this.</p>
@@ -1692,7 +1802,7 @@ fn main() {
         (1 .. 100_000u64)
             .to_stream(scope)
             // Assign timestamps to records so that not much work is in each time.
-            .delay(|number, time| number / 100 )
+            .delay(|number, time| *number / 100 )
             // Buffer records until all prior timestamps have completed.
             .binary_frontier(cycle, Pipeline, Pipeline, "Buffer", move |capability, info| {
 
@@ -1731,42 +1841,46 @@ fn main() {
 <h2 id="capturing-streams-1"><a class="header" href="#capturing-streams-1">Capturing Streams</a></h2>
 <p>At its core, <code>capture_into</code> records everything it sees about the stream it is attached to. If some data arrive, it records that. If there is a change in the possibility that timestamps might arrive on its input, it records that.</p>
 <p>The <code>capture_into</code> method is relative simple, and we can just look at it:</p>
-<pre><code class="language-rust ignore">    fn capture_into&lt;P: EventPusher&lt;S::Timestamp, D&gt;+'static&gt;(&amp;self, event_pusher: P) {
+<pre><code class="language-rust ignore">    fn capture_into&lt;P: EventPusher&lt;S::Timestamp, C&gt;+'static&gt;(&amp;self, mut event_pusher: P) {
 
         let mut builder = OperatorBuilder::new("Capture".to_owned(), self.scope());
         let mut input = PullCounter::new(builder.new_input(self, Pipeline));
         let mut started = false;
 
-        let event_pusher1 = Rc::new(RefCell::new(event_pusher));
-        let event_pusher2 = event_pusher1.clone();
-
         builder.build(
-            move |frontier| {
+            move |progress| {
                 if !started {
-                    frontier[0].update(Default::default(), -1);
+                    // discard initial capability.
+                    progress.frontiers[0].update(S::Timestamp::minimum(), -1);
                     started = true;
                 }
-                if !frontier[0].is_empty() {
-                    let to_send = ::std::mem::replace(&amp;mut frontier[0], ChangeBatch::new());
-                    event_pusher1.borrow_mut().push(Event::Progress(to_send.into_inner()));
+                if !progress.frontiers[0].is_empty() {
+                    // transmit any frontier progress.
+                    let to_send = ::std::mem::replace(&amp;mut progress.frontiers[0], ChangeBatch::new());
+                    event_pusher.push(Event::Progress(to_send.into_inner()));
                 }
-            },
-            move |consumed, _internal, _external| {
-                let mut borrow = event_pusher2.borrow_mut();
-                while let Some((time, data)) = input.next() {
-                    borrow.push(Event::Messages(time.clone(), data.deref_mut().clone()));
+
+                // turn each received message into an event.
+                while let Some(message) = input.next() {
+                    let (time, data) = match message.as_ref_or_mut() {
+                        RefOrMut::Ref(reference) =&gt; (&amp;reference.time, RefOrMut::Ref(&amp;reference.data)),
+                        RefOrMut::Mut(reference) =&gt; (&amp;reference.time, RefOrMut::Mut(&amp;mut reference.data)),
+                    };
+                    let vector = data.replace(Default::default());
+                    event_pusher.push(Event::Messages(time.clone(), vector));
                 }
-                input.consumed().borrow_mut().drain_into(&amp;mut consumed[0]);
+
+                input.consumed().borrow_mut().drain_into(&amp;mut progress.consumeds[0]);
                 false
             }
         );
     }</code></pre>
-<p>The method is generic with respect to some implementor <code>P</code> of the trait <code>EventPusher</code> which defines a method <code>push</code> that accepts <code>Event&lt;T, D&gt;</code> items (we will see a few implementations in just a moment). After a bit of set-up, <code>capture_into</code> builds a new operator with one input and zero outputs, and sets the logic for (i) what to do when the input frontier changes, and (ii) what to do when presented with the opportunity to do a bit of computation. In both cases, we just create new events based on what we see (progress changes and data messages, respectively).</p>
+<p>The method is generic with respect to some implementor <code>P</code> of the trait <code>EventPusher</code> which defines a method <code>push</code> that accepts <code>Event&lt;T, D&gt;</code> items (we will see a few implementations in just a moment). After a bit of set-up, <code>capture_into</code> builds a new operator with one input and zero outputs, and sets the logic for what to do when the operator is scheduled. The single closure handles both frontier changes and data processing, creating new events based on what it sees (progress changes and data messages).</p>
 <p>There is a mysterious subtraction of <code>Default::default()</code>, which has to do with the contract that the replaying operators assume the stream starts with such a capability. This prevents the need for the replayers to block on the stream in their operator construction (any operator must state any initial capabilities as part of its construction; it cannot defer that until later).</p>
 <p>One nice aspect of <code>capture_into</code> is that it really does reveal everything that an operator sees about a stream. If you got your hands on the resulting sequence of events, you would be able to review the full history of the stream. In principle, this could be a fine place to persist the data, capturing both data and progress information.</p>
 <h2 id="replaying-streams"><a class="header" href="#replaying-streams">Replaying Streams</a></h2>
 <p>At <em>its</em> core, <code>replay_into</code> takes some sequence of <code>Event&lt;T, D&gt;</code> items and reproduces the stream, as it was recorded. It is also fairly simple, and we can just look at its implementation as well:</p>
-<pre><code class="language-rust ignore">    fn replay_into&lt;S: Scope&lt;Timestamp=T&gt;&gt;(self, scope: &amp;mut S) -&gt; StreamVec&lt;S, D&gt;{
+<pre><code class="language-rust ignore">    fn replay_into&lt;S: Scope&lt;Timestamp=T&gt;&gt;(self, scope: &amp;mut S) -&gt; Stream&lt;S, C&gt;{
 
         let mut builder = OperatorBuilder::new("Replay".to_owned(), scope.clone());
         let (targets, stream) = builder.new_output();
@@ -1775,31 +1889,32 @@ fn main() {
         let mut event_streams = self.into_iter().collect::&lt;Vec&lt;_&gt;&gt;();
         let mut started = false;
 
+        let mut allocation: C = Default::default();
+
         builder.build(
-            move |_frontier| { },
-            move |_consumed, internal, produced| {
+            move |progress| {
 
                 if !started {
-                    internal[0].update(Default::default(), (event_streams.len() as i64) - 1);
+                    progress.internals[0].update(S::Timestamp::minimum(), (event_streams.len() as i64) - 1);
                     started = true;
                 }
 
                 for event_stream in event_streams.iter_mut() {
                     while let Some(event) = event_stream.next() {
-                        match *event {
-                            Event::Start =&gt; { },
-                            Event::Progress(ref vec) =&gt; {
-                                internal[0].extend(vec.iter().cloned());
+                        match event {
+                            Event::Progress(vec) =&gt; {
+                                progress.internals[0].extend(vec.iter().cloned());
                             },
-                            Event::Messages(ref time, ref data) =&gt; {
-                                output.session(time).give_iterator(data.iter().cloned());
+                            Event::Messages(ref time, data) =&gt; {
+                                allocation.clone_from(data);
+                                output.session(time).give_container(&amp;mut allocation);
                             }
                         }
                     }
                 }
 
                 output.cease();
-                output.inner().produced().borrow_mut().drain_into(&amp;mut produced[0]);
+                output.inner().produced().borrow_mut().drain_into(&amp;mut progress.produceds[0]);
 
                 false
             }
@@ -1809,14 +1924,14 @@ fn main() {
    }</code></pre>
 <p>The type of <code>self</code> here is actually something that allows us to enumerate a sequence of event streams, so each replayer is actually replaying some variable number of streams. As part of this, our very first action is to amend our initial <code>Default::default()</code> capability to have multiplicity equal to the number of streams we are replaying:</p>
 <pre><code class="language-rust ignore">                if !started {
-                    internal[0].update(Default::default(), (event_streams.len() as i64) - 1);
+                    progress.internals[0].update(S::Timestamp::minimum(), (event_streams.len() as i64) - 1);
                     started = true;
                 }</code></pre>
 <p>If we have multiple streams, we’ll now have multiple capabilities. If we have no stream, we will just drop the capability. This change is important because each source stream believes it has such a capability, and we will eventually see this many drops of the capability in the event stream (though perhaps not immediately; the initial deletion we inserted in <code>capture_into</code> likely cancels with the initial capabilities expressed by the outside world; we will likely need to wait until the captured stream is informed about the completion of messages with the default time).</p>
 <p>Having done the initial adjustment, we literally just play out the streams (note the plural) as they are available. The <code>next</code> method is expected not to block, but rather to return <code>None</code> when there are no more events currently available. It is a bit of a head-scratcher, but any interleaving of these streams is itself a valid stream (messages are sent and capabilities claimed only when we hold appropriate capabilities).</p>
 <h2 id="an-example-3"><a class="header" href="#an-example-3">An Example</a></h2>
 <p>We can check out the examples <code>examples/capture_send.rs</code> and <code>examples/capture_recv.rs</code> to see a paired use of capture and receive demonstrating the generality.</p>
-<p>The <code>capture_send</code> example creates a new TCP connection for each worker, which it wraps and uses as an <code>EventPusher</code>. Timely dataflow takes care of all the serialization and stuff like that (warning: it uses abomonation, so this is not great for long-term storage).</p>
+<p>The <code>capture_send</code> example creates a new TCP connection for each worker, which it wraps and uses as an <code>EventPusher</code>. Timely dataflow takes care of all the serialization and stuff like that (warning: by default it uses abomonation for serialization, so this is not great for long-term storage; the <code>bincode</code> feature uses serde instead).</p>
 <pre class="playground"><code class="language-rust no_run">extern crate timely;
 
 use std::net::TcpStream;
@@ -1890,8 +2005,7 @@ fn main() {
 </code></pre>
 <p>which just goes on and on, but which should produce 50 lines of text, with five copies of <code>0 .. 10</code> interleaved variously.</p>
 <h2 id="capture-types"><a class="header" href="#capture-types">Capture types</a></h2>
-<p>There are several sorts of things you could capture into and replay from. In the <code>capture::events</code> module you will find two examples, a linked list and a binary serializer / deserializer (wrapper around <code>Write</code> and <code>Read</code> traits). The binary serializer is fairly general; we used it up above to wrap TCP streams. You could also write to files, or write to shared memory. However, be mindful that the serialization format (abomonation) is essentially the in-memory representation, and Rust makes no guarantees about the stability of such a representation across builds.</p>
-<p>There is also <a href="https://github.com/TimelyDataflow/timely-dataflow/tree/master/kafkaesque">an in-progress Kafka adapter</a> available in the repository, which uses Kafka topics to store the binary representation of captured streams, which can then be replayed by any timely computation that can read them. This may be a while before it is sorted out, because Kafka seems to have a few quirks, but if you would like to help get in touch.</p>
+<p>There are several sorts of things you could capture into and replay from. In the <code>capture::events</code> module you will find two examples, a linked list and a binary serializer / deserializer (wrapper around <code>Write</code> and <code>Read</code> traits). The binary serializer is fairly general; we used it up above to wrap TCP streams. You could also write to files, or write to shared memory. However, be mindful that the default serialization format (abomonation) is essentially the in-memory representation, and Rust makes no guarantees about the stability of such a representation across builds.</p>
 <div style="break-before: page; page-break-before: always;"></div>
 <h1 id="custom-datatypes-and-containers"><a class="header" href="#custom-datatypes-and-containers">Custom Datatypes and Containers</a></h1>
 <p><strong>THIS TEXT IS LARGELY INCORRECT AND NEEDS IMPROVEMENT</strong></p>
@@ -2100,43 +2214,70 @@ fn main() {
 }</code></pre>
 <p>There are a few steps here, and we’ll talk through the important parts in each of them.</p>
 <h2 id="configuration"><a class="header" href="#configuration">Configuration</a></h2>
-<p>There is only a limited amount of configuration you can currently do in a timely dataflow computation, and it all lives in the <code>initialize::Configuration</code> type. This type is a simple enumeration of three ways a timely computation could run:</p>
-<pre><code class="language-rust ignore">pub enum Configuration {
+<p>There is only a limited amount of configuration you can currently do in a timely dataflow computation, and it all lives in the <code>initialize::Config</code> type. This type is an enumeration of the ways a timely computation could run:</p>
+<pre><code class="language-rust ignore">pub enum Config {
     Thread,
     Process(usize),
-    Cluster(usize, usize, Vec&lt;String&gt;, bool)
+    ProcessBinary(usize),
+    Cluster {
+        threads: usize,
+        process: usize,
+        addresses: Vec&lt;String&gt;,
+        report: bool,
+        log_fn: Box&lt;dyn Fn(CommunicationSetup) -&gt; Option&lt;Logger&lt;...&gt;&gt; + Send + Sync&gt;,
+    }
 }</code></pre>
-<p>The first variant <code>Thread</code> indicates that we will simply have one worker thread. This is a helpful thing to know because it means that all of our exchange channels can be dramatically simplified, just down to simple queues. The second variant <code>Process</code> corresponds to multiple worker threads within one process. The number indicates the parameters. The third variant <code>Cluster</code> is how we indicate that this process will participate in a larger clustered computation; we supply the number of threads, this process’ identifier, a list of addresses of all participants, and a boolean for whether we would like some diagnostics about the established connections.</p>
+<p>The first variant <code>Thread</code> indicates that we will simply have one worker thread. This is a helpful thing to know because it means that all of our exchange channels can be dramatically simplified, just down to simple queues. The second variant <code>Process</code> corresponds to multiple worker threads within one process. The <code>ProcessBinary</code> variant is similar but uses zero-copy exchange channels. The <code>Cluster</code> variant is how we indicate that this process will participate in a larger clustered computation; we supply the number of threads, this process’ identifier, a list of addresses of all participants, a boolean for whether we would like some diagnostics about the established connections, and a logging function.</p>
 <p>The configuration is important because it determines how we build the channel allocator <code>allocator</code> that we eventually provide to each worker: <code>allocator</code> will be responsible for building communication channels to other workers, and it will need to know where these other workers are.</p>
 <h2 id="channel-allocators"><a class="header" href="#channel-allocators">Channel Allocators</a></h2>
 <p>The <code>allocator</code> reference bound by the worker closure is the only handle a worker has to the outside world (other than any values you move into the closure). It wraps up all the information we have about this workers place in the world, and provides the ability to assemble channels to the other workers.</p>
 <p>There are a few implementations of the <code>Allocate</code> trait, which is defined as</p>
-<pre><code class="language-rust ignore">pub trait Allocate {
+<pre class="playground"><code class="language-rust no_run"><span class="boring">#![allow(unused)]
+</span><span class="boring">fn main() {
+</span><span class="boring">trait Exchangeable {}
+</span><span class="boring">trait Push&lt;T&gt; {}
+</span><span class="boring">trait Pull&lt;T&gt; {}
+</span>pub trait Allocate {
     fn index(&amp;self) -&gt; usize;
     fn peers(&amp;self) -&gt; usize;
-    fn allocate&lt;T: Data&gt;(&amp;mut self) -&gt; (Vec&lt;Box&lt;Push&lt;T&gt;&gt;&gt;, Box&lt;Pull&lt;T&gt;&gt;);
-}</code></pre>
-<p>These methods are the only functionality provided by <code>allocator</code>. A worker can ask for its own index, which is a number from zero up to the number of total peer workers (including itself), which it can also ask for. Perhaps most importantly, the worker can also request the allocation of a typed channel, which is returned as a pair of (i) a list of <code>Push</code> endpoints into which it can send data, and (ii) a single <code>Pull</code> endpoint from which it can extract data. The list has length equal to the number of peers, and data sent into push endpoint <code>i</code> will eventually be received by the worker with index <code>i</code>, if it keeps pulling on its pull endpoint.</p>
-<p>The channels are various and interesting, but should be smartly arranged. The channel from the worker back to itself is just a queue, the channels within the same process are Rust’s inter-thread channels, and the channels between processes will automatically serialize and deserialize the type <code>T</code> for you (this is part of the <code>T: Data</code> requirement).</p>
+    fn allocate&lt;T: Exchangeable&gt;(&amp;mut self, identifier: usize) -&gt; (Vec&lt;Box&lt;dyn Push&lt;T&gt;&gt;&gt;, Box&lt;dyn Pull&lt;T&gt;&gt;);
+}
+<span class="boring">}</span></code></pre>
+<p>These methods are the only functionality provided by <code>allocator</code>. A worker can ask for its own index, which is a number from zero up to the number of total peer workers (including itself), which it can also ask for. Perhaps most importantly, the worker can also request the allocation of a typed channel by providing an identifier, which is returned as a pair of (i) a list of <code>Push</code> endpoints into which it can send data, and (ii) a single <code>Pull</code> endpoint from which it can extract data. The list has length equal to the number of peers, and data sent into push endpoint <code>i</code> will eventually be received by the worker with index <code>i</code>, if it keeps pulling on its pull endpoint.</p>
+<p>The channels are various and interesting, but should be smartly arranged. The channel from the worker back to itself is just a queue, the channels within the same process are Rust’s inter-thread channels, and the channels between processes will automatically serialize and deserialize the type <code>T</code> for you (this is part of the <code>T: Exchangeable</code> requirement).</p>
 <p>One crucial assumption made in this design is that the channels can be identified by their order of creation. If two workers start executing in different processes, allocating multiple channels, the only way we will know how to align these channels is by identifiers handed out as the channels are allocated. I strongly recommend against non-deterministic channel construction, or “optimizing out” some channels from some workers.</p>
 <h3 id="the-bytesable-trait"><a class="header" href="#the-bytesable-trait">The Bytesable Trait</a></h3>
 <p>The <code>Bytesable</code> trait that we impose on all types that we exchange is a “marker trait”: it wraps several constraints together, like so</p>
-<pre><code class="language-rust ignore">pub trait Exchangeable : Send+Any+Bytesable { }
-impl&lt;T: Send+Any+Bytesable&gt; Exchangeable for T { }</code></pre>
+<pre class="playground"><code class="language-rust no_run"><span class="boring">#![allow(unused)]
+</span><span class="boring">fn main() {
+</span><span class="boring">use std::any::Any;
+</span><span class="boring">trait Bytesable {}
+</span>pub trait Exchangeable : Send+Any+Bytesable { }
+impl&lt;T: Send+Any+Bytesable&gt; Exchangeable for T { }
+<span class="boring">}</span></code></pre>
 <p>These traits are all Rust traits, except for <code>Bytesable</code>, and they mostly just say that we can send the data around. The <code>Bytesable</code> trait is something we introduce, and asks for methods to get into and out of a sequence of bytes.</p>
-<pre><code class="language-rust ignore">pub trait Bytesable {
-    fn into_bytes(&amp;mut self, &amp;mut Vec&lt;u8&gt;);
-    fn from_bytes(&amp;mut Vec&lt;u8&gt;) -&gt; Self;
-}</code></pre>
+<pre class="playground"><code class="language-rust no_run"><span class="boring">#![allow(unused)]
+</span><span class="boring">fn main() {
+</span><span class="boring">extern crate timely_bytes;
+</span><span class="boring">use timely_bytes::arc::Bytes;
+</span>pub trait Bytesable {
+    fn into_bytes&lt;W: ::std::io::Write&gt;(&amp;self, writer: &amp;mut W);
+    fn from_bytes(bytes: Bytes) -&gt; Self;
+    fn length_in_bytes(&amp;self) -&gt; usize;
+}
+<span class="boring">}</span></code></pre>
 <p>The timely crate has a <code>Bincode</code> wrapper type that implements <code>Bytesable</code> for any types that implement <code>serde::Serialize + for&lt;'a&gt; serde::Deserialize&lt;'a&gt;</code>.
 You can also implement them on your own though, as we have done in the example.</p>
 <h2 id="push-and-pull"><a class="header" href="#push-and-pull">Push and Pull</a></h2>
 <p>The two traits <code>Push</code> and <code>Pull</code> are the heart of the communication underlying timely dataflow. They are very simple, but relatively subtle and interesting and perhaps even under-exploited.</p>
 <h3 id="push"><a class="header" href="#push">Push</a></h3>
 <p>The <code>Push</code> trait looks like so (with two helper methods elided):</p>
-<pre><code class="language-rust ignore">pub trait Push&lt;T&gt; {
+<pre class="playground"><code class="language-rust no_run"><span class="boring">#![allow(unused)]
+</span><span class="boring">fn main() {
+</span>pub trait Push&lt;T&gt; {
     fn push(&amp;mut self, element: &amp;mut Option&lt;T&gt;);
-}</code></pre>
+}
+<span class="boring">}</span></code></pre>
 <p>That’s all of it.</p>
 <p>The <code>push</code> method takes a mutable reference to an option wrapped around a thing. This is your way of telling the communication layer that, (i) if the reference points to a thing, you’d really like to push it into the channel, and (ii) if the reference doesn’t point to a thing this is the cue that you might walk away for a while. It is important to send a <code>None</code> if you would like to ensure that whatever you’ve <code>push</code>ed in the past should be guaranteed to get through without further work on your part.</p>
 <p>Now, we didn’t need a mutable reference to do that; we could have just had the argument type be <code>Option&lt;T&gt;</code>, or had two methods <code>send</code> and <code>done</code> (those are the elided helper methods).</p>
@@ -2144,9 +2285,12 @@ You can also implement them on your own though, as we have done in the example.<
 <p>Although not used by timely at the moment, this is also designed to support zero copy networking where the communication layer below (e.g. something like RDMA) operates more efficiently if it allocates the buffers for you (e.g. in dedicated memory pinned by the hardware). In this case, <code>push</code> is a great way to <em>request</em> resources from the channel. Similarly, it can serve as a decent back-channel to return owned resources for the underlying typed data (e.g., you <code>push</code>ed a list of <code>String</code> elements, and once used they could be returned to you to be reused).</p>
 <h3 id="pull"><a class="header" href="#pull">Pull</a></h3>
 <p>The <code>Pull</code> trait is the dual to <code>Push</code>: it allows someone on the other end of a channel to request whatever the channel has in store next, also as a mutable reference to an option wrapped around the type.</p>
-<pre><code class="language-rust ignore">pub trait Pull&lt;T&gt; {
+<pre class="playground"><code class="language-rust no_run"><span class="boring">#![allow(unused)]
+</span><span class="boring">fn main() {
+</span>pub trait Pull&lt;T&gt; {
     fn pull(&amp;mut self) -&gt; &amp;mut Option&lt;T&gt;;
-}</code></pre>
+}
+<span class="boring">}</span></code></pre>
 <p>As before, the mutable reference and option allow the two participants to communicate about the availability of data, and to return resources if appropriate. For example, it is very natural after the call to <code>pull</code> to claim any <code>T</code> made available with a <code>::std::mem::swap</code> which puts something else in its place (either <code>Some(other)</code> or <code>None</code>). If the puller has some data to return, perhaps data it received from wherever it was pushing data at, this is a great opportunity to move it back up the communication chain.</p>
 <p>I’m not aware of a circumstance where you might be obliged to call <code>pull</code> and set the result to <code>None</code> to signal that you may stop calling <code>Pull</code>. It seems like it could be important, if these methods really are dual, but I don’t see how just yet.</p>
 <h2 id="guarded-computation"><a class="header" href="#guarded-computation">Guarded Computation</a></h2>
@@ -2170,14 +2314,14 @@ You can also implement them on your own though, as we have done in the example.<
 </span><span class="boring">fn main() {
 </span>pub struct Source {
     /// Index of the source operator.
-    pub index: usize,
+    pub node: usize,
     /// Number of the output port from the operator.
     pub port: usize,
 }
 
 pub struct Target {
     /// Index of the target operator.
-    pub index: usize,
+    pub node: usize,
     /// Number of the input port to the operator.
     pub port: usize,
 }
@@ -2202,11 +2346,12 @@ pub struct Target {
 <p>Each worker maintains an accumulation of progress update batches, which explains where capabilities may exist in the dataflow graph. This information is useful, but it is not yet sufficient to make strong statements about the possibility of timestamped messages arriving at <em>other</em> locations in the dataflow graph. Even though a capability for timestamp <code>t</code> may exist, this does not mean that the time may arrive at any location in the dataflow graph. To be precise, we must discuss the paths through the dataflow graph which the timestamp capability could follow.</p>
 <h3 id="path-summaries"><a class="header" href="#path-summaries">Path Summaries</a></h3>
 <p>Progress tracking occurs in the context of a dataflow graph of operators all with a common timestamp type <code>T: Timestamp</code>. The <code>Timestamp</code> trait requires the <code>PartialOrder</code> trait, meaning two timestamps may be ordered but need not be. Each type implementing <code>Timestamp</code> must also specify an associated type <code>Summary</code> implementing <code>PathSummary&lt;Self&gt;</code>.</p>
-<pre><code class="language-rust ignore">pub trait Timestamp: PartialOrder {
-    type Summary : PathSummary&lt;Self&gt;;
+<pre><code class="language-rust ignore">pub trait Timestamp: Clone+Eq+PartialOrder+Debug+Send+Any+Data+Hash+Ord {
+    type Summary : PathSummary&lt;Self&gt; + 'static;
+    fn minimum() -&gt; Self;
 }</code></pre>
 <p>A path summary is informally meant to summarize what <em>must</em> happen to a timestamp as it travels along a path in a timely dataflow. Most paths that you might draw have trivial summaries (“no change guaranteed”), but some paths do force changes on timestamps. For example, a path that goes from the end of a loop back to its head <em>must</em> increment the loop counter coordinate of any timestamp capability passed along it.</p>
-<pre><code class="language-rust ignore">pub trait PathSummary&lt;T&gt; : PartialOrder {
+<pre><code class="language-rust ignore">pub trait PathSummary&lt;T&gt; : Clone+'static+Eq+PartialOrder+Debug+Default {
     fn results_in(&amp;self, src: &amp;T) -&gt; Option&lt;T&gt;;
     fn followed_by(&amp;self, other: &amp;Self) -&gt; Option&lt;Self&gt;;
 }</code></pre>
@@ -2228,7 +2373,7 @@ path.results_in(&amp;u64::max_value()) == None;</code></pre>
 <p>The second part of progress tracking, communicating the implications of current capabilities, is fundamentally about determining and locking in the minimal collections of path summaries between any two locations (<code>Source</code> or <code>Target</code>) in the dataflow graph. This is the “compiled” representation of the dataflow graph, from which we can derive statements about the possibility of messages at one point in the graph leading to messages at another point.</p>
 <h3 id="operator-summaries"><a class="header" href="#operator-summaries">Operator summaries</a></h3>
 <p>Where do path summaries come from?</p>
-<p>Each operator in timely dataflow must implement the <code>Operate</code> trait. Among other things, that we will get to, the <code>Operate</code> trait requires that the operator summarize <em>itself</em>, providing a collection of path summaries for each of its internal paths, from each of its inputs to each of its outputs. The operator must describe what timestamps could possibly result at each of its output as a function of a timestamped message arriving at each of its inputs.</p>
+<p>Each operator in timely dataflow must implement the <code>Operate</code> builder trait, which consumes the operator during initialization. Among other things, that we will get to, the <code>Operate</code> trait requires that the operator summarize <em>itself</em>, providing a collection of path summaries for each of its internal paths, from each of its inputs to each of its outputs. The operator must describe what timestamps could possibly result at each of its output as a function of a timestamped message arriving at each of its inputs.</p>
 <p>For most operators, this summary is simply: “timestamped data at each of my inputs could result in equivalently timestamped data at each of my outputs”. This is a fairly simple summary, and while it isn’t very helpful in making progress, it is the only guarantee the operator can provide.</p>
 <p>The <code>Feedback</code> operator is where most of our interesting path summaries start: it is the operator found in feedback loops that ensures that a specific coordinate of the timestamp is incremented. All cycles in a timely dataflow graph must pass through such an operator, and in cyclic dataflow we see non-trivial summaries from the outputs of downstream operators to the inputs of upstream operators.</p>
 <p>Another useful summary is the absence of a summary. Sometimes there is no path between two points in a dataflow graph. Perhaps you do some computation on your dataflow inputs, and then introduce them into an iterative computation; there is no path that returns that data to the computation you do on the inputs. Records in-flight in the iterative subcomputation will not block the computation you do on your inputs, because we know that there is no path back from the iteration to the inputs.</p>

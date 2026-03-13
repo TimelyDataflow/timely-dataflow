@@ -35,7 +35,7 @@
             const path_to_root = "../";
             const default_light_theme = "light";
             const default_dark_theme = "navy";
-            window.path_to_searchindex_js = "../searchindex-8b624a9b.js";
+            window.path_to_searchindex_js = "../searchindex-192e2cad.js";
         </script>
         <!-- Start loading toc.js asap -->
         <script src="../toc-394d71ec.js"></script>
@@ -239,22 +239,48 @@ fn main() {
         let mut probe = ProbeHandle::new();</code></pre>
 <p>The input handle is how we supply data to the computation, and the probe handle is how we check whether the computation is complete up through certain inputs. Since a streaming computation may never “finish”, <code>probe</code> is the only way to understand how much progress we’ve made.</p>
 <p>The next step is to build a timely dataflow. Here we use <code>input</code> as a source of data, and attach <code>probe</code> to the end so that we can watch for completion of work.</p>
-<pre><code class="language-rust ignore">        // build a new dataflow.
+<pre class="playground"><code class="language-rust"><span class="boring">extern crate timely;
+</span><span class="boring">use timely::dataflow::{InputHandle, ProbeHandle};
+</span><span class="boring">use timely::dataflow::operators::{Input, Inspect, Probe};
+</span><span class="boring">fn main() {
+</span><span class="boring">    timely::execute_from_args(std::env::args().take(1), |worker| {
+</span><span class="boring">        let mut input = InputHandle::new();
+</span><span class="boring">        let mut probe: ProbeHandle&lt;usize&gt; = ProbeHandle::new();
+</span>        // build a new dataflow.
         worker.dataflow(|scope| {
             input.to_stream(scope)
+                 .container::&lt;Vec&lt;_&gt;&gt;()
                  .inspect(|x| println!("seen: {:?}", x))
                  .probe_with(&amp;mut probe);
-        });</code></pre>
+        });
+<span class="boring">        input.send(("round".to_owned(), 1i64));
+</span><span class="boring">    }).unwrap();
+</span><span class="boring">}</span></code></pre>
 <p>This computation is pretty simple: it just prints out the inputs we send at it.</p>
 <p>Having constructed the dataflow, we feed it some data.</p>
-<pre><code class="language-rust ignore">        // feed the dataflow with data.
+<pre class="playground"><code class="language-rust"><span class="boring">extern crate timely;
+</span><span class="boring">use timely::dataflow::{InputHandle, ProbeHandle};
+</span><span class="boring">use timely::dataflow::operators::{Input, Inspect, Probe};
+</span><span class="boring">fn main() {
+</span><span class="boring">    timely::execute_from_args(std::env::args().take(1), |worker| {
+</span><span class="boring">        let mut input = InputHandle::new();
+</span><span class="boring">        let mut probe = ProbeHandle::new();
+</span><span class="boring">        worker.dataflow(|scope| {
+</span><span class="boring">            input.to_stream(scope)
+</span><span class="boring">                 .container::&lt;Vec&lt;_&gt;&gt;()
+</span><span class="boring">                 .inspect(|x| println!("seen: {:?}", x))
+</span><span class="boring">                 .probe_with(&amp;mut probe);
+</span><span class="boring">        });
+</span>        // feed the dataflow with data.
         for round in 0..10 {
             input.send(("round".to_owned(), 1));
             input.advance_to(round + 1);
             while probe.less_than(input.time()) {
                 worker.step();
             }
-        }</code></pre>
+        }
+<span class="boring">    }).unwrap();
+</span><span class="boring">}</span></code></pre>
 <p>There are several things going on here. First, we <code>send</code> some data into the input, which allows the data to circulate through the workers along the dataflow. This data will be of type <code>(String, i64)</code>, because our example wants to send some text and annotate each with the change in the count (we add or remove text with <code>+1</code> or <code>-1</code>, respectively). Second, we <code>advance_to</code> to tell timely dataflow that we have ceased sending data for <code>round</code> and anything before it. At this point timely can start to reason about <code>round</code> becoming complete, once all the associated data make their way through the dataflow. Finally, we repeatedly <code>step</code> the worker until <code>probe</code> reports that it has caught up to <code>round + 1</code>, meaning that data for <code>round</code> are fully flushed from the system (and printed to the screen, one hopes).</p>
 <h2 id="breaking-text-into-words"><a class="header" href="#breaking-text-into-words">Breaking text into words</a></h2>
 <p>Let’s add a simple operator that takes our text strings we supply as input and breaks them into words.</p>
