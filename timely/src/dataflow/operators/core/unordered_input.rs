@@ -141,7 +141,7 @@ impl<T:Timestamp> Operate<T> for UnorderedOperator<T> {
         (Vec::new(), Rc::clone(&self.shared_progress), self)
     }
 
-    fn notify_me(&self) -> FrontierInterest { FrontierInterest::Never }
+    fn notify_me(&self) -> Vec<FrontierInterest> { Vec::new() }
 }
 
 /// A handle to an input [Stream], used to introduce data to a timely dataflow computation.

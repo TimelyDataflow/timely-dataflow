@@ -198,7 +198,12 @@ where
 
         activations.borrow_mut().activate(&self.path[..]);
 
-        let notify_me: FrontierInterest = self.children.iter().map(|c| c.notify).max().unwrap();
+        // The subgraph's per-input interest is conservatively the max across all children's inputs.
+        let max_interest = self.children.iter()
+            .flat_map(|c| c.notify.iter().copied())
+            .max()
+            .unwrap_or(FrontierInterest::Never);
+        let notify_me: Vec<FrontierInterest> = vec![max_interest; inputs];
 
         Subgraph {
             name: self.name,
@@ -277,7 +282,7 @@ where
 
     progress_mode: ProgressMode,
 
-    notify_me: FrontierInterest,
+    notify_me: Vec<FrontierInterest>,
 }
 
 impl<TOuter, TInner> Schedule for Subgraph<TOuter, TInner>
@@ -479,8 +484,8 @@ where
             self.maybe_shutdown.push(location.node);
             // Targets are actionable, sources are not.
             if let crate::progress::Port::Target(port) = location.port {
-                // Activate based on expressed frontier interest.
-                let activate = match self.children[location.node].notify {
+                // Activate based on expressed frontier interest for this input.
+                let activate = match self.children[location.node].notify[port] {
                     FrontierInterest::Always => true,
                     FrontierInterest::IfCapability => { operators[location.node].cap_counts > 0 }
                     FrontierInterest::Never => false,
@@ -598,7 +603,7 @@ where
         (internal_summary, Rc::clone(&self.shared_progress), self)
     }
 
-    fn notify_me(&self) -> FrontierInterest { self.notify_me }
+    fn notify_me(&self) -> Vec<FrontierInterest> { self.notify_me.clone() }
 }
 
 struct PerOperatorState<T: Timestamp> {
@@ -608,7 +613,7 @@ struct PerOperatorState<T: Timestamp> {
     id: usize,          // worker-unique identifier
 
     local: bool,        // indicates whether the operator will exchange data or not
-    notify: FrontierInterest,
+    notify: Vec<FrontierInterest>,
     inputs: usize,      // number of inputs to the operator
     outputs: usize,     // number of outputs from the operator
 
@@ -632,7 +637,7 @@ impl<T: Timestamp> PerOperatorState<T> {
             index:      0,
             id:         usize::MAX,
             local:      false,
-            notify:     FrontierInterest::IfCapability,
+            notify:     vec![FrontierInterest::IfCapability; inputs],
             inputs,
             outputs,
 

@@ -48,11 +48,15 @@ impl<G: Scope> OperatorBuilder<G> {
         }
     }
 
-    /// Indicates whether the operator requires frontier information.
+    /// Sets frontier interest for all inputs.
     pub fn set_notify(&mut self, notify: bool) {
         let interest = if notify { FrontierInterest::Always } else { FrontierInterest::Never };
         self.builder.set_notify(interest);
+    }
 
+    /// Sets frontier interest for a specific input.
+    pub fn set_notify_for(&mut self, input: usize, notify: FrontierInterest) {
+        self.builder.set_notify_for(input, notify);
     }
 
     /// Adds a new input to a generic operator builder, returning the `Pull` implementor to use.
