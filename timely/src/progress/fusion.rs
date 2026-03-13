@@ -577,6 +577,7 @@ fn fuse_group<T: Timestamp>(
     head.operator = Some(group_scheduler);
     head.shared_progress = group_progress;
     head.internal_summary = composed_summary;
+    head.notify = vec![FrontierInterest::Never; num_inputs];
     head.inputs = num_inputs;
     head.outputs = num_outputs;
     head.edges = vec![Vec::new(); num_outputs];
