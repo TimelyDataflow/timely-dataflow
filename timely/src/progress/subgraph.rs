@@ -16,14 +16,14 @@ use crate::logging::TimelySummaryLogger as SummaryLogger;
 use crate::scheduling::Schedule;
 use crate::scheduling::activate::Activations;
 
-use crate::progress::frontier::{MutableAntichain, MutableAntichainFilter, Antichain};
+use crate::progress::frontier::{MutableAntichain, MutableAntichainFilter};
 use crate::progress::{Timestamp, Operate, operate::SharedProgress};
 use crate::progress::{Location, Port, Source, Target};
 use crate::progress::operate::{FrontierInterest, Connectivity, PortConnectivity};
 use crate::progress::ChangeBatch;
 use crate::progress::broadcast::Progcaster;
 use crate::progress::reachability;
-use crate::progress::timestamp::{Refines, PathSummary};
+use crate::progress::timestamp::Refines;
 
 use crate::worker::ProgressMode;
 
@@ -166,12 +166,12 @@ where
         // Create empty child zero representative.
         self.children[0] = PerOperatorState::empty(outputs, inputs);
 
-        // Pipeline chain fusion: detect and fuse chains of pipeline-connected operators.
+        // Pipeline group fusion: detect and fuse groups of pipeline-connected operators.
         let fuse_chain_length = worker.config().fuse_chain_length;
         if fuse_chain_length >= 2 {
-            let chains = detect_chains(&self.children, &self.edge_stash, fuse_chain_length);
-            for chain in chains {
-                fuse_chain::<TInner>(&mut self.children, &mut self.edge_stash, &chain);
+            let groups = detect_groups(&self.children, &self.edge_stash, fuse_chain_length);
+            for group in groups {
+                fuse_group::<TInner>(&mut self.children, &mut self.edge_stash, &group);
             }
         }
 
@@ -338,13 +338,16 @@ where
         //
         // We should be able to schedule arbitrary subsets of children, as
         // long as we eventually schedule all children that need to do work.
-        let mut previous = 0;
+        let mut scheduled = std::collections::HashSet::new();
+        scheduled.insert(0);  // Child 0 is the subgraph boundary, never scheduled.
         while let Some(Reverse(index)) = self.temp_active.pop() {
-            // De-duplicate, and don't revisit.
-            if index > previous {
+            if !scheduled.insert(index) { continue; }
+            // Tombstoned group members forward activations to their representative.
+            if let Some(fwd) = self.children[index].forward_to {
+                self.temp_active.push(Reverse(fwd));
+            } else {
                 // TODO: This is a moment where a scheduling decision happens.
                 self.activate_child(index);
-                previous = index;
             }
         }
 
@@ -644,6 +647,9 @@ struct PerOperatorState<T: Timestamp> {
     internal_summary: Connectivity<T::Summary>,   // cached result from initialize.
 
     logging: Option<Logger>,
+
+    /// For tombstoned group members: forward activations to the group representative.
+    forward_to: Option<usize>,
 }
 
 impl<T: Timestamp> PerOperatorState<T> {
@@ -666,6 +672,7 @@ impl<T: Timestamp> PerOperatorState<T> {
 
             shared_progress: Rc::new(RefCell::new(SharedProgress::new(inputs,outputs))),
             internal_summary: Vec::new(),
+            forward_to: None,
         }
     }
 
@@ -720,6 +727,7 @@ impl<T: Timestamp> PerOperatorState<T> {
 
             shared_progress,
             internal_summary,
+            forward_to: None,
         }
     }
 
@@ -845,183 +853,170 @@ impl<T: Timestamp> Drop for PerOperatorState<T> {
     }
 }
 
-// --- Pipeline chain fusion ---
+// --- Pipeline group fusion ---
 
-/// Detects maximal fusible chains from the edge topology.
+/// Returns true if an operator has identity internal summaries on all (input, output) pairs.
+/// That is, every connected (input, output) pair has summary `Antichain::from_elem(Default::default())`.
+fn has_identity_summary<T: Timestamp>(child: &PerOperatorState<T>) -> bool {
+    for input_pc in child.internal_summary.iter() {
+        for (_port, ac) in input_pc.iter_ports() {
+            if ac.len() != 1 || ac.elements()[0] != Default::default() {
+                return false;
+            }
+        }
+    }
+    // Must have at least one connection (empty summary means no paths).
+    child.internal_summary.iter().any(|pc| pc.iter_ports().next().is_some())
+}
+
+/// Returns true if an operator is eligible for group fusion.
+fn is_fusible<T: Timestamp>(child: &PerOperatorState<T>) -> bool {
+    child.operator.is_some()
+        && !child.notify
+        && has_identity_summary(child)
+}
+
+/// Detects fusible groups of operators connected by pipeline edges.
 ///
-/// A chain is a sequence of operators `[A, B, C, ...]` where each link satisfies:
-/// * Both operators have exactly 1 input and 1 output
-/// * A's sole output targets B's sole input (no fan-out)
-/// * B's sole input comes from A's output (no fan-in)
-/// * The target uses pipeline (thread-local) channels on its input
-/// * Both have `notify == false` (no frontier observation)
+/// Uses union-find to group operators connected by fusible edges into components.
+/// An edge is fusible when both endpoints are fusible operators and the target
+/// uses pipeline (thread-local) channels. No fan-in/fan-out or 1-in/1-out restriction.
 ///
-/// Returns chains of at least `min_length` operators, identified by index.
-fn detect_chains<T: Timestamp>(
+/// Returns groups of at least `min_length` operators, identified by child index.
+fn detect_groups<T: Timestamp>(
     children: &[PerOperatorState<T>],
     edge_stash: &[(Source, Target)],
     min_length: usize,
 ) -> Vec<Vec<usize>> {
-    // Build forward map: source_node -> target_node (only for single-input/single-output pipeline edges).
-    // Build reverse map: target_node -> source_node.
-    let mut forward: HashMap<usize, usize> = HashMap::new();
-    let mut reverse: HashMap<usize, usize> = HashMap::new();
+    // Mark fusible operators.
+    let fusible: Vec<bool> = children.iter().enumerate().map(|(i, child)| {
+        i != 0 && is_fusible(child)
+    }).collect();
 
-    // Count edges per source and target to detect fan-out/fan-in.
-    let mut source_edge_count: HashMap<usize, usize> = HashMap::new();
-    let mut target_edge_count: HashMap<usize, usize> = HashMap::new();
+    // Union-Find structure.
+    let n = children.len();
+    let mut parent: Vec<usize> = (0..n).collect();
+    let mut rank: Vec<usize> = vec![0; n];
 
-    for (source, target) in edge_stash.iter() {
-        *source_edge_count.entry(source.node).or_insert(0) += 1;
-        *target_edge_count.entry(target.node).or_insert(0) += 1;
+    fn find(parent: &mut [usize], x: usize) -> usize {
+        if parent[x] != x {
+            parent[x] = find(parent, parent[x]);
+        }
+        parent[x]
     }
 
+    fn union(parent: &mut [usize], rank: &mut [usize], a: usize, b: usize) {
+        let ra = find(parent, a);
+        let rb = find(parent, b);
+        if ra == rb { return; }
+        if rank[ra] < rank[rb] {
+            parent[ra] = rb;
+        } else if rank[ra] > rank[rb] {
+            parent[rb] = ra;
+        } else {
+            parent[rb] = ra;
+            rank[ra] += 1;
+        }
+    }
+
+    // For each edge, if both endpoints are fusible and target uses pipeline pact, union them.
     for (source, target) in edge_stash.iter() {
         let src = source.node;
         let tgt = target.node;
-
-        // Skip child 0 (the subgraph boundary).
         if src == 0 || tgt == 0 { continue; }
-
-        let src_child = &children[src];
-        let tgt_child = &children[tgt];
-
-        // Both must have exactly 1 input and 1 output.
-        if src_child.inputs != 1 || src_child.outputs != 1 { continue; }
-        if tgt_child.inputs != 1 || tgt_child.outputs != 1 { continue; }
-
-        // The target must use pipeline (thread-local) channels on its input.
-        // The source's input pact doesn't matter: it receives data from outside the chain.
-        if !tgt_child.pipeline { continue; }
-
-        // Both must not require notifications.
-        if src_child.notify || tgt_child.notify { continue; }
-
-        // No fan-out from source, no fan-in to target.
-        if source_edge_count.get(&src) != Some(&1) { continue; }
-        if target_edge_count.get(&tgt) != Some(&1) { continue; }
-
-        // Must have an operator (not already tombstoned).
-        if src_child.operator.is_none() || tgt_child.operator.is_none() { continue; }
-
-        // Edge must connect port 0 -> port 0.
-        if source.port != 0 || target.port != 0 { continue; }
-
-        // Both must have identity internal summaries.
-        // Non-identity summaries (e.g., feedback operators with iteration steps)
-        // require per-member timestamp transformation that fusion does not support.
-        fn has_identity_summary<T: Timestamp>(child: &PerOperatorState<T>) -> bool {
-            if child.internal_summary.len() != 1 { return false; }
-            match child.internal_summary[0].get(0) {
-                Some(ac) => ac.len() == 1 && ac.elements()[0] == Default::default(),
-                None => false,
-            }
-        }
-        if !has_identity_summary(src_child) || !has_identity_summary(tgt_child) { continue; }
-
-        forward.insert(src, tgt);
-        reverse.insert(tgt, src);
+        if !fusible[src] || !fusible[tgt] { continue; }
+        if !children[tgt].pipeline { continue; }
+        union(&mut parent, &mut rank, src, tgt);
     }
 
-    // Walk chains starting from heads (nodes with no predecessor in a chain).
-    let mut visited = vec![false; children.len()];
-    let mut chains = Vec::new();
-
-    for &head in forward.keys() {
-        // A head is a node that is not a successor in any chain link.
-        if reverse.contains_key(&head) { continue; }
-        if visited[head] { continue; }
-
-        let mut chain = vec![head];
-        visited[head] = true;
-        let mut current = head;
-        while let Some(&next) = forward.get(&current) {
-            if visited[next] { break; }
-            chain.push(next);
-            visited[next] = true;
-            current = next;
-        }
-
-        if chain.len() >= min_length {
-            chains.push(chain);
+    // Collect components.
+    let mut components: HashMap<usize, Vec<usize>> = HashMap::new();
+    for i in 1..n {
+        if fusible[i] {
+            let root = find(&mut parent, i);
+            components.entry(root).or_default().push(i);
         }
     }
 
-    chains
+    // Filter by minimum size and sort members for determinism.
+    components.into_values()
+        .filter(|group| group.len() >= min_length)
+        .map(|mut group| { group.sort(); group })
+        .collect()
 }
 
-/// Composes internal summaries for a chain of single-input/single-output operators.
-///
-/// For chain `[A, B, C]`, the composed summary is:
-/// `A.summary[0→0] followed_by B.summary[0→0] followed_by C.summary[0→0]`
-fn compose_summaries<T: Timestamp>(
-    summaries: &[&Connectivity<T::Summary>],
-) -> Connectivity<T::Summary> {
-    if summaries.is_empty() {
-        return vec![PortConnectivity::default()];
-    }
+/// Topological sort of group members using Kahn's algorithm on internal edges.
+fn topological_sort(
+    members: &[usize],
+    edge_stash: &[(Source, Target)],
+) -> Vec<usize> {
+    let member_set: std::collections::HashSet<usize> = members.iter().cloned().collect();
+    let member_to_pos: HashMap<usize, usize> = members.iter().enumerate().map(|(i, &m)| (m, i)).collect();
+    let n = members.len();
 
-    // Start with the first operator's summary (input 0 -> output 0).
-    let mut result_antichain: Antichain<T::Summary> = Antichain::new();
+    let mut in_degree = vec![0usize; n];
+    let mut adj: Vec<Vec<usize>> = vec![Vec::new(); n];
 
-    // Extract the first summary's 0→0 antichain.
-    if let Some(first) = summaries[0].get(0) {
-        if let Some(ac) = first.get(0) {
-            result_antichain = ac.clone();
+    for (source, target) in edge_stash.iter() {
+        if member_set.contains(&source.node) && member_set.contains(&target.node) {
+            let from = member_to_pos[&source.node];
+            let to = member_to_pos[&target.node];
+            // Avoid counting duplicate edges for the same (from, to) pair multiple times
+            // for in-degree. We track adjacency; Kahn's handles it correctly.
+            adj[from].push(to);
+            in_degree[to] += 1;
         }
     }
 
-    // Compose with each subsequent operator's summary.
-    for summary in &summaries[1..] {
-        let next_antichain = summary.get(0).and_then(|pc| pc.get(0));
-        let next_antichain = match next_antichain {
-            Some(ac) => ac,
-            None => {
-                // No path through this operator; result is empty.
-                result_antichain = Antichain::new();
-                break;
-            }
-        };
+    let mut queue: std::collections::VecDeque<usize> = std::collections::VecDeque::new();
+    for i in 0..n {
+        if in_degree[i] == 0 {
+            queue.push_back(i);
+        }
+    }
 
-        let mut composed = Antichain::new();
-        for a in result_antichain.elements().iter() {
-            for b in next_antichain.elements().iter() {
-                if let Some(c) = a.followed_by(b) {
-                    composed.insert(c);
-                }
+    let mut order = Vec::with_capacity(n);
+    while let Some(pos) = queue.pop_front() {
+        order.push(members[pos]);
+        for &next in &adj[pos] {
+            in_degree[next] -= 1;
+            if in_degree[next] == 0 {
+                queue.push_back(next);
             }
         }
-        result_antichain = composed;
     }
 
-    let mut port_connectivity = PortConnectivity::default();
-    for elem in result_antichain.elements().iter() {
-        port_connectivity.insert_ref(0, elem);
-    }
-    vec![port_connectivity]
+    assert_eq!(order.len(), n, "group contains a cycle, which should be impossible with identity summaries");
+    order
 }
 
-/// A member of a fused chain, holding the original operator and its progress handle.
-struct ChainMember<T: Timestamp> {
+/// A member of a fused group, holding the original operator and its progress handle.
+struct GroupMember<T: Timestamp> {
     operator: Box<dyn Schedule>,
     shared_progress: Rc<RefCell<SharedProgress<T>>>,
 }
 
-/// Schedules a chain of pipeline-connected operators as a single unit.
+/// Schedules a DAG of pipeline-connected operators as a single unit.
 ///
-/// The chain presents as a single operator to the subgraph: it has the first
-/// member's input and the last member's output. Intermediate progress is
-/// hidden from the reachability tracker.
-struct ChainScheduler<T: Timestamp> {
+/// The group presents as a single operator to the subgraph with `input_map.len()` inputs
+/// and `output_map.len()` outputs. Members are scheduled in topological order.
+/// Intermediate progress is hidden from the reachability tracker.
+struct GroupScheduler<T: Timestamp> {
     name: String,
     path: Vec<usize>,
-    /// Progress visible to the subgraph (first op's inputs, last op's outputs).
-    chain_progress: Rc<RefCell<SharedProgress<T>>>,
-    /// Operators in execution order, with their individual SharedProgress handles.
-    members: Vec<ChainMember<T>>,
+    /// Progress visible to the subgraph.
+    group_progress: Rc<RefCell<SharedProgress<T>>>,
+    /// Operators in topological order, with their individual SharedProgress handles.
+    members: Vec<GroupMember<T>>,
+    /// Group input i -> (member index in members vec, member input port)
+    input_map: Vec<(usize, usize)>,
+    /// Group output j -> (member index in members vec, member output port)
+    output_map: Vec<(usize, usize)>,
+    /// capability_map[member_idx][output_port] -> list of group output indices
+    capability_map: Vec<Vec<Vec<usize>>>,
 }
 
-impl<T: Timestamp> Schedule for ChainScheduler<T> {
+impl<T: Timestamp> Schedule for GroupScheduler<T> {
     fn name(&self) -> &str { &self.name }
     fn path(&self) -> &[usize] { &self.path }
 
@@ -1029,18 +1024,18 @@ impl<T: Timestamp> Schedule for ChainScheduler<T> {
         let n = self.members.len();
         assert!(n > 0);
 
-        // Step 1: Copy chain's input frontier changes to first member.
+        // Step 1: Forward group's input frontier changes to the appropriate members.
         {
-            let mut chain_sp = self.chain_progress.borrow_mut();
-            let mut first_sp = self.members[0].shared_progress.borrow_mut();
-            for (port, frontier) in chain_sp.frontiers.iter_mut().enumerate() {
-                for (time, diff) in frontier.iter() {
-                    first_sp.frontiers[port].update(time.clone(), *diff);
+            let mut group_sp = self.group_progress.borrow_mut();
+            for (i, &(member_idx, member_port)) in self.input_map.iter().enumerate() {
+                let mut member_sp = self.members[member_idx].shared_progress.borrow_mut();
+                for (time, diff) in group_sp.frontiers[i].iter() {
+                    member_sp.frontiers[member_port].update(time.clone(), *diff);
                 }
             }
         }
 
-        // Step 2: Schedule each member in sequence.
+        // Step 2: Schedule each member in topological order.
         let mut any_incomplete = false;
         for i in 0..n {
             let incomplete = self.members[i].operator.schedule();
@@ -1049,32 +1044,32 @@ impl<T: Timestamp> Schedule for ChainScheduler<T> {
 
         // Step 3: Aggregate progress.
         {
-            let mut chain_sp = self.chain_progress.borrow_mut();
+            let mut group_sp = self.group_progress.borrow_mut();
 
-            // consumeds = first member's consumeds
-            let mut first_sp = self.members[0].shared_progress.borrow_mut();
-            for (port, consumed) in first_sp.consumeds.iter_mut().enumerate() {
-                for (time, diff) in consumed.iter() {
-                    chain_sp.consumeds[port].update(time.clone(), *diff);
+            // consumeds: for each group input, take from the corresponding member.
+            for (i, &(member_idx, member_port)) in self.input_map.iter().enumerate() {
+                let mut member_sp = self.members[member_idx].shared_progress.borrow_mut();
+                for (time, diff) in member_sp.consumeds[member_port].iter() {
+                    group_sp.consumeds[i].update(time.clone(), *diff);
                 }
             }
-            drop(first_sp);
 
-            // produceds = last member's produceds
-            let mut last_sp = self.members[n-1].shared_progress.borrow_mut();
-            for (port, produced) in last_sp.produceds.iter_mut().enumerate() {
-                for (time, diff) in produced.iter() {
-                    chain_sp.produceds[port].update(time.clone(), *diff);
+            // produceds: for each group output, take from the corresponding member.
+            for (j, &(member_idx, member_port)) in self.output_map.iter().enumerate() {
+                let mut member_sp = self.members[member_idx].shared_progress.borrow_mut();
+                for (time, diff) in member_sp.produceds[member_port].iter() {
+                    group_sp.produceds[j].update(time.clone(), *diff);
                 }
             }
-            drop(last_sp);
 
-            // internals = aggregate from all members
-            for member in self.members.iter() {
+            // internals: for each member's output port, report at mapped group outputs.
+            for (m, member) in self.members.iter().enumerate() {
                 let mut member_sp = member.shared_progress.borrow_mut();
                 for (port, internal) in member_sp.internals.iter_mut().enumerate() {
                     for (time, diff) in internal.iter() {
-                        chain_sp.internals[port].update(time.clone(), *diff);
+                        for &group_out in &self.capability_map[m][port] {
+                            group_sp.internals[group_out].update(time.clone(), *diff);
+                        }
                     }
                 }
             }
@@ -1089,75 +1084,280 @@ impl<T: Timestamp> Schedule for ChainScheduler<T> {
             for batch in sp.produceds.iter_mut() { batch.clear(); }
         }
 
-        // Clear the chain's own frontiers (consumed by step 1).
+        // Clear the group's own frontiers (consumed by step 1).
         {
-            let mut chain_sp = self.chain_progress.borrow_mut();
-            for batch in chain_sp.frontiers.iter_mut() { batch.clear(); }
+            let mut group_sp = self.group_progress.borrow_mut();
+            for batch in group_sp.frontiers.iter_mut() { batch.clear(); }
         }
 
         any_incomplete
     }
 }
 
-/// Fuses a detected chain into a single operator within `children`, rewriting `edge_stash`.
+/// Computes reachability for all (member, output_port) pairs in a single reverse-topological pass.
 ///
-/// The head of the chain retains its slot and becomes the fused operator.
-/// All other chain members become tombstones.
-fn fuse_chain<T: Timestamp>(
+/// Returns `capability_map[topo_pos][output_port] -> sorted Vec<group_output_index>`.
+/// Since all summaries are identity, timestamps don't change along any path.
+fn compute_all_reachability(
+    topo_order: &[usize],
+    children: &[PerOperatorState<impl Timestamp>],
+    internal_edges: &HashMap<(usize, usize), Vec<(usize, usize)>>,
+    member_summaries: &HashMap<usize, Vec<(usize, usize)>>,
+    output_port_to_group_output: &HashMap<(usize, usize), Vec<usize>>,
+) -> Vec<Vec<Vec<usize>>> {
+    let n = topo_order.len();
+
+    // Build reverse lookup: node -> topo_pos.
+    let node_to_topo: HashMap<usize, usize> = topo_order.iter().enumerate()
+        .map(|(i, &node)| (node, i))
+        .collect();
+
+    // reachable[(node, output_port)] -> set of group output indices
+    // Use a flat Vec indexed by (topo_pos, port) for fast access.
+    // First, compute a port offset table.
+    let mut port_offset = Vec::with_capacity(n);
+    let mut total_ports = 0usize;
+    for &node in topo_order.iter() {
+        port_offset.push(total_ports);
+        total_ports += children[node].outputs;
+    }
+
+    // Each entry is a sorted Vec<usize> of reachable group outputs.
+    let mut reachable: Vec<Vec<usize>> = vec![Vec::new(); total_ports];
+
+    // Seed: output ports that are directly group outputs.
+    for (&(node, port), group_outs) in output_port_to_group_output.iter() {
+        if let Some(&topo_pos) = node_to_topo.get(&node) {
+            let idx = port_offset[topo_pos] + port;
+            reachable[idx] = group_outs.clone();
+            reachable[idx].sort();
+            reachable[idx].dedup();
+        }
+    }
+
+    // Reverse topological pass: propagate reachability backward through edges.
+    for rev_pos in (0..n).rev() {
+        let node = topo_order[rev_pos];
+        let num_outputs = children[node].outputs;
+
+        // For each output port of this node, follow internal edges forward
+        // and union the reachability of the downstream ports.
+        for port in 0..num_outputs {
+            if let Some(targets) = internal_edges.get(&(node, port)) {
+                for &(next_node, next_input_port) in targets {
+                    // Use next node's summary to find which output ports are reachable from this input.
+                    if let Some(connections) = member_summaries.get(&next_node) {
+                        if let Some(&next_topo) = node_to_topo.get(&next_node) {
+                            for &(inp, outp) in connections.iter() {
+                                if inp == next_input_port {
+                                    // Merge reachable[next_topo][outp] into reachable[rev_pos][port].
+                                    let src_idx = port_offset[next_topo] + outp;
+                                    let dst_idx = port_offset[rev_pos] + port;
+                                    if src_idx != dst_idx {
+                                        // Clone to avoid double borrow.
+                                        let to_add = reachable[src_idx].clone();
+                                        let dst = &mut reachable[dst_idx];
+                                        dst.extend_from_slice(&to_add);
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+            // Deduplicate after merging all edges for this port.
+            let idx = port_offset[rev_pos] + port;
+            reachable[idx].sort();
+            reachable[idx].dedup();
+        }
+    }
+
+    // Reshape into capability_map[topo_pos][output_port].
+    let mut capability_map = Vec::with_capacity(n);
+    for (topo_pos, &node) in topo_order.iter().enumerate() {
+        let num_outputs = children[node].outputs;
+        let mut port_map = Vec::with_capacity(num_outputs);
+        for port in 0..num_outputs {
+            let idx = port_offset[topo_pos] + port;
+            port_map.push(std::mem::take(&mut reachable[idx]));
+        }
+        capability_map.push(port_map);
+    }
+
+    capability_map
+}
+
+/// Fuses a detected group into a single operator within `children`, rewriting `edge_stash`.
+///
+/// The representative (lowest index in group) retains its slot and becomes the fused operator.
+/// All other group members become tombstones.
+fn fuse_group<T: Timestamp>(
     children: &mut [PerOperatorState<T>],
     edge_stash: &mut Vec<(Source, Target)>,
-    chain: &[usize],
+    group: &[usize],
 ) {
-    assert!(chain.len() >= 2);
-    let head_idx = chain[0];
-    let tail_idx = *chain.last().unwrap();
+    assert!(group.len() >= 2);
+    let group_set: std::collections::HashSet<usize> = group.iter().cloned().collect();
+    let representative = *group.iter().min().unwrap();
 
-    // Compose internal summaries.
-    let summary_refs: Vec<&Connectivity<T::Summary>> = chain.iter()
-        .map(|&idx| &children[idx].internal_summary)
+    // Step 1: Compute topological order.
+    let topo_order = topological_sort(group, edge_stash);
+    let node_to_topo: HashMap<usize, usize> = topo_order.iter().enumerate().map(|(i, &n)| (n, i)).collect();
+
+    // Step 2: Compute input_map and output_map by scanning edges.
+    // Group inputs: (member_node, input_port) pairs where at least one incoming edge originates outside the group.
+    // Group outputs: (member_node, output_port) pairs where at least one outgoing edge targets outside the group,
+    //                OR the port has no outgoing edges at all within the edge_stash.
+    let mut group_input_set: std::collections::HashSet<(usize, usize)> = std::collections::HashSet::new();
+    let mut group_output_set: std::collections::HashSet<(usize, usize)> = std::collections::HashSet::new();
+    let mut has_outgoing: std::collections::HashSet<(usize, usize)> = std::collections::HashSet::new();
+
+    // Collect all output ports of group members.
+    let mut all_output_ports: std::collections::HashSet<(usize, usize)> = std::collections::HashSet::new();
+    for &node in group.iter() {
+        for port in 0..children[node].outputs {
+            all_output_ports.insert((node, port));
+        }
+    }
+
+    // Build internal edges map: (src_node, src_port) -> [(tgt_node, tgt_port)]
+    let mut internal_edges: HashMap<(usize, usize), Vec<(usize, usize)>> = HashMap::new();
+
+    for (source, target) in edge_stash.iter() {
+        let src_in = group_set.contains(&source.node);
+        let tgt_in = group_set.contains(&target.node);
+
+        if src_in {
+            has_outgoing.insert((source.node, source.port));
+        }
+
+        if src_in && tgt_in {
+            // Internal edge
+            internal_edges.entry((source.node, source.port))
+                .or_default()
+                .push((target.node, target.port));
+        } else if !src_in && tgt_in {
+            // Incoming edge from outside
+            group_input_set.insert((target.node, target.port));
+        } else if src_in && !tgt_in {
+            // Outgoing edge to outside
+            group_output_set.insert((source.node, source.port));
+        }
+    }
+
+    // Output ports with no outgoing edges at all are also group outputs.
+    for &(node, port) in &all_output_ports {
+        if !has_outgoing.contains(&(node, port)) {
+            group_output_set.insert((node, port));
+        }
+    }
+
+    // Sort and assign indices for determinism.
+    let mut input_map: Vec<(usize, usize)> = group_input_set.into_iter()
+        .map(|(node, port)| (node_to_topo[&node], port))
         .collect();
-    let composed_summary = compose_summaries::<T>(&summary_refs);
+    input_map.sort();
+    // Convert back: input_map elements are (topo_position, port)
 
-    // Collect members by extracting operators and shared_progress from children.
-    let mut members = Vec::with_capacity(chain.len());
-    let mut chain_name_parts = Vec::new();
-    let mut head_path = Vec::new();
+    let mut output_map: Vec<(usize, usize)> = group_output_set.into_iter()
+        .map(|(node, port)| (node_to_topo[&node], port))
+        .collect();
+    output_map.sort();
 
-    for (i, &idx) in chain.iter().enumerate() {
-        let child = &mut children[idx];
-        let operator = child.operator.take().expect("chain member must have an operator");
+    // Build reverse lookups.
+    // (node, input_port) -> group input index
+    let input_port_to_group_input: HashMap<(usize, usize), usize> = input_map.iter().enumerate()
+        .map(|(i, &(topo_pos, port))| ((topo_order[topo_pos], port), i))
+        .collect();
+
+    // (node, output_port) -> group output indices
+    let mut output_port_to_group_output: HashMap<(usize, usize), Vec<usize>> = HashMap::new();
+    for (j, &(topo_pos, port)) in output_map.iter().enumerate() {
+        output_port_to_group_output.entry((topo_order[topo_pos], port))
+            .or_default()
+            .push(j);
+    }
+
+    // Step 3: Compute member summaries (input_port, output_port) connections for each node.
+    let mut member_summaries: HashMap<usize, Vec<(usize, usize)>> = HashMap::new();
+    for &node in group.iter() {
+        let mut connections = Vec::new();
+        for (inp_idx, pc) in children[node].internal_summary.iter().enumerate() {
+            for (out_port, _ac) in pc.iter_ports() {
+                connections.push((inp_idx, out_port));
+            }
+        }
+        member_summaries.insert(node, connections);
+    }
+
+    // Step 4: Compute capability_map via reachability (single reverse-topological pass).
+    // capability_map[topo_pos][output_port] -> list of group output indices
+    let capability_map = compute_all_reachability(
+        &topo_order, children, &internal_edges, &member_summaries, &output_port_to_group_output,
+    );
+
+    // Step 5: Compute composed summary for the group.
+    // For each (group_input_i, group_output_j): if there's a reachability path, set identity summary.
+    let num_inputs = input_map.len();
+    let num_outputs = output_map.len();
+
+    let mut composed_summary: Connectivity<T::Summary> = Vec::with_capacity(num_inputs);
+    for &(topo_pos, port) in input_map.iter() {
+        let node = topo_order[topo_pos];
+        let mut pc = PortConnectivity::default();
+
+        // Find which group outputs are reachable from this input.
+        // Use the node's summary to find output ports reachable from this input port,
+        // then use capability_map for those output ports.
+        if let Some(connections) = member_summaries.get(&node) {
+            for &(inp, outp) in connections.iter() {
+                if inp == port {
+                    for &group_out in &capability_map[topo_pos][outp] {
+                        pc.insert(group_out, Default::default());
+                    }
+                }
+            }
+        }
+        composed_summary.push(pc);
+    }
+
+    // Step 6: Extract members in topological order.
+    let mut members = Vec::with_capacity(topo_order.len());
+    let mut group_name_parts = Vec::new();
+    let mut representative_path = Vec::new();
+
+    for &node in topo_order.iter() {
+        let child = &mut children[node];
+        let operator = child.operator.take().expect("group member must have an operator");
         let shared_progress = Rc::clone(&child.shared_progress);
 
-        if i == 0 {
-            head_path = operator.path().to_vec();
+        if node == representative {
+            representative_path = operator.path().to_vec();
         }
-        chain_name_parts.push(child.name.clone());
+        group_name_parts.push(child.name.clone());
 
-        members.push(ChainMember {
+        members.push(GroupMember {
             operator,
             shared_progress,
         });
     }
 
-    let chain_name = format!("Chain[{}]", chain_name_parts.join(" -> "));
+    let group_name = format!("Group[{}]", group_name_parts.join(", "));
 
-    // Create the chain's SharedProgress: 1 input, 1 output (matching head's input, tail's output).
-    let chain_progress = Rc::new(RefCell::new(SharedProgress::new(1, 1)));
+    // Step 7: Create the group's SharedProgress.
+    let group_progress = Rc::new(RefCell::new(SharedProgress::new(num_inputs, num_outputs)));
 
-    // Transfer initial internal capabilities from ALL members to chain_progress.
-    //
-    // Each member declared +peers capabilities at T::minimum() during initialize().
-    // All N members' capabilities must be visible to the reachability tracker at the
-    // chain's single output port, because each member independently drops its
-    // capability during execution. If we only reported one member's initial caps,
-    // the tracker would go negative after N members drop their capabilities.
+    // Transfer initial internal capabilities from ALL members to group_progress,
+    // mapped through capability_map.
     {
-        let mut chain_sp = chain_progress.borrow_mut();
-        for member in members.iter() {
+        let mut group_sp = group_progress.borrow_mut();
+        for (topo_pos, member) in members.iter().enumerate() {
             let mut member_sp = member.shared_progress.borrow_mut();
             for (port, internal) in member_sp.internals.iter_mut().enumerate() {
                 for (time, diff) in internal.iter() {
-                    chain_sp.internals[port].update(time.clone(), *diff);
+                    for &group_out in &capability_map[topo_pos][port] {
+                        group_sp.internals[group_out].update(time.clone(), *diff);
+                    }
                 }
             }
         }
@@ -1169,23 +1369,31 @@ fn fuse_chain<T: Timestamp>(
         for batch in sp.internals.iter_mut() { batch.clear(); }
     }
 
-    let chain_scheduler: Box<dyn Schedule> = Box::new(ChainScheduler {
-        name: chain_name.clone(),
-        path: head_path,
-        chain_progress: Rc::clone(&chain_progress),
+    let group_scheduler: Box<dyn Schedule> = Box::new(GroupScheduler {
+        name: group_name.clone(),
+        path: representative_path,
+        group_progress: Rc::clone(&group_progress),
         members,
+        input_map: input_map.clone(),
+        output_map: output_map.clone(),
+        capability_map,
     });
 
-    // Install the fused operator at the head slot.
-    let head = &mut children[head_idx];
-    head.name = chain_name;
-    head.operator = Some(chain_scheduler);
-    head.shared_progress = chain_progress;
+    // Step 8: Install the fused operator at the representative slot.
+    // Edges are left empty here; the build method populates them from edge_stash.
+    let head = &mut children[representative];
+    head.name = group_name;
+    head.operator = Some(group_scheduler);
+    head.shared_progress = group_progress;
     head.internal_summary = composed_summary;
+    head.inputs = num_inputs;
+    head.outputs = num_outputs;
+    head.edges = vec![Vec::new(); num_outputs];
 
-    // Tombstone all other chain members.
-    for &idx in &chain[1..] {
-        let child = &mut children[idx];
+    // Step 9: Tombstone all other group members, forwarding activations to representative.
+    for &node in group.iter() {
+        if node == representative { continue; }
+        let child = &mut children[node];
         child.name = format!("Tombstone({})", child.name);
         child.operator = None;
         child.shared_progress = Rc::new(RefCell::new(SharedProgress::new(0, 0)));
@@ -1193,22 +1401,48 @@ fn fuse_chain<T: Timestamp>(
         child.inputs = 0;
         child.outputs = 0;
         child.internal_summary = Vec::new();
+        child.forward_to = Some(representative);
     }
 
-    // Rewrite edge_stash:
-    // 1. Remove internal chain edges (edges between consecutive chain members).
-    // 2. Rewrite edges from the tail's output to use the head's index as source.
-    let chain_set: std::collections::HashSet<usize> = chain.iter().cloned().collect();
+    // Step 10: Rewrite edge_stash.
+    // Remove edges where both endpoints are in the group.
+    // Rewrite edges incoming to group members: target.node = representative, target.port = group_input_index.
+    // Rewrite edges outgoing from group members: source.node = representative, source.port = group_output_index.
+    let mut new_edge_stash: Vec<(Source, Target)> = Vec::new();
 
-    edge_stash.retain(|(source, target)| {
-        // Remove edges internal to the chain.
-        !(chain_set.contains(&source.node) && chain_set.contains(&target.node))
-    });
+    for (source, target) in edge_stash.iter() {
+        let src_in = group_set.contains(&source.node);
+        let tgt_in = group_set.contains(&target.node);
 
-    // Rewrite edges from tail's output to come from head's output instead.
-    for (source, _target) in edge_stash.iter_mut() {
-        if source.node == tail_idx {
-            source.node = head_idx;
+        if src_in && tgt_in {
+            // Internal edge: remove.
+            continue;
+        } else if !src_in && tgt_in {
+            // Incoming edge: rewrite target.
+            if let Some(&group_input) = input_port_to_group_input.get(&(target.node, target.port)) {
+                new_edge_stash.push((
+                    *source,
+                    Target::new(representative, group_input),
+                ));
+            }
+        } else if src_in && !tgt_in {
+            // Outgoing edge: rewrite source.
+            let topo_pos = node_to_topo[&source.node];
+            if let Some(group_outs) = output_port_to_group_output.get(&(source.node, source.port)) {
+                for &group_out in group_outs {
+                    if output_map[group_out] == (topo_pos, source.port) {
+                        new_edge_stash.push((
+                            Source::new(representative, group_out),
+                            *target,
+                        ));
+                    }
+                }
+            }
+        } else {
+            // Neither endpoint in group: keep as-is.
+            new_edge_stash.push((*source, *target));
         }
     }
+
+    *edge_stash = new_edge_stash;
 }
