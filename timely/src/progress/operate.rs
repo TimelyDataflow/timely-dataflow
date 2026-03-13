@@ -61,6 +61,14 @@ pub trait Operate<T: Timestamp> {
     /// frontier changes on that input should cause the operator to be scheduled. The conservative
     /// default is `Always` for each input.
     fn notify_me(&self) -> &[FrontierInterest];// { &vec![FrontierInterest::Always; self.inputs()] }
+
+    /// Indicates whether all inputs use thread-local (pipeline) channels.
+    ///
+    /// Operators with pipeline inputs receive data through thread-local channels,
+    /// meaning data pushed by an upstream operator on the same worker is immediately
+    /// available. This property is used by chain fusion to determine whether
+    /// consecutive operators can be scheduled as a single unit.
+    fn pipeline(&self) -> bool { true }
 }
 
 /// The ways in which an operator can express interest in activation when an input frontier changes.
