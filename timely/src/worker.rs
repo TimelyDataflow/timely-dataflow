@@ -696,7 +696,17 @@ impl<A: Allocate> Worker<A> {
             func(&mut resources, &mut builder)
         };
 
-        let operator = subscope.into_inner().build(self);
+        let mut subscope = subscope.into_inner();
+
+        // Register the fusion pass if enabled.
+        let fuse_chain_length = self.config().fuse_chain_length;
+        if fuse_chain_length >= 2 {
+            subscope.add_graph_pass(Box::new(
+                crate::progress::fusion::FusionPass::new(fuse_chain_length)
+            ));
+        }
+
+        let operator = subscope.build(self);
 
         if let Some(l) = logging.as_mut() {
             l.log(crate::logging::OperatesEvent {

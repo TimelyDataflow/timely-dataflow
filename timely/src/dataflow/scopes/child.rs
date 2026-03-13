@@ -148,7 +148,17 @@ where
             };
             func(&mut builder)
         };
-        let subscope = subscope.into_inner().build(self);
+        let mut subscope = subscope.into_inner();
+
+        // Register the fusion pass if enabled.
+        let fuse_chain_length = self.parent.config().fuse_chain_length;
+        if fuse_chain_length >= 2 {
+            subscope.add_graph_pass(Box::new(
+                crate::progress::fusion::FusionPass::new(fuse_chain_length)
+            ));
+        }
+
+        let subscope = subscope.build(self);
 
         self.add_operator_with_indices(Box::new(subscope), index, identifier);
 
