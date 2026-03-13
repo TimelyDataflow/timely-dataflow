@@ -373,8 +373,6 @@ impl<T: Timestamp> Default for Builder<T> {
 /// alter the potential pointstamps that could arrive at downstream input ports.
 pub struct Tracker<T:Timestamp> {
 
-    /// Internal connections within hosted operators, flattened from `Vec<Vec<PortConnectivity<T::Summary>>>`.
-    /// Indexed by `(node, input_port)` to yield `(output_port, summary)` pairs.
     /// Internal operator connectivity, columnar form of `Vec<Vec<PortConnectivity<T::Summary>>>`.
     /// Indexed by `(node, input_port)` to yield `(output_port, summary)` pairs.
     nodes: Vecs<Vecs<Vec<(usize, T::Summary)>>>,
@@ -542,11 +540,16 @@ impl<T:Timestamp> Tracker<T> {
             .collect();
 
         for (location, summaries) in output_summaries.into_iter() {
+            // Summaries from scope inputs are useful in summarizing the scope.
             if location.node == 0 {
                 if let Port::Source(port) = location.port {
                     builder_summary[port] = summaries;
                 }
+                else {
+                    // Ignore (ideally trivial) output to output summaries.
+                }
             }
+            // Summaries from internal nodes are important for projecting capabilities.
             else {
                 match location.port {
                     Port::Target(port) => {
