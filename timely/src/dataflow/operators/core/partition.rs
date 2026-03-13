@@ -41,9 +41,9 @@ impl<G: Scope, C: Container + DrainContainer> Partition<G, C> for Stream<G, C> {
         F: FnMut(C::Item<'_>) -> (u64, D2) + 'static,
     {
         let mut builder = OperatorBuilder::new("Partition".to_owned(), self.scope());
-        builder.set_notify(false);
 
         let mut input = builder.new_input(self, Pipeline);
+        builder.set_notify_for(0, crate::progress::operate::FrontierInterest::Never);
         let mut outputs = Vec::with_capacity(parts as usize);
         let mut streams = Vec::with_capacity(parts as usize);
 

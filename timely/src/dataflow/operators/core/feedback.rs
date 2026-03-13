@@ -73,7 +73,6 @@ impl<G: Scope> Feedback<G> for G {
     fn feedback<C: Container>(&mut self, summary: <G::Timestamp as Timestamp>::Summary) -> (Handle<G, C>, Stream<G, C>) {
 
         let mut builder = OperatorBuilder::new("Feedback".to_owned(), self.clone());
-        builder.set_notify(false);
         let (output, stream) = builder.new_output();
 
         (Handle { builder, summary, output }, stream)
@@ -118,6 +117,7 @@ impl<G: Scope, C: Container> ConnectLoop<G, C> for Stream<G, C> {
         let mut output = handle.output;
 
         let mut input = builder.new_input_connection(self, Pipeline, [(0, Antichain::from_elem(summary.clone()))]);
+        builder.set_notify_for(0, crate::progress::operate::FrontierInterest::Never);
 
         builder.build(move |_capability| move |_frontier| {
             let mut output = output.activate();

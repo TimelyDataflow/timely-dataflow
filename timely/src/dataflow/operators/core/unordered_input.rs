@@ -129,6 +129,7 @@ impl<T:Timestamp> Schedule for UnorderedOperator<T> {
     }
 }
 
+use crate::progress::operate::FrontierInterest;
 impl<T:Timestamp> Operate<T> for UnorderedOperator<T> {
     fn inputs(&self) -> usize { 0 }
     fn outputs(&self) -> usize { 1 }
@@ -140,7 +141,7 @@ impl<T:Timestamp> Operate<T> for UnorderedOperator<T> {
         (Vec::new(), Rc::clone(&self.shared_progress), self)
     }
 
-    fn notify_me(&self) -> bool { false }
+    fn notify_me(&self) -> &[FrontierInterest] { &[] }
 }
 
 /// A handle to an input [Stream], used to introduce data to a timely dataflow computation.

@@ -199,6 +199,7 @@ impl<T:Timestamp> Schedule for Operator<T> {
     }
 }
 
+use crate::progress::operate::FrontierInterest;
 impl<T:Timestamp> Operate<T> for Operator<T> {
 
     fn inputs(&self) -> usize { 0 }
@@ -209,7 +210,7 @@ impl<T:Timestamp> Operate<T> for Operator<T> {
         (Vec::new(), Rc::clone(&self.shared_progress), self)
     }
 
-    fn notify_me(&self) -> bool { false }
+    fn notify_me(&self) -> &[FrontierInterest] { &[] }
 }
 
 

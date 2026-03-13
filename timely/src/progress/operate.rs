@@ -55,12 +55,23 @@ pub trait Operate<T: Timestamp> {
     /// safely "create" capabilities without basing them on other, prior capabilities.
     fn initialize(self: Box<Self>) -> (Connectivity<T::Summary>, Rc<RefCell<SharedProgress<T>>>, Box<dyn Schedule>);
 
-    /// Indicates if the operator should be invoked on the basis of input frontier transitions.
+    /// Indicates for each input whether the operator should be invoked when that input's frontier changes.
     ///
-    /// This value is conservatively set to `true`, but operators that know they are oblivious to
-    /// frontier information can indicate this with `false`, and they will not be scheduled on the
-    /// basis of their input frontiers changing.
-    fn notify_me(&self) -> bool { true }
+    /// Returns a `Vec<FrontierInterest>` with one entry per input. Each entry describes whether
+    /// frontier changes on that input should cause the operator to be scheduled. The conservative
+    /// default is `Always` for each input.
+    fn notify_me(&self) -> &[FrontierInterest];// { &vec![FrontierInterest::Always; self.inputs()] }
+}
+
+/// The ways in which an operator can express interest in activation when an input frontier changes.
+#[derive(Ord, PartialOrd, Eq, PartialEq, Copy, Clone, Debug)]
+pub enum FrontierInterest {
+    /// Never interested in frontier changes, as for example the `map()` and `filter()` operators.
+    Never,
+    /// Interested when the operator holds capabilities.
+    IfCapability,
+    /// Always interested in frontier changes, as for example the `probe()` and `capture()` operators.
+    Always,
 }
 
 /// Operator internal connectivity, from inputs to outputs.

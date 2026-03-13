@@ -1,4 +1,5 @@
-use timely::dataflow::operators::{Input, Probe};
+use timely::dataflow::Scope;
+use timely::dataflow::operators::{Input, Probe, Enter, Leave};
 use timely::dataflow::operators::vec::Map;
 
 fn main() {
@@ -20,10 +21,14 @@ fn main() {
         // create a new input, exchange data, and inspect its output
         for _dataflow in 0 .. dataflows {
             worker.dataflow(|scope| {
-                let (input, mut stream) = scope.new_input();
-                for _step in 0 .. length {
-                    stream = stream.map(|x: ()| x);
-                }
+                let (input, stream) = scope.new_input();
+                let stream = scope.region(|inner| {
+                    let mut stream = stream.enter(inner);
+                    for _step in 0 .. length {
+                        stream = stream.map(|x: ()| x);
+                    }
+                    stream.leave()
+                });
                 let (probe, _stream) = stream.probe();
                 inputs.push(input);
                 probes.push(probe);
@@ -43,7 +48,7 @@ fn main() {
                 worker.step();
                 steps += 1;
             }
-            println!("{:?}\tround {} complete in {} steps", timer.elapsed(), round, steps);
+            if round % 1000 == 0 { println!("{:?}\tround {} complete in {} steps", timer.elapsed(), round, steps); }
         }
 
     }).unwrap();
