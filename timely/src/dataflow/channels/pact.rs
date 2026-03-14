@@ -25,6 +25,8 @@ pub trait ParallelizationContract<T, C> {
     type Puller: Pull<Message<T, C>>+'static;
     /// Allocates a matched pair of push and pull endpoints implementing the pact.
     fn connect<A: AsWorker>(self, allocator: &mut A, identifier: usize, address: Rc<[usize]>, logging: Option<Logger>) -> (Self::Pusher, Self::Puller);
+    /// Indicates whether this pact uses a thread-local channel (no inter-worker exchange).
+    fn is_pipeline(&self) -> bool { false }
 }
 
 /// A direct connection
@@ -34,6 +36,7 @@ pub struct Pipeline;
 impl<T: 'static, C: Accountable + 'static> ParallelizationContract<T, C> for Pipeline {
     type Pusher = LogPusher<ThreadPusher<Message<T, C>>>;
     type Puller = LogPuller<ThreadPuller<Message<T, C>>>;
+    fn is_pipeline(&self) -> bool { true }
     fn connect<A: AsWorker>(self, allocator: &mut A, identifier: usize, address: Rc<[usize]>, logging: Option<Logger>) -> (Self::Pusher, Self::Puller) {
         let (pusher, puller) = allocator.pipeline::<Message<T, C>>(identifier, address);
         (LogPusher::new(pusher, allocator.index(), allocator.index(), identifier, logging.clone()),

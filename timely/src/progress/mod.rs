@@ -15,6 +15,8 @@ pub mod operate;
 pub mod broadcast;
 pub mod reachability;
 pub mod subgraph;
+pub(crate) mod graph_pass;
+pub(crate) mod fusion;
 
 /// A timely dataflow location.
 #[derive(Copy, Clone, Eq, PartialEq, Ord, PartialOrd, Hash, Debug, Serialize, Deserialize, Columnar)]

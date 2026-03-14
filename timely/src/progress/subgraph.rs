@@ -26,6 +26,7 @@ use crate::progress::reachability;
 use crate::progress::timestamp::Refines;
 
 use crate::worker::ProgressMode;
+use crate::progress::graph_pass::GraphPass;
 
 // IMPORTANT : by convention, a child identifier of zero is used to indicate inputs and outputs of
 // the Subgraph itself. An identifier greater than zero corresponds to an actual child, which can
@@ -69,6 +70,9 @@ where
     logging: Option<Logger>,
     /// Typed logging handle for operator summaries.
     summary_logging: Option<SummaryLogger<TInner::Summary>>,
+
+    /// Graph transformation passes to run during `build()`.
+    graph_passes: Vec<Box<dyn GraphPass<TInner>>>,
 }
 
 impl<TOuter, TInner> SubgraphBuilder<TOuter, TInner>
@@ -123,6 +127,7 @@ where
             output_capabilities: Vec::new(),
             logging,
             summary_logging,
+            graph_passes: Vec::new(),
         }
     }
 
@@ -130,6 +135,15 @@ where
     pub fn allocate_child_id(&mut self) -> usize {
         self.child_count += 1;
         self.child_count - 1
+    }
+
+    /// Registers a graph transformation pass to run during `build()`.
+    ///
+    /// Passes run sequentially in registration order, each seeing the output
+    /// of the previous pass. They execute after operators are initialized but
+    /// before the reachability tracker is built.
+    pub(crate) fn add_graph_pass(&mut self, pass: Box<dyn GraphPass<TInner>>) {
+        self.graph_passes.push(pass);
     }
 
     /// Adds a new child to the subgraph.
@@ -166,12 +180,19 @@ where
         // Create empty child zero representative.
         self.children[0] = PerOperatorState::empty(outputs, inputs);
 
+        // Run registered graph transformation passes (e.g., operator fusion).
+        for pass in self.graph_passes.iter() {
+            pass.apply(&mut self.children, &mut self.edge_stash);
+        }
+
         let mut builder = reachability::Builder::new();
 
         // Child 0 has `inputs` outputs and `outputs` inputs, not yet connected.
         let summary = (0..outputs).map(|_| PortConnectivity::default()).collect();
         builder.add_node(0, outputs, inputs, summary);
         for (index, child) in self.children.iter().enumerate().skip(1) {
+            // Tombstoned children are added with (0, 0) inputs/outputs and empty summary
+            // to preserve index positions in the reachability tracker.
             builder.add_node(index, child.inputs, child.outputs, child.internal_summary.clone());
         }
 
@@ -192,7 +213,13 @@ where
 
         let mut incomplete = vec![true; self.children.len()];
         incomplete[0] = false;
-        let incomplete_count = incomplete.len() - 1;
+        // Tombstoned children are not incomplete.
+        for (i, child) in self.children.iter().enumerate().skip(1) {
+            if child.inputs == 0 && child.outputs == 0 && child.operator.is_none() {
+                incomplete[i] = false;
+            }
+        }
+        let incomplete_count = incomplete.iter().filter(|&&b| b).count();
 
         let activations = worker.activations();
 
@@ -321,13 +348,16 @@ where
         //
         // We should be able to schedule arbitrary subsets of children, as
         // long as we eventually schedule all children that need to do work.
-        let mut previous = 0;
+        let mut scheduled = std::collections::HashSet::new();
+        scheduled.insert(0);  // Child 0 is the subgraph boundary, never scheduled.
         while let Some(Reverse(index)) = self.temp_active.pop() {
-            // De-duplicate, and don't revisit.
-            if index > previous {
+            if !scheduled.insert(index) { continue; }
+            // Tombstoned group members forward activations to their representative.
+            if let Some(fwd) = self.children[index].forward_to {
+                self.temp_active.push(Reverse(fwd));
+            } else {
                 // TODO: This is a moment where a scheduling decision happens.
                 self.activate_child(index);
-                previous = index;
             }
         }
 
@@ -606,26 +636,43 @@ where
     fn notify_me(&self) -> &[FrontierInterest] { &self.notify_me }
 }
 
-struct PerOperatorState<T: Timestamp> {
+/// Per-operator state within a subgraph.
+///
+/// Each child operator in a subgraph has an associated `PerOperatorState` that
+/// tracks its scheduling state, progress information, and graph connectivity.
+///
+/// Graph passes may modify these fields to implement transformations like
+/// operator fusion. In particular, a pass that merges operators should
+/// tombstone absorbed operators by clearing their fields and setting
+/// `forward_to` for activation forwarding.
+pub(crate) struct PerOperatorState<T: Timestamp> {
 
-    name: String,       // name of the operator
-    index: usize,       // index of the operator within its parent scope
-    id: usize,          // worker-unique identifier
+    pub(crate) name: String,       // name of the operator
+    pub(crate) index: usize,       // index of the operator within its parent scope
+    pub(crate) id: usize,          // worker-unique identifier
 
-    local: bool,        // indicates whether the operator will exchange data or not
-    notify: Vec<FrontierInterest>,
-    inputs: usize,      // number of inputs to the operator
-    outputs: usize,     // number of outputs from the operator
+    pub(crate) local: bool,        // indicates whether progress information is pre-circulated or not
+    pub(crate) notify: Vec<FrontierInterest>,
+    pub(crate) pipeline: bool,     // indicates whether all inputs use thread-local (pipeline) channels
+    pub(crate) inputs: usize,      // number of inputs to the operator
+    pub(crate) outputs: usize,     // number of outputs from the operator
 
-    operator: Option<Box<dyn Schedule>>,
+    pub(crate) operator: Option<Box<dyn Schedule>>,
 
-    edges: Vec<Vec<Target>>,    // edges from the outputs of the operator
+    pub(crate) edges: Vec<Vec<Target>>,    // edges from the outputs of the operator
 
-    shared_progress: Rc<RefCell<SharedProgress<T>>>,
+    pub(crate) shared_progress: Rc<RefCell<SharedProgress<T>>>,
 
-    internal_summary: Connectivity<T::Summary>,   // cached result from initialize.
+    pub(crate) internal_summary: Connectivity<T::Summary>,   // cached result from initialize.
 
-    logging: Option<Logger>,
+    pub(crate) logging: Option<Logger>,
+
+    /// For tombstoned operators: forward activations to this operator index instead.
+    ///
+    /// When a graph pass merges multiple operators into one, the absorbed operators
+    /// are tombstoned and their activations are forwarded to the representative
+    /// operator that replaced them.
+    pub(crate) forward_to: Option<usize>,
 }
 
 impl<T: Timestamp> PerOperatorState<T> {
@@ -638,6 +685,7 @@ impl<T: Timestamp> PerOperatorState<T> {
             id:         usize::MAX,
             local:      false,
             notify:     vec![FrontierInterest::IfCapability; inputs],
+            pipeline:   false,
             inputs,
             outputs,
 
@@ -647,6 +695,7 @@ impl<T: Timestamp> PerOperatorState<T> {
 
             shared_progress: Rc::new(RefCell::new(SharedProgress::new(inputs,outputs))),
             internal_summary: Vec::new(),
+            forward_to: None,
         }
     }
 
@@ -662,6 +711,7 @@ impl<T: Timestamp> PerOperatorState<T> {
         let inputs = scope.inputs();
         let outputs = scope.outputs();
         let notify = scope.notify_me().to_vec();
+        let pipeline = scope.pipeline();
 
         let (internal_summary, shared_progress, operator) = scope.initialize();
 
@@ -691,6 +741,7 @@ impl<T: Timestamp> PerOperatorState<T> {
             id:                 identifier,
             local,
             notify,
+            pipeline,
             inputs,
             outputs,
             edges:              vec![vec![]; outputs],
@@ -699,6 +750,7 @@ impl<T: Timestamp> PerOperatorState<T> {
 
             shared_progress,
             internal_summary,
+            forward_to: None,
         }
     }
 
@@ -823,3 +875,4 @@ impl<T: Timestamp> Drop for PerOperatorState<T> {
         self.shut_down();
     }
 }
+
