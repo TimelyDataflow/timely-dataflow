@@ -27,6 +27,7 @@ pub struct OperatorShape {
     peers: usize,   // The total number of workers in the computation. Needed to initialize pointstamp counts with the correct magnitude.
     inputs: usize,  // The number of input ports.
     outputs: usize, // The number of output ports.
+    pipeline: bool, // Whether all inputs use Pipeline pact (thread-local channels).
 }
 
 /// Core data for the structure of an operator, minus scope and logic.
@@ -38,6 +39,7 @@ impl OperatorShape {
             peers,
             inputs: 0,
             outputs: 0,
+            pipeline: true,
         }
     }
 
@@ -110,6 +112,7 @@ impl<G: Scope> OperatorBuilder<G> {
     {
         let channel_id = self.scope.new_identifier();
         let logging = self.scope.logging();
+        if !pact.is_pipeline() { self.shape.pipeline = false; }
         let (sender, receiver) = pact.connect(&mut self.scope, channel_id, Rc::clone(&self.address), logging);
         let target = Target::new(self.index, self.shape.inputs);
         stream.connect_to(target, sender, channel_id);
@@ -224,4 +227,5 @@ where
     }
 
     fn notify_me(&self) -> &[FrontierInterest] { &self.shape.notify }
+    fn pipeline(&self) -> bool { self.shape.pipeline }
 }

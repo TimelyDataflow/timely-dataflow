@@ -166,19 +166,51 @@ where
         // Create empty child zero representative.
         self.children[0] = PerOperatorState::empty(outputs, inputs);
 
+        // Build the graph IR from children and edges.
+        let mut ir = crate::progress::graph_ir::GraphIR::from_builder(&mut self.children, self.edge_stash);
+
+        // Pipeline group fusion: detect and fuse groups of pipeline-connected operators.
+        let fuse_chain_length = worker.config().fuse_chain_length;
+        if fuse_chain_length >= 2 {
+            crate::progress::graph_ir::fusion_pass(&mut ir, fuse_chain_length);
+        }
+
+        // Lower the IR to a dense operator array with sequential indices.
+        let lowered = ir.lower();
+        let children = lowered.children;
+        // Build a dense activation index map: old_index -> new_index.
+        // This maps from original operator indices (used in activation paths) to
+        // the new dense indices. The map is sized to the max old index + 1.
+        let max_old_index = lowered.old_to_new.keys().cloned().max().unwrap_or(0);
+        let mut activation_index_map = vec![usize::MAX; max_old_index + 1];
+        for (&old, &new) in lowered.old_to_new.iter() {
+            activation_index_map[old] = new;
+        }
+        let edge_stash = lowered.edges;
+
         let mut builder = reachability::Builder::new();
 
         // Child 0 has `inputs` outputs and `outputs` inputs, not yet connected.
         let summary = (0..outputs).map(|_| PortConnectivity::default()).collect();
         builder.add_node(0, outputs, inputs, summary);
-        for (index, child) in self.children.iter().enumerate().skip(1) {
+        for (index, child) in children.iter().enumerate().skip(1) {
             builder.add_node(index, child.inputs, child.outputs, child.internal_summary.clone());
         }
 
-        for (source, target) in self.edge_stash {
-            self.children[source.node].edges[source.port].push(target);
+        // Populate edges arrays and register with reachability builder.
+        // Note: edges in edge_stash already use new (dense) indices.
+        let mut children = children;
+        for (source, target) in edge_stash {
+            children[source.node].edges[source.port].push(target);
             builder.add_edge(source, target);
         }
+
+        // Remap input_messages edges: the edges from child 0 were populated from
+        // the original edge_stash in the old index space. Since child 0 always stays
+        // at index 0 and its edge targets have been remapped during lowering,
+        // the edges are already correct. However, child 0's edges were not populated
+        // from the edge stash above (they come from the builder), so they are already
+        // handled.
 
         // The `None` argument is optional logging infrastructure.
         let type_name = std::any::type_name::<TInner>();
@@ -190,9 +222,9 @@ where
 
         let progcaster = Progcaster::new(worker, Rc::clone(&self.path), self.identifier, self.logging.clone(), progress_logging);
 
-        let mut incomplete = vec![true; self.children.len()];
+        let mut incomplete = vec![true; children.len()];
         incomplete[0] = false;
-        let incomplete_count = incomplete.len() - 1;
+        let incomplete_count = incomplete.iter().filter(|&&b| b).count();
 
         let activations = worker.activations();
 
@@ -212,10 +244,11 @@ where
             outputs,
             incomplete,
             incomplete_count,
+            activation_index_map,
             activations,
             temp_active: BinaryHeap::new(),
             maybe_shutdown: Vec::new(),
-            children: self.children,
+            children,
             input_messages: self.input_messages,
             output_capabilities: self.output_capabilities,
 
@@ -254,6 +287,11 @@ where
 
     incomplete: Vec<bool>,   // the incompletion status of each child.
     incomplete_count: usize, // the number of incomplete children.
+
+    // Maps old (original) operator index to new (dense) index after lowering.
+    // Used to translate activation indices from the activation system, since
+    // operator paths still reference original indices.
+    activation_index_map: Vec<usize>,
 
     // shared activations (including children).
     activations: Rc<RefCell<Activations>>,
@@ -312,9 +350,18 @@ where
 
         {   // Enqueue active children; scoped to let borrow drop.
             let temp_active = &mut self.temp_active;
+            let index_map = &self.activation_index_map;
             self.activations
                 .borrow_mut()
-                .for_extensions(&self.path[..], |index| temp_active.push(Reverse(index)));
+                .for_extensions(&self.path[..], |old_index| {
+                    // Translate old activation index to new dense index.
+                    if old_index < index_map.len() {
+                        let new_index = index_map[old_index];
+                        if new_index != usize::MAX {
+                            temp_active.push(Reverse(new_index));
+                        }
+                    }
+                });
         }
 
         // Schedule child operators.
@@ -606,26 +653,27 @@ where
     fn notify_me(&self) -> &[FrontierInterest] { &self.notify_me }
 }
 
-struct PerOperatorState<T: Timestamp> {
+pub(crate) struct PerOperatorState<T: Timestamp> {
 
-    name: String,       // name of the operator
-    index: usize,       // index of the operator within its parent scope
-    id: usize,          // worker-unique identifier
+    pub(crate) name: String,       // name of the operator
+    pub(crate) index: usize,       // index of the operator within its parent scope
+    pub(crate) id: usize,          // worker-unique identifier
 
-    local: bool,        // indicates whether the operator will exchange data or not
-    notify: Vec<FrontierInterest>,
-    inputs: usize,      // number of inputs to the operator
-    outputs: usize,     // number of outputs from the operator
+    pub(crate) local: bool,        // indicates whether progress information is pre-circulated or not
+    pub(crate) notify: Vec<FrontierInterest>,
+    pub(crate) pipeline: bool,     // indicates whether all inputs use thread-local (pipeline) channels
+    pub(crate) inputs: usize,      // number of inputs to the operator
+    pub(crate) outputs: usize,     // number of outputs from the operator
 
-    operator: Option<Box<dyn Schedule>>,
+    pub(crate) operator: Option<Box<dyn Schedule>>,
 
-    edges: Vec<Vec<Target>>,    // edges from the outputs of the operator
+    pub(crate) edges: Vec<Vec<Target>>,    // edges from the outputs of the operator
 
-    shared_progress: Rc<RefCell<SharedProgress<T>>>,
+    pub(crate) shared_progress: Rc<RefCell<SharedProgress<T>>>,
 
-    internal_summary: Connectivity<T::Summary>,   // cached result from initialize.
+    pub(crate) internal_summary: Connectivity<T::Summary>,   // cached result from initialize.
 
-    logging: Option<Logger>,
+    pub(crate) logging: Option<Logger>,
 }
 
 impl<T: Timestamp> PerOperatorState<T> {
@@ -638,6 +686,7 @@ impl<T: Timestamp> PerOperatorState<T> {
             id:         usize::MAX,
             local:      false,
             notify:     vec![FrontierInterest::IfCapability; inputs],
+            pipeline:   false,
             inputs,
             outputs,
 
@@ -662,6 +711,7 @@ impl<T: Timestamp> PerOperatorState<T> {
         let inputs = scope.inputs();
         let outputs = scope.outputs();
         let notify = scope.notify_me().to_vec();
+        let pipeline = scope.pipeline();
 
         let (internal_summary, shared_progress, operator) = scope.initialize();
 
@@ -691,6 +741,7 @@ impl<T: Timestamp> PerOperatorState<T> {
             id:                 identifier,
             local,
             notify,
+            pipeline,
             inputs,
             outputs,
             edges:              vec![vec![]; outputs],
@@ -823,3 +874,4 @@ impl<T: Timestamp> Drop for PerOperatorState<T> {
         self.shut_down();
     }
 }
+
