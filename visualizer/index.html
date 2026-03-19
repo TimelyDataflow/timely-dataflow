@@ -1,0 +1,1643 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Timely Dataflow Visualizer</title>
+  <style>
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body {
+      font-family: monospace;
+      background: #1a1a1a;
+      color: #ccc;
+      padding: 1em;
+      display: flex;
+      flex-direction: column;
+      gap: 1em;
+    }
+    #header { display: flex; align-items: baseline; gap: 1em; flex-wrap: wrap; }
+    h1 { font-size: 1.2em; color: #fff; }
+    h2 { font-size: 1em; color: #fff; margin-bottom: 0.5em; }
+    #status { font-size: 0.85em; color: #888; }
+    #status.loaded { color: #4c4; }
+    #status.error  { color: #c44; }
+
+    .conn-row {
+      display: flex; gap: 0.5em; flex-wrap: wrap; align-items: center;
+    }
+
+    button {
+      font-family: monospace; font-size: 0.85em;
+      background: #333; color: #ccc; border: 1px solid #555;
+      padding: 0.3em 0.8em; border-radius: 3px; cursor: pointer;
+    }
+    button:hover { background: #444; }
+    button:disabled { opacity: 0.5; cursor: default; }
+
+    .panel {
+      background: #222; border: 1px solid #333;
+      border-radius: 5px; padding: 1em;
+    }
+
+    .tab-bar {
+      display: flex; gap: 0; margin-bottom: -1px;
+    }
+    .tab-bar button {
+      padding: 0.4em 1.2em; border: 1px solid #333;
+      border-bottom: none; border-radius: 5px 5px 0 0;
+      background: #1a1a1a; color: #888; font-weight: bold;
+    }
+    .tab-bar button.active {
+      background: #222; color: #fff; border-color: #333;
+    }
+    .tab-pane { display: none; }
+    .tab-pane.active { display: block; }
+
+    table { width: 100%; border-collapse: collapse; font-size: 0.85em; }
+    th {
+      text-align: left; color: #888;
+      border-bottom: 1px solid #444; padding: 0.3em 0.5em;
+      cursor: pointer; user-select: none;
+    }
+    th:hover { color: #fff; }
+    th .sort-arrow { font-size: 0.7em; margin-left: 0.3em; }
+    td { padding: 0.3em 0.5em; border-bottom: 1px solid #2a2a2a; }
+    td.num { text-align: right; font-variant-numeric: tabular-nums; }
+    tr.clickable { cursor: pointer; }
+    tr.clickable:hover { background: #2a2a3a; }
+    tr.selected  { background: #2a2a4a; }
+    .no-data {
+      color: #666; font-style: italic; padding: 1em; text-align: center;
+    }
+    .dim { color: #666; }
+
+    .controls {
+      display: flex; gap: 0.5em; align-items: center;
+      margin-bottom: 0.75em; flex-wrap: wrap;
+    }
+    .controls label { font-size: 0.85em; color: #888; }
+    .controls select, .controls input[type="checkbox"] {
+      font-family: monospace; font-size: 0.85em;
+      background: #1a1a1a; color: #ccc; border: 1px solid #444;
+      padding: 0.2em 0.4em; border-radius: 3px;
+    }
+
+    .breadcrumb {
+      display: flex; gap: 0.3em; align-items: center;
+      font-size: 0.85em; margin-bottom: 0.5em; flex-wrap: wrap;
+    }
+    .breadcrumb span { color: #888; }
+    .breadcrumb a {
+      color: #8af; cursor: pointer; text-decoration: none;
+    }
+    .breadcrumb a:hover { text-decoration: underline; }
+    .breadcrumb .current { color: #fff; font-weight: bold; }
+
+    #graph-container {
+      width: 100%;
+      overflow: auto; background: #1a1a1a;
+      border: 1px solid #333; border-radius: 3px;
+    }
+    #graph-container svg { cursor: default; }
+
+    .detail-header {
+      display: flex; justify-content: space-between;
+      align-items: baseline; flex-wrap: wrap; gap: 0.5em;
+      margin-bottom: 0.5em;
+    }
+    .detail-header h2 { margin: 0; }
+    .detail-stats { font-size: 0.85em; color: #888; }
+
+    .legend {
+      display: flex; gap: 1em; font-size: 0.8em;
+      color: #888; margin-bottom: 0.5em; flex-wrap: wrap;
+    }
+    .legend-item {
+      display: flex; align-items: center; gap: 0.3em;
+    }
+    .legend-swatch {
+      width: 14px; height: 14px; border: 1px solid #555; border-radius: 2px;
+    }
+
+    #log {
+      font-size: 0.8em; color: #c44;
+      max-height: 6em; overflow-y: auto;
+      white-space: pre-wrap; user-select: text; cursor: text;
+    }
+    #log:empty { display: none; }
+
+    .drop-zone {
+      border: 2px dashed #555; border-radius: 8px;
+      padding: 2em; text-align: center; color: #888;
+      cursor: pointer; transition: border-color 0.2s, background 0.2s;
+    }
+    .drop-zone:hover, .drop-zone.dragover {
+      border-color: #8af; background: #222;
+    }
+    .drop-zone input[type="file"] { display: none; }
+
+    .format-help {
+      font-size: 0.8em; color: #666; margin-top: 0.5em;
+      max-width: 700px; line-height: 1.5;
+    }
+    .format-help code {
+      background: #2a2a2a; padding: 0.1em 0.3em; border-radius: 2px;
+      color: #aaa;
+    }
+  </style>
+</head>
+<body>
+  <div id="header">
+    <h1>Timely Dataflow Visualizer</h1>
+    <span id="status">No data loaded</span>
+  </div>
+
+  <div id="load-section">
+    <div class="conn-row" style="margin-bottom: 0.5em;">
+      <input id="ws-url" style="font-family:monospace;font-size:0.85em;background:#222;color:#ccc;border:1px solid #444;padding:0.3em 0.5em;border-radius:3px;width:22em;" value="ws://localhost:51371" placeholder="ws://localhost:51371">
+      <button id="ws-connect-btn" onclick="connectWs()">Connect</button>
+      <span class="dim">or</span>
+      <button onclick="document.getElementById('file-input').click()">Load JSON file</button>
+      <input type="file" id="file-input" accept=".json,.jsonl" onchange="handleFile(this.files[0])" style="display:none">
+    </div>
+    <div class="drop-zone" id="drop-zone" onclick="document.getElementById('file-input').click()">
+      Drop a JSON log file here, or click to browse
+    </div>
+    <div class="format-help">
+      <b>Live:</b> run <code>cargo run --example logging-live</code> and click Connect.<br>
+      <b>File:</b> a JSON array of <code>[worker, duration_ns, event]</code> triples
+      (generate with <code>cargo run --example logging-json &gt; events.json</code>).
+    </div>
+  </div>
+
+  <div id="main-content" style="display:none">
+    <div class="conn-row">
+      <label style="font-size:0.85em;color:#888;">Worker:</label>
+      <select id="worker-select" onchange="onWorkerChange()"></select>
+      <span class="dim">|</span>
+      <button onclick="document.getElementById('file-input').click()">Load another file</button>
+    </div>
+
+    <div class="tab-bar">
+      <button class="active" onclick="switchTab('overview')">Overview</button>
+      <button onclick="switchTab('detail')">Dataflow Detail</button>
+    </div>
+
+    <div id="tab-overview" class="tab-pane active panel">
+      <div id="overview-content">
+        <div class="no-data">No dataflows found</div>
+      </div>
+    </div>
+
+    <div id="tab-detail" class="tab-pane panel">
+      <div id="detail-empty" class="no-data">
+        Select a dataflow from the Overview tab
+      </div>
+      <div id="detail-loaded" style="display:none">
+        <div class="detail-header">
+          <h2 id="detail-title"></h2>
+          <span class="detail-stats" id="detail-stats"></span>
+        </div>
+        <div class="controls">
+          <button onclick="resetScope()">&lt;&lt; Root</button>
+          <button onclick="popScope()">&lt; Back</button>
+          <span class="dim">|</span>
+          <label style="font-size:0.85em;color:#888;">
+            <input type="checkbox" id="hide-inactive" onchange="renderGraph()">
+            Hide inactive
+          </label>
+        </div>
+        <div class="legend">
+          <span class="legend-item"><span class="legend-swatch" style="background:#12b886"></span> Scope (no messages)</span>
+          <span class="legend-item"><span class="legend-swatch" style="background:#7950f2"></span> Scope (has messages)</span>
+          <span class="legend-item"><span class="legend-swatch" style="background:#fff;border-color:#888"></span> Operator (no messages)</span>
+          <span class="legend-item"><span class="legend-swatch" style="background:#fab005"></span> Operator (has messages)</span>
+          <span class="legend-item"><span class="legend-swatch" style="background:#bbbbff"></span> Boundary port</span>
+        </div>
+        <div class="breadcrumb" id="breadcrumb"></div>
+        <div id="graph-container"></div>
+      </div>
+    </div>
+  </div>
+
+  <div id="log"></div>
+
+  <script>
+    // == State ==================================================================
+
+    // Per-worker state, incrementally maintained:
+    // { worker_id: {
+    //     operates: [...],          -- structural: small, appended once
+    //     channels: [...],          -- structural: small, appended once
+    //     elapsed_ns: { op_id -> ns },  -- aggregated schedule elapsed
+    //     scheduleOpen: { op_id -> start_ns },  -- currently-open schedule spans
+    //     channelMsgs: { ch_id -> count },  -- aggregated message send counts
+    //     channelRecs: { ch_id -> count },  -- aggregated record counts
+    // }}
+    let allWorkerEvents = {};
+    let selectedWorker = 0;
+
+    // Current worker's processed state
+    let operators   = {};    // id -> { name, addr, is_scope, elapsed_ns, msg_in, msg_out }
+    let channels    = [];    // [{ id, scope_addr, source: [op, port], target: [op, port], msgs_sent, records_sent }]
+    let addrToId    = {};    // addr_key -> operator id
+    let childrenOf  = {};    // parent_addr_key -> [child_id, ...]
+    let rootIds     = [];    // top-level dataflow operator ids
+
+    // Selected dataflow
+    let currentDataflowId   = null;
+    let currentDataflowName = null;
+    let scopeStack  = [];
+    let expandedScopes = new Set();
+
+    // Transitive message counts
+    let transitiveMessages = {};
+
+    // WebSocket live connection
+    let ws = null;
+    let liveTimer = null;
+    let liveDirty = false;
+    let liveEventCount = 0;
+
+    // Overview sort
+    let overviewData = [];
+    let overviewSort = { col: 2, asc: false };
+
+    const statusEl = document.getElementById('status');
+    const logEl    = document.getElementById('log');
+
+    // == Utilities =============================================================
+
+    function esc(s) {
+      const d = document.createElement('div');
+      d.textContent = String(s ?? '');
+      return d.innerHTML;
+    }
+
+    function logError(text) {
+      const line = document.createElement('div');
+      line.textContent = text;
+      logEl.appendChild(line);
+      logEl.scrollTop = logEl.scrollHeight;
+    }
+
+    function formatNs(ns) {
+      if (!ns || ns <= 0) return '';
+      const us = ns / 1e3;
+      if (us < 1000) return us.toFixed(0) + 'us';
+      const ms = ns / 1e6;
+      if (ms < 1000) return ms.toFixed(1) + 'ms';
+      const s = ns / 1e9;
+      if (s < 60) return s.toFixed(2) + 's';
+      const m = Math.floor(s / 60);
+      const rs = (s % 60).toFixed(1);
+      return m + 'm' + rs + 's';
+    }
+
+    function addrKey(addr) { return addr.join(','); }
+
+    function addrParent(addr) { return addr.slice(0, -1); }
+
+    // == Drag and drop =========================================================
+
+    const dropZone = document.getElementById('drop-zone');
+    dropZone.addEventListener('dragover', e => { e.preventDefault(); dropZone.classList.add('dragover'); });
+    dropZone.addEventListener('dragleave', () => dropZone.classList.remove('dragover'));
+    dropZone.addEventListener('drop', e => {
+      e.preventDefault();
+      dropZone.classList.remove('dragover');
+      if (e.dataTransfer.files.length > 0) handleFile(e.dataTransfer.files[0]);
+    });
+
+    // == File loading ==========================================================
+
+    function handleFile(file) {
+      if (!file) return;
+      statusEl.textContent = 'Loading ' + file.name + '...';
+      statusEl.className = '';
+
+      const reader = new FileReader();
+      reader.onload = e => {
+        try {
+          parseEvents(e.target.result);
+          statusEl.textContent = 'Loaded ' + file.name;
+          statusEl.className = 'loaded';
+        } catch (err) {
+          logError('Parse error: ' + err.message);
+          statusEl.textContent = 'Error loading file';
+          statusEl.className = 'error';
+        }
+      };
+      reader.onerror = () => {
+        logError('Failed to read file');
+        statusEl.textContent = 'Error reading file';
+        statusEl.className = 'error';
+      };
+      reader.readAsText(file);
+    }
+
+    function parseEvents(text) {
+      let data;
+      // Try JSON array first
+      try {
+        data = JSON.parse(text);
+      } catch {
+        // Try JSON lines
+        data = text.trim().split('\n').map((line, i) => {
+          try { return JSON.parse(line); }
+          catch { throw new Error('Invalid JSON on line ' + (i + 1)); }
+        });
+      }
+
+      if (!Array.isArray(data)) throw new Error('Expected a JSON array');
+
+      // Parse into per-worker event lists
+      allWorkerEvents = {};
+
+      for (const entry of data) {
+        let worker, duration_ns, event;
+
+        if (Array.isArray(entry)) {
+          if (entry.length === 3) {
+            // [worker, duration_ns, event]
+            worker = entry[0];
+            duration_ns = parseDuration(entry[1]);
+            event = entry[2];
+          } else if (entry.length === 2) {
+            // [duration_ns, event] — single worker
+            worker = 0;
+            duration_ns = parseDuration(entry[0]);
+            event = entry[1];
+          } else {
+            continue;
+          }
+        } else if (typeof entry === 'object' && entry !== null) {
+          worker = entry.worker ?? 0;
+          duration_ns = parseDuration(entry.elapsed ?? entry.duration ?? entry.time ?? 0);
+          event = entry.event ?? entry;
+        } else {
+          continue;
+        }
+
+        if (!allWorkerEvents[worker]) {
+          allWorkerEvents[worker] = { operates: [], channels: [], elapsed_ns: {}, scheduleOpen: {}, channelMsgs: {}, channelRecs: {} };
+        }
+
+        const wev = allWorkerEvents[worker];
+        categorizeEvent(event, duration_ns, wev);
+      }
+
+      const workerIds = Object.keys(allWorkerEvents).map(Number).sort((a, b) => a - b);
+      if (workerIds.length === 0) throw new Error('No recognizable events found');
+
+      // Populate worker selector
+      const sel = document.getElementById('worker-select');
+      sel.innerHTML = '';
+      for (const w of workerIds) {
+        const opt = document.createElement('option');
+        opt.value = w;
+        opt.textContent = 'Worker ' + w;
+        sel.appendChild(opt);
+      }
+      selectedWorker = workerIds[0];
+      sel.value = selectedWorker;
+
+      document.getElementById('main-content').style.display = '';
+      processWorkerEvents();
+    }
+
+    function parseDuration(d) {
+      if (typeof d === 'number') return d;
+      if (typeof d === 'object' && d !== null) {
+        // serde Duration: { secs: N, nanos: N }
+        return (Number(d.secs || 0) * 1e9) + Number(d.nanos || 0);
+      }
+      return Number(d) || 0;
+    }
+
+    function categorizeEvent(event, duration_ns, wev) {
+      if (!event || typeof event !== 'object') return;
+
+      let tag, inner;
+
+      // Handle externally-tagged serde enum: { "Operates": {...} }
+      const keys = Object.keys(event);
+      if (keys.length === 1 && typeof event[keys[0]] === 'object') {
+        tag = keys[0];
+        inner = event[tag];
+      } else if (event.type) {
+        // Handle flat format: { type: "Operates", id: ..., addr: ... }
+        tag = event.type;
+        inner = { ...event };
+        delete inner.type;
+      } else {
+        return;
+      }
+
+      switch (tag) {
+        case 'Operates':
+          wev.operates.push(inner);
+          return;
+        case 'Channels':
+          wev.channels.push(inner);
+          return;
+        case 'Schedule': {
+          const ss = inner.start_stop;
+          const id = inner.id;
+          if (ss === 'Start' || ss === 0 || (typeof ss === 'object' && ss && 'Start' in ss)) {
+            wev.scheduleOpen[id] = duration_ns;
+          } else {
+            // Stop — accumulate elapsed
+            if (wev.scheduleOpen[id] !== undefined) {
+              const elapsed = duration_ns - wev.scheduleOpen[id];
+              if (elapsed > 0) {
+                wev.elapsed_ns[id] = (wev.elapsed_ns[id] || 0) + elapsed;
+              }
+              delete wev.scheduleOpen[id];
+            }
+          }
+          return;
+        }
+        case 'Messages':
+          if (inner.is_send) {
+            const ch = inner.channel;
+            wev.channelMsgs[ch] = (wev.channelMsgs[ch] || 0) + 1;
+            wev.channelRecs[ch] = (wev.channelRecs[ch] || 0) + (inner.record_count || 0);
+          }
+          return;
+        case 'Shutdown':
+        case 'PushProgress':
+        case 'Application':
+        case 'CommChannels':
+        case 'Input':
+        case 'Park':
+        case 'Text':
+          return;
+      }
+    }
+
+    // == WebSocket live connection =============================================
+
+    function disconnectWs() {
+      if (liveTimer) { clearInterval(liveTimer); liveTimer = null; }
+      if (ws) { ws.close(); ws = null; }
+    }
+
+    function connectWs() {
+      const url = document.getElementById('ws-url').value.trim();
+      if (!url) { logError('Enter a WebSocket URL'); return; }
+
+      disconnectWs();
+
+      // Reset state for a fresh connection.
+      allWorkerEvents = {};
+      liveEventCount = 0;
+      liveDirty = false;
+      currentDataflowId = null;
+      currentDataflowName = null;
+      scopeStack = [];
+      expandedScopes.clear();
+
+      statusEl.textContent = 'Connecting to ' + url + '...';
+      statusEl.className = '';
+      document.getElementById('ws-connect-btn').textContent = 'Disconnect';
+      document.getElementById('ws-connect-btn').onclick = () => {
+        disconnectWs();
+        statusEl.textContent = 'Disconnected';
+        statusEl.className = '';
+        document.getElementById('ws-connect-btn').textContent = 'Connect';
+        document.getElementById('ws-connect-btn').onclick = connectWs;
+      };
+
+      ws = new WebSocket(url);
+
+      ws.addEventListener('open', () => {
+        statusEl.textContent = 'Connected to ' + url;
+        statusEl.className = 'loaded';
+        document.getElementById('main-content').style.display = '';
+      });
+
+      ws.addEventListener('message', event => {
+        try {
+          const data = JSON.parse(event.data);
+          // Handle both single events and batched arrays of events.
+          if (Array.isArray(data) && data.length > 0 && Array.isArray(data[0])) {
+            // Batched: [[worker, ns, event], ...]
+            for (const entry of data) {
+              ingestEntry(entry);
+              liveEventCount++;
+            }
+          } else {
+            // Single: [worker, ns, event]
+            ingestEntry(data);
+            liveEventCount++;
+          }
+          liveDirty = true;
+        } catch (e) {
+          // Ignore unparseable messages silently.
+        }
+      });
+
+      ws.addEventListener('close', () => {
+        statusEl.textContent = 'Disconnected (' + liveEventCount + ' events received)';
+        statusEl.className = '';
+        document.getElementById('ws-connect-btn').textContent = 'Connect';
+        document.getElementById('ws-connect-btn').onclick = connectWs;
+        ws = null;
+        // Do a final process to capture any remaining events.
+        if (liveDirty) {
+          liveDirty = false;
+          processWorkerEvents();
+          refreshCurrentView();
+        }
+      });
+
+      ws.addEventListener('error', () => {
+        logError('WebSocket error connecting to ' + url);
+        statusEl.textContent = 'Connection error';
+        statusEl.className = 'error';
+      });
+
+      // Throttled re-process: rebuild the view every 500ms if new events arrived.
+      liveTimer = setInterval(() => {
+        if (!liveDirty) return;
+        liveDirty = false;
+        processWorkerEvents();
+        refreshCurrentView();
+        statusEl.textContent = 'Live (' + liveEventCount + ' events)';
+        statusEl.className = 'loaded';
+      }, 500);
+    }
+
+    /** Ingest a single [worker, duration_ns, event] entry into allWorkerEvents. */
+    function ingestEntry(entry) {
+      let worker, duration_ns, event;
+      if (Array.isArray(entry)) {
+        if (entry.length === 3) {
+          worker = entry[0];
+          duration_ns = parseDuration(entry[1]);
+          event = entry[2];
+        } else if (entry.length === 2) {
+          worker = 0;
+          duration_ns = parseDuration(entry[0]);
+          event = entry[1];
+        } else return;
+      } else if (typeof entry === 'object' && entry !== null) {
+        worker = entry.worker ?? 0;
+        duration_ns = parseDuration(entry.elapsed ?? entry.duration ?? entry.time ?? 0);
+        event = entry.event ?? entry;
+      } else return;
+
+      if (!allWorkerEvents[worker]) {
+        allWorkerEvents[worker] = { operates: [], channels: [], elapsed_ns: {}, scheduleOpen: {}, channelMsgs: {}, channelRecs: {} };
+        // Update worker selector if new worker appeared.
+        updateWorkerSelector();
+      }
+      categorizeEvent(event, duration_ns, allWorkerEvents[worker]);
+    }
+
+    function updateWorkerSelector() {
+      const sel = document.getElementById('worker-select');
+      const workerIds = Object.keys(allWorkerEvents).map(Number).sort((a, b) => a - b);
+      const current = sel.value;
+      sel.innerHTML = '';
+      for (const w of workerIds) {
+        const opt = document.createElement('option');
+        opt.value = w;
+        opt.textContent = 'Worker ' + w;
+        sel.appendChild(opt);
+      }
+      if (current && workerIds.includes(Number(current))) {
+        sel.value = current;
+      } else if (workerIds.length > 0) {
+        sel.value = workerIds[0];
+        selectedWorker = workerIds[0];
+      }
+    }
+
+    /** Refresh whichever view is currently active without losing navigation state. */
+    function refreshCurrentView() {
+      if (currentDataflowId != null && operators[currentDataflowId]) {
+        // Update stats
+        const totalOps = countDescendants(currentDataflowId);
+        const totalMsgs = transitiveMessages[currentDataflowId] || 0;
+        const totalElapsed = sumElapsed(currentDataflowId);
+        document.getElementById('detail-stats').textContent =
+          totalOps + ' operators, ' + totalMsgs + ' records, ' + formatNs(totalElapsed);
+        renderGraph();
+      }
+      renderOverview();
+    }
+
+    // == Process events for selected worker ====================================
+
+    function processWorkerEvents() {
+      const wev = allWorkerEvents[selectedWorker];
+      if (!wev) return;
+
+      // Build operators
+      operators = {};
+      addrToId = {};
+      for (const op of wev.operates) {
+        const addr = Array.isArray(op.addr) ? op.addr.map(Number) : [];
+        operators[op.id] = {
+          name: op.name || ('Op ' + op.id),
+          addr,
+          is_scope: false,  // determined below
+          elapsed_ns: 0,
+          msg_count: 0,     // total messages on channels touching this operator
+        };
+        addrToId[addrKey(addr)] = op.id;
+      }
+
+      // Determine which operators are scopes (any operator that is a parent of another)
+      const parentAddrs = new Set();
+      for (const id in operators) {
+        const addr = operators[id].addr;
+        if (addr.length > 1) {
+          parentAddrs.add(addrKey(addrParent(addr)));
+        }
+      }
+      for (const id in operators) {
+        if (parentAddrs.has(addrKey(operators[id].addr))) {
+          operators[id].is_scope = true;
+        }
+      }
+
+      // Build children map (keyed by parent addr)
+      childrenOf = {};
+      for (const id in operators) {
+        const addr = operators[id].addr;
+        if (addr.length > 1) {
+          const parentKey = addrKey(addrParent(addr));
+          if (!childrenOf[parentKey]) childrenOf[parentKey] = [];
+          childrenOf[parentKey].push(Number(id));
+        }
+      }
+
+      // Find root dataflows (addr length 1)
+      rootIds = [];
+      for (const id in operators) {
+        if (operators[id].addr.length === 1) {
+          rootIds.push(Number(id));
+        }
+      }
+
+      // Build channels with pre-aggregated counts
+      channels = [];
+      for (const ch of wev.channels) {
+        const chId = ch.id;
+        channels.push({
+          id: chId,
+          scope_addr: Array.isArray(ch.scope_addr) ? ch.scope_addr.map(Number) : [],
+          source: Array.isArray(ch.source) ? ch.source.map(Number) : [ch.source, 0],
+          target: Array.isArray(ch.target) ? ch.target.map(Number) : [ch.target, 0],
+          typ: ch.typ || '',
+          msgs_sent: wev.channelMsgs[chId] || 0,
+          records_sent: wev.channelRecs[chId] || 0,
+        });
+      }
+
+      // Apply pre-aggregated schedule elapsed to operators
+      for (const id in wev.elapsed_ns) {
+        if (operators[id]) {
+          operators[id].elapsed_ns = wev.elapsed_ns[id];
+        }
+      }
+
+      // Compute transitive message counts (sum of all channel records touching descendants)
+      computeTransitiveMessages();
+
+      // Build overview
+      buildOverview();
+      renderOverview();
+
+      // If we had a dataflow selected, refresh it
+      if (currentDataflowId !== null && operators[currentDataflowId]) {
+        renderGraph();
+      }
+
+      statusEl.textContent = 'Worker ' + selectedWorker + ': ' +
+        Object.keys(operators).length + ' operators, ' +
+        channels.length + ' channels';
+      statusEl.className = 'loaded';
+    }
+
+    function computeTransitiveMessages() {
+      transitiveMessages = {};
+
+      // For each operator, sum records_sent of all channels within its scope subtree
+      function compute(id) {
+        if (transitiveMessages[id] !== undefined) return transitiveMessages[id];
+        const op = operators[id];
+        if (!op) { transitiveMessages[id] = 0; return 0; }
+
+        // Direct channel records for channels scoped at this operator
+        const myAddrKey = addrKey(op.addr);
+        let total = 0;
+        for (const ch of channels) {
+          if (addrKey(ch.scope_addr) === myAddrKey) {
+            total += ch.records_sent;
+          }
+        }
+
+        // Add children's totals
+        const kids = childrenOf[myAddrKey] || [];
+        for (const kid of kids) {
+          total += compute(kid);
+        }
+
+        transitiveMessages[id] = total;
+        return total;
+      }
+
+      for (const id in operators) {
+        compute(Number(id));
+      }
+    }
+
+    // == Worker change =========================================================
+
+    function onWorkerChange() {
+      selectedWorker = Number(document.getElementById('worker-select').value);
+      currentDataflowId = null;
+      currentDataflowName = null;
+      scopeStack = [];
+      expandedScopes.clear();
+      processWorkerEvents();
+    }
+
+    // == Tab switching =========================================================
+
+    function switchTab(tab) {
+      document.querySelectorAll('.tab-bar button').forEach((btn, i) => {
+        btn.className = (i === 0 && tab === 'overview') || (i === 1 && tab === 'detail') ? 'active' : '';
+      });
+      document.getElementById('tab-overview').className =
+        tab === 'overview' ? 'tab-pane active panel' : 'tab-pane panel';
+      document.getElementById('tab-detail').className =
+        tab === 'detail' ? 'tab-pane active panel' : 'tab-pane panel';
+    }
+
+    // == Overview ==============================================================
+
+    function buildOverview() {
+      overviewData = [];
+      for (const id of rootIds) {
+        const op = operators[id];
+        if (!op) continue;
+        const kids = childrenOf[addrKey(op.addr)] || [];
+        const totalOps = countDescendants(Number(id));
+        overviewData.push({
+          id: Number(id),
+          name: op.name,
+          operators: totalOps,
+          messages: transitiveMessages[id] || 0,
+          elapsed_ns: sumElapsed(Number(id)),
+        });
+      }
+    }
+
+    function countDescendants(id) {
+      const op = operators[id];
+      if (!op) return 0;
+      let count = 1;
+      const kids = childrenOf[addrKey(op.addr)] || [];
+      for (const kid of kids) count += countDescendants(kid);
+      return count;
+    }
+
+    function sumElapsed(id) {
+      const op = operators[id];
+      if (!op) return 0;
+      let total = op.elapsed_ns || 0;
+      const kids = childrenOf[addrKey(op.addr)] || [];
+      for (const kid of kids) total += sumElapsed(kid);
+      return total;
+    }
+
+    function renderOverview() {
+      const container = document.getElementById('overview-content');
+      if (overviewData.length === 0) {
+        container.innerHTML = '<div class="no-data">No dataflows found</div>';
+        return;
+      }
+
+      const sorted = [...overviewData].sort((a, b) => {
+        const cols = ['id', 'name', 'operators', 'messages', 'elapsed_ns'];
+        const key = cols[overviewSort.col];
+        let va = a[key], vb = b[key];
+        if (typeof va === 'string') { va = va.toLowerCase(); vb = vb.toLowerCase(); }
+        if (va < vb) return overviewSort.asc ? -1 : 1;
+        if (va > vb) return overviewSort.asc ? 1 : -1;
+        return 0;
+      });
+
+      const cols = [
+        { name: 'Addr', key: 'id' },
+        { name: 'Name', key: 'name' },
+        { name: 'Operators', key: 'operators', num: true },
+        { name: 'Records', key: 'messages', num: true },
+        { name: 'Elapsed', key: 'elapsed_ns', num: true, fmt: formatNs },
+      ];
+
+      let html = '<table><thead><tr>';
+      for (let i = 0; i < cols.length; i++) {
+        const c = cols[i];
+        const arrow = overviewSort.col === i ? (overviewSort.asc ? ' \u25b2' : ' \u25bc') : '';
+        html += '<th onclick="sortOverview(' + i + ')">' + c.name +
+          '<span class="sort-arrow">' + arrow + '</span></th>';
+      }
+      html += '<th></th></tr></thead><tbody>';
+
+      for (const row of sorted) {
+        const sel = currentDataflowId === row.id ? ' selected' : '';
+        html += '<tr class="clickable' + sel + '" onclick="selectDataflow(' + row.id + ')">';
+        for (const c of cols) {
+          const val = row[c.key];
+          if (c.fmt) {
+            html += '<td class="num">' + c.fmt(val) + '</td>';
+          } else if (c.num) {
+            html += '<td class="num">' + esc(val) + '</td>';
+          } else {
+            html += '<td>' + esc(val) + '</td>';
+          }
+        }
+        html += '<td>\u25b6</td></tr>';
+      }
+      html += '</tbody></table>';
+      container.innerHTML = html;
+    }
+
+    function sortOverview(col) {
+      if (overviewSort.col === col) {
+        overviewSort.asc = !overviewSort.asc;
+      } else {
+        overviewSort.col = col;
+        overviewSort.asc = col <= 1;
+      }
+      renderOverview();
+    }
+
+    // == Select dataflow =======================================================
+
+    function selectDataflow(id) {
+      currentDataflowId = id;
+      const op = operators[id];
+      currentDataflowName = op ? op.name : 'Dataflow ' + id;
+      scopeStack = [];
+      expandedScopes.clear();
+      renderOverview();
+
+      switchTab('detail');
+      document.getElementById('detail-empty').style.display = 'none';
+      document.getElementById('detail-loaded').style.display = '';
+      document.getElementById('detail-title').textContent = currentDataflowName;
+
+      const totalOps = countDescendants(id);
+      const totalMsgs = transitiveMessages[id] || 0;
+      const totalElapsed = sumElapsed(id);
+      document.getElementById('detail-stats').textContent =
+        totalOps + ' operators, ' + totalMsgs + ' records, ' + formatNs(totalElapsed);
+
+      renderGraph();
+    }
+
+    // == Scope navigation ======================================================
+
+    function pushScope(oid) {
+      scopeStack.push(oid);
+      expandedScopes.clear();
+      renderGraph();
+    }
+
+    function popScope() {
+      if (scopeStack.length > 0) {
+        scopeStack.pop();
+        expandedScopes.clear();
+        renderGraph();
+      }
+    }
+
+    function resetScope() {
+      scopeStack = [];
+      expandedScopes.clear();
+      renderGraph();
+    }
+
+    function jumpToScope(index) {
+      scopeStack = scopeStack.slice(0, index + 1);
+      expandedScopes.clear();
+      renderGraph();
+    }
+
+    function toggleScope(opId) {
+      if (expandedScopes.has(opId)) expandedScopes.delete(opId);
+      else expandedScopes.add(opId);
+      renderGraph();
+    }
+
+    // == Breadcrumb ============================================================
+
+    function renderBreadcrumb() {
+      const el = document.getElementById('breadcrumb');
+      if (scopeStack.length === 0) {
+        el.innerHTML = '<span class="current">Root</span>';
+        return;
+      }
+      let html = '<a onclick="resetScope()">Root</a>';
+      for (let i = 0; i < scopeStack.length; i++) {
+        const oid = scopeStack[i];
+        const op = operators[oid];
+        const name = op ? op.name : oid;
+        html += ' <span>\u203a</span> ';
+        if (i < scopeStack.length - 1) {
+          html += '<a onclick="jumpToScope(' + i + ')">' + esc(name) + '</a>';
+        } else {
+          html += '<span class="current">' + esc(name) + '</span>';
+        }
+      }
+      el.innerHTML = html;
+    }
+
+    // == Graph rendering =======================================================
+
+    const L = { nodeW: 220, nodeH: 36, portW: 80, portH: 26, gapX: 20, gapY: 44, stackGap: 1, pad: 20, rx: 5 };
+    const SVG_NS = 'http://www.w3.org/2000/svg';
+
+    function svgEl(tag, attrs) {
+      const el = document.createElementNS(SVG_NS, tag);
+      for (const [k, v] of Object.entries(attrs || {})) el.setAttribute(k, v);
+      return el;
+    }
+
+    function renderGraph() {
+      renderBreadcrumb();
+      const scopeId = scopeStack.length > 0
+        ? scopeStack[scopeStack.length - 1]
+        : currentDataflowId;
+      renderScopeDAG(scopeId);
+    }
+
+    // == Build scope graph data ================================================
+
+    function buildScopeGraph(scopeId) {
+      if (scopeId == null || !operators[scopeId]) return null;
+      const scope = operators[scopeId];
+      const scopeAddrKey = addrKey(scope.addr);
+      const kids = childrenOf[scopeAddrKey] || [];
+      if (kids.length === 0) return null;
+
+      const nodes = [];
+      const nodeMap = {};
+
+      for (const kid of kids) {
+        const op = operators[kid];
+        if (!op) continue;
+
+        const tMsgs = transitiveMessages[kid] || 0;
+        const hasData = tMsgs > 0;
+
+        let fill, textFill;
+        if (op.is_scope) {
+          fill = hasData ? '#7950f2' : '#12b886';
+          textFill = '#fff';
+        } else {
+          fill = hasData ? '#fab005' : '#2a2a3a';
+          textFill = hasData ? '#000' : '#ccc';
+        }
+
+        let label = op.name;
+        if (label.length > 28) label = label.slice(0, 25) + '\u2026';
+
+        const subParts = [];
+        if (tMsgs > 0) subParts.push(tMsgs + ' recs');
+        if (op.elapsed_ns > 0) subParts.push(formatNs(op.elapsed_ns));
+        const subtitle = subParts.length > 0 ? subParts.join('  \u00b7  ') : null;
+
+        const id = (op.is_scope ? 'scope_' : 'op_') + kid;
+        const node = {
+          id, opId: kid, label, subtitle,
+          tooltip: op.name + (hasData ? '\n' + tMsgs + ' records' : '')
+            + (op.elapsed_ns > 0 ? '\nelapsed ' + formatNs(op.elapsed_ns) : ''),
+          isScope: op.is_scope, isPort: false,
+          fill, textFill, stroke: op.is_scope ? '#fff3' : '#5558',
+          w: L.nodeW, h: subtitle ? L.nodeH + 16 : L.nodeH,
+        };
+        nodes.push(node);
+        nodeMap[id] = node;
+      }
+
+      // Find channels scoped at this operator
+      const scopeChannels = channels.filter(ch => addrKey(ch.scope_addr) === scopeAddrKey);
+
+      const edges = [];
+
+      for (const ch of scopeChannels) {
+        let fromId, toId;
+
+        if (ch.source[0] === 0) {
+          // Source is child zero = scope input
+          const pid = 'port_in_' + ch.source[1];
+          if (!nodeMap[pid]) {
+            const n = {
+              id: pid, label: 'in ' + ch.source[1], isPort: true, portDir: 'in',
+              fill: '#4a4a6a', textFill: '#ccc', stroke: '#6668',
+              w: L.portW, h: L.portH, tooltip: 'scope input ' + ch.source[1],
+            };
+            nodes.push(n); nodeMap[pid] = n;
+          }
+          fromId = pid;
+        } else {
+          const childAddr = scope.addr.concat([ch.source[0]]);
+          const childOpId = addrToId[addrKey(childAddr)];
+          if (childOpId == null || !operators[childOpId]) continue;
+          fromId = (operators[childOpId].is_scope ? 'scope_' : 'op_') + childOpId;
+        }
+
+        if (ch.target[0] === 0) {
+          // Target is child zero = scope output
+          const pid = 'port_out_' + ch.target[1];
+          if (!nodeMap[pid]) {
+            const n = {
+              id: pid, label: 'out ' + ch.target[1], isPort: true, portDir: 'out',
+              fill: '#4a4a6a', textFill: '#ccc', stroke: '#6668',
+              w: L.portW, h: L.portH, tooltip: 'scope output ' + ch.target[1],
+            };
+            nodes.push(n); nodeMap[pid] = n;
+          }
+          toId = pid;
+        } else {
+          const childAddr = scope.addr.concat([ch.target[0]]);
+          const childOpId = addrToId[addrKey(childAddr)];
+          if (childOpId == null || !operators[childOpId]) continue;
+          toId = (operators[childOpId].is_scope ? 'scope_' : 'op_') + childOpId;
+        }
+
+        if (!nodeMap[fromId] || !nodeMap[toId]) continue;
+
+        let label = '';
+        if (ch.records_sent > 0) label = ch.records_sent + ' recs';
+        else if (ch.msgs_sent > 0) label = ch.msgs_sent + ' msgs';
+
+        edges.push({
+          from: fromId, to: toId, label,
+          sent: ch.records_sent || ch.msgs_sent,
+          fromPort: String(ch.source[1]), toPort: String(ch.target[1]),
+        });
+      }
+
+      // Filter inactive if requested
+      const hideInactive = document.getElementById('hide-inactive')?.checked;
+      if (hideInactive) {
+        const activeEdges = edges.filter(e => e.sent > 0);
+        const connectedNodes = new Set();
+        activeEdges.forEach(e => { connectedNodes.add(e.from); connectedNodes.add(e.to); });
+        const activeNodes = nodes.filter(n =>
+          connectedNodes.has(n.id) || n.isScope || (n.opId != null && transitiveMessages[n.opId] > 0)
+        );
+        const activeNodeMap = {};
+        activeNodes.forEach(n => activeNodeMap[n.id] = n);
+        const finalEdges = activeEdges.filter(e => activeNodeMap[e.from] && activeNodeMap[e.to]);
+        return { nodes: activeNodes, edges: finalEdges, nodeMap: activeNodeMap };
+      }
+
+      return { nodes, edges, nodeMap };
+    }
+
+    // == Layer assignment (longest path) =======================================
+
+    function assignLayers(nodes, edges) {
+      const outE = {}, inE = {};
+      nodes.forEach(n => { outE[n.id] = []; inE[n.id] = []; });
+      edges.forEach(e => {
+        if (!outE[e.from] || !inE[e.to]) return;  // skip edges with unknown endpoints
+        outE[e.from].push(e.to); inE[e.to].push(e.from);
+      });
+
+      // Kahn's topological sort
+      const inDeg = {};
+      nodes.forEach(n => inDeg[n.id] = inE[n.id].length);
+      const queue = nodes.filter(n => inDeg[n.id] === 0).map(n => n.id);
+      const order = [];
+      while (queue.length > 0) {
+        const id = queue.shift();
+        order.push(id);
+        for (const to of outE[id]) {
+          inDeg[to]--;
+          if (inDeg[to] === 0) queue.push(to);
+        }
+      }
+      nodes.forEach(n => { if (!order.includes(n.id)) order.push(n.id); });
+
+      const layer = {};
+      const isBackEdge = {};
+      for (const id of order) {
+        let maxPred = -1;
+        for (const pred of inE[id]) {
+          if (layer[pred] !== undefined) maxPred = Math.max(maxPred, layer[pred]);
+        }
+        layer[id] = maxPred + 1;
+      }
+
+      edges.forEach((e, i) => {
+        if (layer[e.to] !== undefined && layer[e.from] !== undefined && layer[e.to] <= layer[e.from]) {
+          isBackEdge[i] = true;
+        }
+      });
+
+      return { layer, isBackEdge };
+    }
+
+    // == Crossing minimization (barycenter) ====================================
+
+    function orderLayers(nodes, edges, layerMap) {
+      const numLayers = Math.max(0, ...nodes.map(n => layerMap[n.id])) + 1;
+      let layers = Array.from({ length: numLayers }, () => []);
+      nodes.forEach(n => layers[layerMap[n.id]].push(n.id));
+      layers = layers.filter(layer => layer.length > 0);
+
+      const above = {}, below = {};
+      nodes.forEach(n => { above[n.id] = []; below[n.id] = []; });
+      edges.forEach(e => {
+        const fl = layerMap[e.from], tl = layerMap[e.to];
+        if (fl < tl) {
+          below[e.from].push(e.to);
+          above[e.to].push(e.from);
+        }
+      });
+
+      const pos = {};
+      layers.forEach(layer => layer.forEach((id, i) => pos[id] = i));
+
+      const nLayers = layers.length;
+      for (let iter = 0; iter < 6; iter++) {
+        const down = iter % 2 === 0;
+        const [start, end, step] = down ? [1, nLayers, 1] : [nLayers - 2, -1, -1];
+        for (let li = start; li !== end; li += step) {
+          const layer = layers[li];
+          const bary = {};
+          for (const id of layer) {
+            const nbrs = down ? above[id] : below[id];
+            bary[id] = nbrs.length > 0
+              ? nbrs.reduce((s, n) => s + pos[n], 0) / nbrs.length
+              : pos[id];
+          }
+          layer.sort((a, b) => bary[a] - bary[b]);
+          layer.forEach((id, i) => pos[id] = i);
+        }
+      }
+      return layers;
+    }
+
+    // == Coordinate assignment =================================================
+
+    function positionNodes(layers, nodeMap) {
+      let maxW = 0;
+      const layerWidths = layers.map(layer => {
+        let w = 0;
+        layer.forEach((id, i) => { w += nodeMap[id].w + (i > 0 ? L.gapX : 0); });
+        maxW = Math.max(maxW, w);
+        return w;
+      });
+
+      const layerMaxH = layers.map(layer =>
+        Math.max(...layer.map(id => nodeMap[id].h))
+      );
+      const layerY = [];
+      let cumY = L.pad;
+      layerMaxH.forEach(h => {
+        layerY.push(cumY);
+        cumY += h + L.gapY;
+      });
+
+      layers.forEach((layer, li) => {
+        const lw = layerWidths[li];
+        let x = L.pad + (maxW - lw) / 2;
+        const maxH = layerMaxH[li];
+        layer.forEach(id => {
+          const n = nodeMap[id];
+          n.x = x;
+          n.y = layerY[li] + (maxH - n.h) / 2;
+          x += n.w + L.gapX;
+        });
+      });
+
+      return { width: maxW + L.pad * 2, height: cumY - L.gapY + L.pad };
+    }
+
+    // == Chain detection and stacking ==========================================
+
+    function detectChains(nodes, edges, isBackEdge) {
+      const outCount = {}, inCount = {};
+      const outTarget = {}, inSource = {};
+      nodes.forEach(n => { outCount[n.id] = 0; inCount[n.id] = 0; });
+
+      edges.forEach((e, i) => {
+        if (isBackEdge[i]) return;
+        outCount[e.from]++;
+        inCount[e.to]++;
+        if (outCount[e.from] === 1) outTarget[e.from] = e.to;
+        else outTarget[e.from] = null;
+        if (inCount[e.to] === 1) inSource[e.to] = e.from;
+        else inSource[e.to] = null;
+      });
+
+      const byId = {};
+      nodes.forEach(n => byId[n.id] = n);
+      const visited = new Set();
+      const stacks = [];
+      const nodeToStack = {};
+
+      for (const n of nodes) {
+        if (visited.has(n.id)) continue;
+        const chain = [n.id];
+        visited.add(n.id);
+
+        let cur = n.id;
+        while (true) {
+          const next = outTarget[cur];
+          if (!next || visited.has(next)) break;
+          const nextNode = byId[next];
+          const curNode = byId[cur];
+          if (!nextNode) break;
+          if (outCount[cur] !== 1 || inCount[next] !== 1) break;
+          if (nextNode.isScope || nextNode.isPort) break;
+          if (curNode && (curNode.isScope || curNode.isPort)) break;
+          chain.push(next);
+          visited.add(next);
+          cur = next;
+        }
+
+        const stackIdx = stacks.length;
+        stacks.push(chain);
+        chain.forEach(id => nodeToStack[id] = stackIdx);
+      }
+
+      return { stacks, nodeToStack };
+    }
+
+    function buildStackNodes(stacks, nodeMap) {
+      return stacks.map((chain, si) => {
+        const w = Math.max(...chain.map(id => nodeMap[id].w));
+        const h = chain.reduce((sum, id) => sum + nodeMap[id].h, 0) + (chain.length - 1) * L.stackGap;
+        return {
+          id: '__stack_' + si, stackIdx: si, chain, w, h,
+          isPort: nodeMap[chain[0]].isPort,
+          portDir: nodeMap[chain[0]].portDir,
+        };
+      });
+    }
+
+    function remapEdges(edges, nodeToStack, isBackEdge) {
+      const stackEdges = [];
+      edges.forEach((e, i) => {
+        const fs = nodeToStack[e.from], ts = nodeToStack[e.to];
+        if (fs === ts) return;
+        stackEdges.push({
+          from: '__stack_' + fs, to: '__stack_' + ts,
+          label: e.label, sent: e.sent,
+          fromPort: e.fromPort, toPort: e.toPort,
+          origFrom: e.from, origTo: e.to, origIdx: i,
+        });
+      });
+      return { stackEdges };
+    }
+
+    // == Port repositioning ====================================================
+
+    function repositionPorts(layout) {
+      const { nodes, width, height } = layout;
+      const portNum = p => parseInt(p.id.split('_').pop()) || 0;
+
+      const inputPorts = nodes.filter(n => n.isPort && n.portDir === 'in').sort((a, b) => portNum(a) - portNum(b));
+      const outputPorts = nodes.filter(n => n.isPort && n.portDir === 'out').sort((a, b) => portNum(a) - portNum(b));
+
+      if (inputPorts.length > 0) {
+        const totalW = inputPorts.reduce((s, p) => s + p.w, 0) + (inputPorts.length - 1) * L.gapX;
+        let x = (width - totalW) / 2;
+        inputPorts.forEach(p => { p.x = x; p.y = 0; x += p.w + L.gapX; });
+      }
+      if (outputPorts.length > 0) {
+        const totalW = outputPorts.reduce((s, p) => s + p.w, 0) + (outputPorts.length - 1) * L.gapX;
+        let x = (width - totalW) / 2;
+        outputPorts.forEach(p => { p.x = x; p.y = height - p.h; x += p.w + L.gapX; });
+      }
+    }
+
+    // == Recursive layout ======================================================
+
+    function computeLayout(scopeId) {
+      const graph = buildScopeGraph(scopeId);
+      if (!graph) return null;
+
+      const { nodes, edges, nodeMap } = graph;
+      const BORDER_PAD = 12;
+      const HEADER_H = 24;
+
+      // Recursively expand child scopes
+      for (const node of nodes) {
+        if (node.isScope && expandedScopes.has(node.opId)) {
+          const childLayout = computeLayout(node.opId);
+          if (childLayout) {
+            repositionPorts(childLayout);
+            node.childLayout = childLayout;
+            node.expanded = true;
+            node.w = Math.max(node.w, childLayout.width + BORDER_PAD * 2);
+            node.h = childLayout.height + BORDER_PAD + HEADER_H;
+          }
+        }
+      }
+
+      const { layer, isBackEdge } = assignLayers(nodes, edges);
+      const { stacks, nodeToStack } = detectChains(nodes, edges, isBackEdge);
+      const stackNodes = buildStackNodes(stacks, nodeMap);
+      const stackMap = {};
+      stackNodes.forEach(sn => stackMap[sn.id] = sn);
+      const { stackEdges } = remapEdges(edges, nodeToStack, isBackEdge);
+
+      const stackLayer = {};
+      stackNodes.forEach(sn => {
+        stackLayer[sn.id] = Math.min(...sn.chain.map(id => layer[id]));
+      });
+      const stackIsBack = {};
+      stackEdges.forEach((e, i) => {
+        if (stackLayer[e.to] <= stackLayer[e.from]) stackIsBack[i] = true;
+        if (isBackEdge[e.origIdx]) stackIsBack[i] = true;
+      });
+
+      const sLayers = orderLayers(stackNodes, stackEdges, stackLayer);
+      const { width, height } = positionNodes(sLayers, stackMap);
+
+      stacks.forEach((chain, si) => {
+        const sn = stackMap['__stack_' + si];
+        let y = sn.y;
+        chain.forEach(id => {
+          const n = nodeMap[id];
+          n.x = sn.x + (sn.w - n.w) / 2;
+          n.y = y;
+          y += n.h + L.stackGap;
+        });
+      });
+
+      return { scopeId, nodes, edges, nodeMap, stacks, stackEdges, stackIsBack, width, height };
+    }
+
+    // == SVG rendering =========================================================
+
+    function renderEdges(layout, group) {
+      const { stacks, stackEdges, stackIsBack, nodeMap } = layout;
+      const edgeGroup = svgEl('g', { class: 'edges' });
+
+      const outPorts = {}, inPorts = {};
+      stackEdges.forEach(e => {
+        const fsi = parseInt(e.from.split('_').pop());
+        const tsi = parseInt(e.to.split('_').pop());
+        const fId = stacks[fsi][stacks[fsi].length - 1];
+        const tId = stacks[tsi][0];
+        if (!outPorts[fId]) outPorts[fId] = new Set();
+        if (!inPorts[tId]) inPorts[tId] = new Set();
+        outPorts[fId].add(e.fromPort || '0');
+        inPorts[tId].add(e.toPort || '0');
+      });
+      for (const id in outPorts) outPorts[id] = [...outPorts[id]].sort((a, b) => Number(a) - Number(b));
+      for (const id in inPorts) inPorts[id] = [...inPorts[id]].sort((a, b) => Number(a) - Number(b));
+
+      stackEdges.forEach((e, i) => {
+        const fromStackIdx = parseInt(e.from.split('_').pop());
+        const toStackIdx = parseInt(e.to.split('_').pop());
+        const fromChain = stacks[fromStackIdx];
+        const toChain = stacks[toStackIdx];
+        const from = nodeMap[fromChain[fromChain.length - 1]];
+        const to = nodeMap[toChain[0]];
+        if (!from || !to) return;
+
+        const fromId = fromChain[fromChain.length - 1];
+        const toId = toChain[0];
+        const fromPortList = outPorts[fromId] || ['0'];
+        const toPortList = inPorts[toId] || ['0'];
+        const fpi = fromPortList.indexOf(e.fromPort || '0');
+        const tpi = toPortList.indexOf(e.toPort || '0');
+
+        const margin = Math.min(20, from.w * 0.15);
+        const sx = from.x + margin + (fpi + 0.5) / fromPortList.length * (from.w - margin * 2);
+        const sy = from.y + from.h;
+        const tMargin = Math.min(20, to.w * 0.15);
+        const tx = to.x + tMargin + (tpi + 0.5) / toPortList.length * (to.w - tMargin * 2);
+        const ty = to.y;
+
+        const back = stackIsBack[i];
+        let d;
+        if (back) {
+          const rightX = Math.max(from.x + from.w, to.x + to.w) + 30;
+          d = 'M' + sx + ',' + sy +
+            ' C' + sx + ',' + (sy + 20) + ' ' + rightX + ',' + sy +
+            ' ' + rightX + ',' + ((sy + ty) / 2) +
+            ' C' + rightX + ',' + ty + ' ' + tx + ',' + (ty - 20) +
+            ' ' + tx + ',' + ty;
+        } else {
+          const cy = Math.min(L.gapY * 0.4, Math.abs(ty - sy) * 0.35);
+          d = 'M' + sx + ',' + sy +
+            ' C' + sx + ',' + (sy + cy) + ' ' + tx + ',' + (ty - cy) +
+            ' ' + tx + ',' + ty;
+        }
+
+        const color = back ? '#c44' : (e.sent == null || e.sent === 0 ? '#555' : '#888');
+        const marker = back ? 'url(#arrow-back)' : (e.sent == null || e.sent === 0 ? 'url(#arrow-dim)' : 'url(#arrow)');
+        const strokeW = back ? '1.5' : '1.2';
+        const dasharray = (e.sent == null || e.sent === 0) && !back ? '4,3' : 'none';
+
+        const path = svgEl('path', {
+          d, fill: 'none', stroke: color,
+          'stroke-width': strokeW, 'stroke-dasharray': dasharray,
+          'marker-end': marker,
+        });
+        if (e.label) {
+          const t = svgEl('title'); t.textContent = e.label; path.appendChild(t);
+        }
+        edgeGroup.appendChild(path);
+      });
+
+      group.appendChild(edgeGroup);
+    }
+
+    function renderNodes(layout, group) {
+      const { nodes } = layout;
+      const BORDER_PAD = 12;
+      const HEADER_H = 24;
+      const nodeGroup = svgEl('g', { class: 'nodes' });
+
+      nodes.forEach(n => {
+        const g = svgEl('g', { transform: 'translate(' + n.x + ',' + n.y + ')' });
+
+        if (n.expanded && n.childLayout) {
+          // Expanded scope
+          g.appendChild(svgEl('rect', {
+            x: 0, y: 0, width: n.w, height: n.h,
+            rx: 6, ry: 6, fill: '#1a1a1a', stroke: n.fill, 'stroke-width': '2',
+          }));
+          g.appendChild(svgEl('rect', {
+            x: 0, y: 0, width: n.w, height: HEADER_H,
+            rx: 6, ry: 6, fill: n.fill, opacity: '0.3',
+          }));
+          g.appendChild(svgEl('rect', {
+            x: 0, y: 10, width: n.w, height: HEADER_H - 10,
+            fill: n.fill, opacity: '0.3',
+          }));
+
+          let headerLabel = n.label;
+          if (n.subtitle) headerLabel += '  \u00b7  ' + n.subtitle;
+          const hText = svgEl('text', {
+            x: 8, y: HEADER_H / 2 + 1, fill: '#fff',
+            'font-size': '10', 'font-family': 'monospace', 'font-weight': 'bold',
+            'dominant-baseline': 'middle', 'pointer-events': 'none',
+          });
+          hText.textContent = headerLabel;
+          g.appendChild(hText);
+
+          const collapseBtn = svgEl('text', {
+            x: n.w - 12, y: HEADER_H / 2 + 1, fill: '#fff', opacity: '0.6',
+            'font-size': '10', 'font-family': 'monospace',
+            'text-anchor': 'middle', 'dominant-baseline': 'middle', cursor: 'pointer',
+          });
+          collapseBtn.textContent = '\u25bc';
+          g.appendChild(collapseBtn);
+
+          const innerG = svgEl('g', { transform: 'translate(' + BORDER_PAD + ',' + HEADER_H + ')' });
+          renderEdges(n.childLayout, innerG);
+          renderNodes(n.childLayout, innerG);
+          g.appendChild(innerG);
+
+          g.style.cursor = 'pointer';
+          g.addEventListener('click', e => { e.stopPropagation(); toggleScope(n.opId); });
+
+        } else if (n.isScope) {
+          // Collapsed scope (pentagon)
+          const w = n.w, h = n.h, peak = 8;
+          const pts = ['0,' + peak, (w/2) + ',0', w + ',' + peak, w + ',' + h, '0,' + h].join(' ');
+          g.appendChild(svgEl('polygon', {
+            points: pts, fill: n.fill, stroke: n.stroke, 'stroke-width': '1.5',
+          }));
+
+          const hasSubtitle = n.subtitle;
+          const nameY = hasSubtitle ? n.h / 2 - 4 : n.h / 2 + 2;
+          const text = svgEl('text', {
+            x: n.w / 2, y: nameY, fill: n.textFill,
+            'font-size': '11', 'font-family': 'monospace',
+            'text-anchor': 'middle', 'dominant-baseline': 'middle',
+            'pointer-events': 'none',
+          });
+          text.textContent = n.label;
+          g.appendChild(text);
+
+          if (hasSubtitle) {
+            const sub = svgEl('text', {
+              x: n.w / 2, y: nameY + 14, fill: n.textFill, opacity: '0.7',
+              'font-size': '9', 'font-family': 'monospace',
+              'text-anchor': 'middle', 'dominant-baseline': 'middle',
+              'pointer-events': 'none',
+            });
+            sub.textContent = n.subtitle;
+            g.appendChild(sub);
+          }
+
+          const ind = svgEl('text', {
+            x: n.w - 8, y: n.h / 2 + 2, fill: n.textFill, opacity: '0.5',
+            'font-size': '10', 'font-family': 'monospace',
+            'text-anchor': 'middle', 'dominant-baseline': 'middle',
+            'pointer-events': 'none',
+          });
+          ind.textContent = '\u25b6';
+          g.appendChild(ind);
+
+          g.style.cursor = 'pointer';
+          g.addEventListener('click', e => { e.stopPropagation(); toggleScope(n.opId); });
+          g.addEventListener('dblclick', e => { e.preventDefault(); e.stopPropagation(); pushScope(n.opId); });
+          g.addEventListener('mouseenter', () => {
+            g.querySelector('polygon').setAttribute('stroke', '#fff');
+            g.querySelector('polygon').setAttribute('stroke-width', '2.5');
+          });
+          g.addEventListener('mouseleave', () => {
+            g.querySelector('polygon').setAttribute('stroke', n.stroke);
+            g.querySelector('polygon').setAttribute('stroke-width', '1.5');
+          });
+
+        } else {
+          // Regular operator or port
+          g.appendChild(svgEl('rect', {
+            x: 0, y: 0, width: n.w, height: n.h,
+            rx: n.isPort ? n.h / 2 : L.rx, ry: n.isPort ? n.h / 2 : L.rx,
+            fill: n.fill, stroke: n.stroke, 'stroke-width': '1',
+          }));
+
+          const hasSubtitle = n.subtitle && !n.isPort;
+          const nameY = hasSubtitle ? n.h / 2 - 6 : n.h / 2;
+          const text = svgEl('text', {
+            x: n.w / 2, y: nameY, fill: n.textFill,
+            'font-size': n.isPort ? '9' : '11', 'font-family': 'monospace',
+            'text-anchor': 'middle', 'dominant-baseline': 'middle',
+            'pointer-events': 'none',
+          });
+          text.textContent = n.label;
+          g.appendChild(text);
+
+          if (hasSubtitle) {
+            const sub = svgEl('text', {
+              x: n.w / 2, y: nameY + 14, fill: n.textFill, opacity: '0.7',
+              'font-size': '9', 'font-family': 'monospace',
+              'text-anchor': 'middle', 'dominant-baseline': 'middle',
+              'pointer-events': 'none',
+            });
+            sub.textContent = n.subtitle;
+            g.appendChild(sub);
+          }
+        }
+
+        const title = svgEl('title');
+        title.textContent = n.tooltip || n.label;
+        g.appendChild(title);
+        nodeGroup.appendChild(g);
+      });
+
+      group.appendChild(nodeGroup);
+    }
+
+    // == Main scope renderer ===================================================
+
+    function renderScopeDAG(scopeId) {
+      const container = document.getElementById('graph-container');
+      const layout = computeLayout(scopeId);
+      if (!layout) {
+        container.innerHTML = '<div class="no-data">No operators to display</div>';
+        return;
+      }
+
+      const { width, height } = layout;
+      const svg = svgEl('svg', {
+        xmlns: SVG_NS,
+        width: width + 'px', height: height + 'px',
+        style: 'display:block;max-width:none;',
+      });
+
+      const defs = svgEl('defs');
+      for (const [mid, color] of [['arrow', '#888'], ['arrow-back', '#c44'], ['arrow-dim', '#555']]) {
+        const marker = svgEl('marker', {
+          id: mid, viewBox: '0 0 10 10', refX: '10', refY: '5',
+          markerWidth: '7', markerHeight: '7', orient: 'auto-start-reverse',
+        });
+        marker.appendChild(svgEl('path', { d: 'M0,1 L10,5 L0,9z', fill: color }));
+        defs.appendChild(marker);
+      }
+      svg.appendChild(defs);
+
+      const contentGroup = svgEl('g');
+      renderEdges(layout, contentGroup);
+      renderNodes(layout, contentGroup);
+      svg.appendChild(contentGroup);
+
+      container.innerHTML = '';
+      container.appendChild(svg);
+    }
+  </script>
+</body>
+</html>

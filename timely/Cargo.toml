@@ -21,6 +21,7 @@ workspace = true
 [features]
 default = ["getopts"]
 getopts = ["dep:getopts", "timely_communication/getopts"]
+visualizer = ["dep:tungstenite"]
 
 [dependencies]
 columnar = { workspace = true }
@@ -35,3 +36,4 @@ timely_logging = { path = "../logging", version = "0.27" }
 timely_communication = { path = "../communication", version = "0.27", default-features = false }
 timely_container = { path = "../container", version = "0.27" }
 smallvec = { version = "1.15.1", features = ["serde", "const_generics"] }
+tungstenite = { version = "0.26", optional = true }

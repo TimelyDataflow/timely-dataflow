@@ -96,6 +96,9 @@ pub mod order;
 pub mod logging;
 // pub mod log_events;
 
+#[cfg(feature = "visualizer")]
+pub mod visualizer;
+
 pub mod scheduling;
 
 /// A composite trait for types usable as containers in timely dataflow.

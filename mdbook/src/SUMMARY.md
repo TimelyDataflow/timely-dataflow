@@ -36,4 +36,5 @@
 - [Internals](./chapter_5/chapter_5.md)
     - [Communication](./chapter_5/chapter_5_1.md)
     - [Progress Tracking](./chapter_5/chapter_5_2.md)
+    - [Containers](./chapter_5/chapter_5_3.md)
     - [Logging](./chapter_5/chapter_5_4.md)
