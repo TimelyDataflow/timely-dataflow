@@ -64,7 +64,7 @@ impl<P, C> Drop for BatchLogger<P, C> where P: EventPusher<Duration, C> {
 pub struct OperatesEvent {
     /// Worker-unique identifier for the operator.
     pub id: usize,
-    /// Sequence of nested scope identifiers indicating the path from the root to the scope containing this operator.
+    /// Sequence of nested scope identifiers indicating the path from the root to this operator.
     pub addr: Vec<usize>,
     /// A helpful name.
     pub name: String,
@@ -85,7 +85,7 @@ pub struct OperatesSummaryEvent<TS> {
 pub struct ChannelsEvent {
     /// Worker-unique identifier for the channel
     pub id: usize,
-    /// Sequence of nested scope identifiers indicating the path from the root to this instance.
+    /// Sequence of nested scope identifiers indicating the path from the root to the scope containing this channel.
     pub scope_addr: Vec<usize>,
     /// Source descriptor, indicating operator index and output port.
     pub source: (usize, usize),
