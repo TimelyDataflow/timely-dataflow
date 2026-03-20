@@ -136,13 +136,9 @@ where
     pub fn add_child(&mut self, child: Box<dyn Operate<TInner>>, index: usize, identifier: usize) {
         let child = PerOperatorState::new(child, index, identifier, self.logging.clone(), &mut self.summary_logging);
         if let Some(l) = &mut self.logging {
-            let mut child_path = Vec::with_capacity(self.path.len() + 1);
-            child_path.extend_from_slice(&self.path[..]);
-            child_path.push(index);
-
             l.log(crate::logging::OperatesEvent {
                 id: identifier,
-                addr: child_path,
+                addr: self.path.to_vec(),
                 name: child.name.to_owned(),
             });
         }

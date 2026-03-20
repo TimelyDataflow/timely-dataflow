@@ -64,7 +64,7 @@ impl<P, C> Drop for BatchLogger<P, C> where P: EventPusher<Duration, C> {
 pub struct OperatesEvent {
     /// Worker-unique identifier for the operator.
     pub id: usize,
-    /// Sequence of nested scope identifiers indicating the path from the root to this instance.
+    /// Sequence of nested scope identifiers indicating the path from the root to the scope containing this operator.
     pub addr: Vec<usize>,
     /// A helpful name.
     pub name: String,
@@ -172,15 +172,6 @@ pub struct ShutdownEvent {
     pub id: usize,
 }
 
-#[derive(Serialize, Deserialize, Columnar, Debug, Clone, Hash, Eq, PartialEq, Ord, PartialOrd)]
-/// Application-defined code start or stop
-pub struct ApplicationEvent {
-    /// Unique event type identifier
-    pub id: usize,
-    /// `true` when activity begins, `false` when it stops
-    pub is_start: bool,
-}
-
 #[derive(Serialize, Deserialize, Columnar, Debug, PartialEq, Eq, Hash, Clone, Copy)]
 /// Identifier of the worker that generated a log line
 pub struct TimelySetup {
@@ -204,13 +195,6 @@ pub struct CommChannelsEvent {
     pub identifier: usize,
     /// Kind of communication channel (progress / data)
     pub kind: CommChannelKind,
-}
-
-#[derive(Serialize, Deserialize, Columnar, Debug, Copy, Clone, Hash, Eq, PartialEq, Ord, PartialOrd)]
-/// Input logic start/stop
-pub struct InputEvent {
-    /// True when activity begins, false when it stops
-    pub start_stop: StartStop,
 }
 
 /// Records the starting and stopping of an operator.
@@ -244,12 +228,8 @@ pub enum TimelyEvent {
     Schedule(ScheduleEvent),
     /// Operator shutdown.
     Shutdown(ShutdownEvent),
-    /// No clue.
-    Application(ApplicationEvent),
     /// Communication channel event.
     CommChannels(CommChannelsEvent),
-    /// Input event.
-    Input(InputEvent),
     /// Park event.
     Park(ParkEvent),
     /// Unstructured event.
@@ -280,16 +260,8 @@ impl From<ShutdownEvent> for TimelyEvent {
     fn from(v: ShutdownEvent) -> TimelyEvent { TimelyEvent::Shutdown(v) }
 }
 
-impl From<ApplicationEvent> for TimelyEvent {
-    fn from(v: ApplicationEvent) -> TimelyEvent { TimelyEvent::Application(v) }
-}
-
 impl From<CommChannelsEvent> for TimelyEvent {
     fn from(v: CommChannelsEvent) -> TimelyEvent { TimelyEvent::CommChannels(v) }
-}
-
-impl From<InputEvent> for TimelyEvent {
-    fn from(v: InputEvent) -> TimelyEvent { TimelyEvent::Input(v) }
 }
 
 impl From<ParkEvent> for TimelyEvent {
