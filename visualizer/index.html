@@ -4,6 +4,7 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Timely Dataflow Visualizer</title>
+  <script src="https://cdn.jsdelivr.net/npm/elkjs@0.9.3/lib/elk.bundled.js"></script>
   <style>
     * { box-sizing: border-box; margin: 0; padding: 0; }
     body {
@@ -618,7 +619,6 @@
     /** Refresh whichever view is currently active without losing navigation state. */
     function refreshCurrentView() {
       if (currentDataflowId != null && operators[currentDataflowId]) {
-        // Update stats
         const totalOps = countDescendants(currentDataflowId);
         const totalMsgs = transitiveMessages[currentDataflowId] || 0;
         const totalElapsed = sumElapsed(currentDataflowId);
@@ -707,6 +707,16 @@
 
       // Compute transitive message counts (sum of all channel records touching descendants)
       computeTransitiveMessages();
+
+      // Compute per-operator output records (sum of records on channels sourced from this operator)
+      for (const ch of channels) {
+        if (ch.source[0] === 0) continue; // skip scope boundary
+        const srcAddr = ch.scope_addr.concat([ch.source[0]]);
+        const srcId = addrToId[addrKey(srcAddr)];
+        if (srcId != null && operators[srcId]) {
+          operators[srcId].output_records = (operators[srcId].output_records || 0) + ch.records_sent;
+        }
+      }
 
       // Build overview
       buildOverview();
@@ -971,12 +981,28 @@
       return el;
     }
 
+    let renderInFlight = false;
+    let renderPending = false;
+
     function renderGraph() {
+      if (renderInFlight) {
+        renderPending = true;
+        return;
+      }
+      renderInFlight = true;
       renderBreadcrumb();
       const scopeId = scopeStack.length > 0
         ? scopeStack[scopeStack.length - 1]
         : currentDataflowId;
-      renderScopeDAG(scopeId);
+      renderScopeDAG(scopeId)
+        .catch(err => console.error('Layout error:', err))
+        .finally(() => {
+          renderInFlight = false;
+          if (renderPending) {
+            renderPending = false;
+            renderGraph();
+          }
+        });
     }
 
     // == Build scope graph data ================================================
@@ -995,31 +1021,25 @@
         const op = operators[kid];
         if (!op) continue;
 
-        const tMsgs = transitiveMessages[kid] || 0;
-        const hasData = tMsgs > 0;
-
         let fill, textFill;
         if (op.is_scope) {
-          fill = hasData ? '#7950f2' : '#12b886';
+          fill = '#12b886';
           textFill = '#fff';
         } else {
-          fill = hasData ? '#fab005' : '#2a2a3a';
-          textFill = hasData ? '#000' : '#ccc';
+          fill = '#2a2a3a';
+          textFill = '#ccc';
         }
 
         let label = op.name;
         if (label.length > 28) label = label.slice(0, 25) + '\u2026';
 
         const subParts = [];
-        if (tMsgs > 0) subParts.push(tMsgs + ' recs');
         if (op.elapsed_ns > 0) subParts.push(formatNs(op.elapsed_ns));
         const subtitle = subParts.length > 0 ? subParts.join('  \u00b7  ') : null;
 
         const id = (op.is_scope ? 'scope_' : 'op_') + kid;
         const node = {
           id, opId: kid, label, subtitle,
-          tooltip: op.name + (hasData ? '\n' + tMsgs + ' records' : '')
-            + (op.elapsed_ns > 0 ? '\nelapsed ' + formatNs(op.elapsed_ns) : ''),
           isScope: op.is_scope, isPort: false,
           fill, textFill, stroke: op.is_scope ? '#fff3' : '#5558',
           w: L.nodeW, h: subtitle ? L.nodeH + 16 : L.nodeH,
@@ -1043,7 +1063,7 @@
             const n = {
               id: pid, label: 'in ' + ch.source[1], isPort: true, portDir: 'in',
               fill: '#4a4a6a', textFill: '#ccc', stroke: '#6668',
-              w: L.portW, h: L.portH, tooltip: 'scope input ' + ch.source[1],
+              w: L.portW, h: L.portH,
             };
             nodes.push(n); nodeMap[pid] = n;
           }
@@ -1062,7 +1082,7 @@
             const n = {
               id: pid, label: 'out ' + ch.target[1], isPort: true, portDir: 'out',
               fill: '#4a4a6a', textFill: '#ccc', stroke: '#6668',
-              w: L.portW, h: L.portH, tooltip: 'scope output ' + ch.target[1],
+              w: L.portW, h: L.portH,
             };
             nodes.push(n); nodeMap[pid] = n;
           }
@@ -1077,14 +1097,72 @@
         if (!nodeMap[fromId] || !nodeMap[toId]) continue;
 
         let label = '';
-        if (ch.records_sent > 0) label = ch.records_sent + ' recs';
-        else if (ch.msgs_sent > 0) label = ch.msgs_sent + ' msgs';
+        if (ch.records_sent > 0) label = ch.records_sent.toLocaleString() + ' records';
+        else if (ch.msgs_sent > 0) label = ch.msgs_sent.toLocaleString() + ' msgs';
 
         edges.push({
           from: fromId, to: toId, label,
           sent: ch.records_sent || ch.msgs_sent,
           fromPort: String(ch.source[1]), toPort: String(ch.target[1]),
         });
+      }
+
+      // Split Feedback/Variable nodes into source and sink halves.
+      // The source half emits data into the loop body (constrained to top),
+      // the sink half receives data back from it (constrained to bottom).
+      // This gives ELK a clean DAG with no cycles.
+      // Distinct colors for feedback pairs — visually saturated, easy to tell apart.
+      const feedbackPalette = [
+        '#e06c75', '#61afef', '#e5c07b', '#c678dd',
+        '#56b6c2', '#d19a66', '#98c379', '#be5046',
+      ];
+
+      const feedbackIds = nodes
+        .filter(n => !n.isPort && !n.isScope && n.label &&
+          (n.label.toLowerCase().includes('feedback') || n.label.toLowerCase().includes('variable')))
+        .map(n => n.id);
+
+      for (let fi = 0; fi < feedbackIds.length; fi++) {
+        const fbId = feedbackIds[fi];
+        const orig = nodeMap[fbId];
+        const srcId = fbId + '__src';
+        const sinkId = fbId + '__sink';
+        const fbColor = feedbackPalette[fi % feedbackPalette.length];
+
+        // Use scope-local index from addr to tie the two halves together.
+        const op = orig.opId != null ? operators[orig.opId] : null;
+        const localIdx = op && op.addr && op.addr.length > 0 ? op.addr[op.addr.length - 1] : '?';
+        const tag = orig.label + ' [' + localIdx + ']';
+
+        const srcNode = {
+          ...orig, id: srcId,
+          label: tag + ' \u25bc',
+          isFeedbackSrc: true,
+          fill: fbColor, textFill: '#000', stroke: fbColor,
+          feedbackColor: fbColor,
+        };
+        const sinkNode = {
+          ...orig, id: sinkId,
+          label: tag + ' \u25b2',
+          isFeedbackSink: true,
+          fill: fbColor, textFill: '#000', stroke: fbColor,
+          feedbackColor: fbColor,
+        };
+
+        nodes.push(srcNode, sinkNode);
+        nodeMap[srcId] = srcNode;
+        nodeMap[sinkId] = sinkNode;
+
+        // Rewire edges. Only the back-edge (into the feedback sink) gets colored.
+        for (const e of edges) {
+          if (e.from === fbId) { e.from = srcId; }
+          if (e.to === fbId) { e.to = sinkId; e.feedbackColor = fbColor; }
+        }
+
+        // Remove original node
+        const idx = nodes.indexOf(orig);
+        if (idx >= 0) nodes.splice(idx, 1);
+        delete nodeMap[fbId];
       }
 
       // Filter inactive if requested
@@ -1105,152 +1183,34 @@
       return { nodes, edges, nodeMap };
     }
 
-    // == Layer assignment (longest path) =======================================
+    // == ELK layout engine =====================================================
 
-    function assignLayers(nodes, edges) {
-      const outE = {}, inE = {};
-      nodes.forEach(n => { outE[n.id] = []; inE[n.id] = []; });
-      edges.forEach(e => {
-        if (!outE[e.from] || !inE[e.to]) return;  // skip edges with unknown endpoints
-        outE[e.from].push(e.to); inE[e.to].push(e.from);
-      });
+    const elk = new ELK();
+    const STACK_GAP = 1;
 
-      // Kahn's topological sort
-      const inDeg = {};
-      nodes.forEach(n => inDeg[n.id] = inE[n.id].length);
-      const queue = nodes.filter(n => inDeg[n.id] === 0).map(n => n.id);
-      const order = [];
-      while (queue.length > 0) {
-        const id = queue.shift();
-        order.push(id);
-        for (const to of outE[id]) {
-          inDeg[to]--;
-          if (inDeg[to] === 0) queue.push(to);
-        }
-      }
-      nodes.forEach(n => { if (!order.includes(n.id)) order.push(n.id); });
-
-      const layer = {};
-      const isBackEdge = {};
-      for (const id of order) {
-        let maxPred = -1;
-        for (const pred of inE[id]) {
-          if (layer[pred] !== undefined) maxPred = Math.max(maxPred, layer[pred]);
-        }
-        layer[id] = maxPred + 1;
-      }
-
-      edges.forEach((e, i) => {
-        if (layer[e.to] !== undefined && layer[e.from] !== undefined && layer[e.to] <= layer[e.from]) {
-          isBackEdge[i] = true;
-        }
-      });
-
-      return { layer, isBackEdge };
-    }
-
-    // == Crossing minimization (barycenter) ====================================
-
-    function orderLayers(nodes, edges, layerMap) {
-      const numLayers = Math.max(0, ...nodes.map(n => layerMap[n.id])) + 1;
-      let layers = Array.from({ length: numLayers }, () => []);
-      nodes.forEach(n => layers[layerMap[n.id]].push(n.id));
-      layers = layers.filter(layer => layer.length > 0);
-
-      const above = {}, below = {};
-      nodes.forEach(n => { above[n.id] = []; below[n.id] = []; });
-      edges.forEach(e => {
-        const fl = layerMap[e.from], tl = layerMap[e.to];
-        if (fl < tl) {
-          below[e.from].push(e.to);
-          above[e.to].push(e.from);
-        }
-      });
-
-      const pos = {};
-      layers.forEach(layer => layer.forEach((id, i) => pos[id] = i));
-
-      const nLayers = layers.length;
-      for (let iter = 0; iter < 6; iter++) {
-        const down = iter % 2 === 0;
-        const [start, end, step] = down ? [1, nLayers, 1] : [nLayers - 2, -1, -1];
-        for (let li = start; li !== end; li += step) {
-          const layer = layers[li];
-          const bary = {};
-          for (const id of layer) {
-            const nbrs = down ? above[id] : below[id];
-            bary[id] = nbrs.length > 0
-              ? nbrs.reduce((s, n) => s + pos[n], 0) / nbrs.length
-              : pos[id];
-          }
-          layer.sort((a, b) => bary[a] - bary[b]);
-          layer.forEach((id, i) => pos[id] = i);
-        }
-      }
-      return layers;
-    }
-
-    // == Coordinate assignment =================================================
-
-    function positionNodes(layers, nodeMap) {
-      let maxW = 0;
-      const layerWidths = layers.map(layer => {
-        let w = 0;
-        layer.forEach((id, i) => { w += nodeMap[id].w + (i > 0 ? L.gapX : 0); });
-        maxW = Math.max(maxW, w);
-        return w;
-      });
-
-      const layerMaxH = layers.map(layer =>
-        Math.max(...layer.map(id => nodeMap[id].h))
-      );
-      const layerY = [];
-      let cumY = L.pad;
-      layerMaxH.forEach(h => {
-        layerY.push(cumY);
-        cumY += h + L.gapY;
-      });
-
-      layers.forEach((layer, li) => {
-        const lw = layerWidths[li];
-        let x = L.pad + (maxW - lw) / 2;
-        const maxH = layerMaxH[li];
-        layer.forEach(id => {
-          const n = nodeMap[id];
-          n.x = x;
-          n.y = layerY[li] + (maxH - n.h) / 2;
-          x += n.w + L.gapX;
-        });
-      });
-
-      return { width: maxW + L.pad * 2, height: cumY - L.gapY + L.pad };
-    }
-
-    // == Chain detection and stacking ==========================================
-
-    function detectChains(nodes, edges, isBackEdge) {
+    // Detect 1:1 pipeline chains: sequences of non-scope, non-port operators
+    // where each has exactly one forward out-edge to the next and the next has
+    // exactly one in-edge. These get stacked into a single compound node.
+    function detectChains(nodes, edges, nodeMap) {
       const outCount = {}, inCount = {};
-      const outTarget = {}, inSource = {};
+      const outTarget = {};
       nodes.forEach(n => { outCount[n.id] = 0; inCount[n.id] = 0; });
 
-      edges.forEach((e, i) => {
-        if (isBackEdge[i]) return;
-        outCount[e.from]++;
-        inCount[e.to]++;
+      edges.forEach(e => {
+        outCount[e.from] = (outCount[e.from] || 0) + 1;
+        inCount[e.to] = (inCount[e.to] || 0) + 1;
         if (outCount[e.from] === 1) outTarget[e.from] = e.to;
         else outTarget[e.from] = null;
-        if (inCount[e.to] === 1) inSource[e.to] = e.from;
-        else inSource[e.to] = null;
       });
 
-      const byId = {};
-      nodes.forEach(n => byId[n.id] = n);
       const visited = new Set();
-      const stacks = [];
-      const nodeToStack = {};
+      const chains = [];     // arrays of node ids
+      const nodeChain = {};  // node id -> chain index
 
       for (const n of nodes) {
         if (visited.has(n.id)) continue;
+        if (n.isScope || n.isPort || n.expanded) { visited.add(n.id); continue; }
+
         const chain = [n.id];
         visited.add(n.id);
 
@@ -1258,76 +1218,26 @@
         while (true) {
           const next = outTarget[cur];
           if (!next || visited.has(next)) break;
-          const nextNode = byId[next];
-          const curNode = byId[cur];
-          if (!nextNode) break;
+          const nn = nodeMap[next];
+          if (!nn || nn.isScope || nn.isPort || nn.expanded) break;
           if (outCount[cur] !== 1 || inCount[next] !== 1) break;
-          if (nextNode.isScope || nextNode.isPort) break;
-          if (curNode && (curNode.isScope || curNode.isPort)) break;
           chain.push(next);
           visited.add(next);
           cur = next;
         }
 
-        const stackIdx = stacks.length;
-        stacks.push(chain);
-        chain.forEach(id => nodeToStack[id] = stackIdx);
+        if (chain.length > 1) {
+          const ci = chains.length;
+          chains.push(chain);
+          chain.forEach(id => nodeChain[id] = ci);
+        }
       }
 
-      return { stacks, nodeToStack };
+      return { chains, nodeChain };
     }
 
-    function buildStackNodes(stacks, nodeMap) {
-      return stacks.map((chain, si) => {
-        const w = Math.max(...chain.map(id => nodeMap[id].w));
-        const h = chain.reduce((sum, id) => sum + nodeMap[id].h, 0) + (chain.length - 1) * L.stackGap;
-        return {
-          id: '__stack_' + si, stackIdx: si, chain, w, h,
-          isPort: nodeMap[chain[0]].isPort,
-          portDir: nodeMap[chain[0]].portDir,
-        };
-      });
-    }
-
-    function remapEdges(edges, nodeToStack, isBackEdge) {
-      const stackEdges = [];
-      edges.forEach((e, i) => {
-        const fs = nodeToStack[e.from], ts = nodeToStack[e.to];
-        if (fs === ts) return;
-        stackEdges.push({
-          from: '__stack_' + fs, to: '__stack_' + ts,
-          label: e.label, sent: e.sent,
-          fromPort: e.fromPort, toPort: e.toPort,
-          origFrom: e.from, origTo: e.to, origIdx: i,
-        });
-      });
-      return { stackEdges };
-    }
-
-    // == Port repositioning ====================================================
-
-    function repositionPorts(layout) {
-      const { nodes, width, height } = layout;
-      const portNum = p => parseInt(p.id.split('_').pop()) || 0;
-
-      const inputPorts = nodes.filter(n => n.isPort && n.portDir === 'in').sort((a, b) => portNum(a) - portNum(b));
-      const outputPorts = nodes.filter(n => n.isPort && n.portDir === 'out').sort((a, b) => portNum(a) - portNum(b));
-
-      if (inputPorts.length > 0) {
-        const totalW = inputPorts.reduce((s, p) => s + p.w, 0) + (inputPorts.length - 1) * L.gapX;
-        let x = (width - totalW) / 2;
-        inputPorts.forEach(p => { p.x = x; p.y = 0; x += p.w + L.gapX; });
-      }
-      if (outputPorts.length > 0) {
-        const totalW = outputPorts.reduce((s, p) => s + p.w, 0) + (outputPorts.length - 1) * L.gapX;
-        let x = (width - totalW) / 2;
-        outputPorts.forEach(p => { p.x = x; p.y = height - p.h; x += p.w + L.gapX; });
-      }
-    }
-
-    // == Recursive layout ======================================================
-
-    function computeLayout(scopeId) {
+    // Convert our graph model to ELK's JSON format and run layout.
+    async function computeLayout(scopeId) {
       const graph = buildScopeGraph(scopeId);
       if (!graph) return null;
 
@@ -1335,12 +1245,11 @@
       const BORDER_PAD = 12;
       const HEADER_H = 24;
 
-      // Recursively expand child scopes
+      // Recursively expand child scopes (need their size before ELK layout)
       for (const node of nodes) {
         if (node.isScope && expandedScopes.has(node.opId)) {
-          const childLayout = computeLayout(node.opId);
+          const childLayout = await computeLayout(node.opId);
           if (childLayout) {
-            repositionPorts(childLayout);
             node.childLayout = childLayout;
             node.expanded = true;
             node.w = Math.max(node.w, childLayout.width + BORDER_PAD * 2);
@@ -1349,111 +1258,316 @@
         }
       }
 
-      const { layer, isBackEdge } = assignLayers(nodes, edges);
-      const { stacks, nodeToStack } = detectChains(nodes, edges, isBackEdge);
-      const stackNodes = buildStackNodes(stacks, nodeMap);
-      const stackMap = {};
-      stackNodes.forEach(sn => stackMap[sn.id] = sn);
-      const { stackEdges } = remapEdges(edges, nodeToStack, isBackEdge);
+      // Detect 1:1 pipeline chains for stacking
+      const { chains, nodeChain } = detectChains(nodes, edges, nodeMap);
 
-      const stackLayer = {};
-      stackNodes.forEach(sn => {
-        stackLayer[sn.id] = Math.min(...sn.chain.map(id => layer[id]));
-      });
-      const stackIsBack = {};
-      stackEdges.forEach((e, i) => {
-        if (stackLayer[e.to] <= stackLayer[e.from]) stackIsBack[i] = true;
-        if (isBackEdge[e.origIdx]) stackIsBack[i] = true;
+      // Collect the set of output/input ports used by each node from edges.
+      const nodeOutPorts = {};  // nodeId -> Set of port indices
+      const nodeInPorts = {};   // nodeId -> Set of port indices
+      edges.forEach(e => {
+        if (!nodeOutPorts[e.from]) nodeOutPorts[e.from] = new Set();
+        if (!nodeInPorts[e.to]) nodeInPorts[e.to] = new Set();
+        nodeOutPorts[e.from].add(e.fromPort || '0');
+        nodeInPorts[e.to].add(e.toPort || '0');
       });
 
-      const sLayers = orderLayers(stackNodes, stackEdges, stackLayer);
-      const { width, height } = positionNodes(sLayers, stackMap);
+      // Create ELK port objects for a node.
+      function makeElkPorts(nodeId) {
+        const ports = [];
+        const outSet = nodeOutPorts[nodeId] || new Set();
+        const inSet = nodeInPorts[nodeId] || new Set();
+        for (const p of [...inSet].sort()) {
+          ports.push({
+            id: nodeId + '_in_' + p,
+            layoutOptions: {
+              'elk.port.side': 'NORTH',
+              'elk.port.index': p,
+            },
+          });
+        }
+        for (const p of [...outSet].sort()) {
+          ports.push({
+            id: nodeId + '_out_' + p,
+            layoutOptions: {
+              'elk.port.side': 'SOUTH',
+              'elk.port.index': p,
+            },
+          });
+        }
+        return ports;
+      }
 
-      stacks.forEach((chain, si) => {
-        const sn = stackMap['__stack_' + si];
-        let y = sn.y;
-        chain.forEach(id => {
-          const n = nodeMap[id];
-          n.x = sn.x + (sn.w - n.w) / 2;
-          n.y = y;
-          y += n.h + L.stackGap;
+      // Build ELK nodes: chain members become children of a compound stack node,
+      // everything else is a top-level node.
+      const elkNodes = [];
+      const inChain = new Set();
+      chains.forEach(ch => ch.forEach(id => inChain.add(id)));
+
+      // For chains, ports attach to the compound node (first node's inputs,
+      // last node's outputs), not to individual children.
+      chains.forEach((chain, ci) => {
+        const stackW = Math.max(...chain.map(id => nodeMap[id].w));
+        const stackH = chain.reduce((s, id) => s + nodeMap[id].h, 0)
+          + (chain.length - 1) * STACK_GAP;
+        const chainId = '__chain_' + ci;
+        const firstId = chain[0];
+        const lastId = chain[chain.length - 1];
+
+        // Chain's input ports come from the first node, output ports from the last
+        const ports = [];
+        const inSet = nodeInPorts[firstId] || new Set();
+        for (const p of [...inSet].sort()) {
+          ports.push({
+            id: chainId + '_in_' + p,
+            layoutOptions: { 'elk.port.side': 'NORTH', 'elk.port.index': p },
+          });
+        }
+        const outSet = nodeOutPorts[lastId] || new Set();
+        for (const p of [...outSet].sort()) {
+          ports.push({
+            id: chainId + '_out_' + p,
+            layoutOptions: { 'elk.port.side': 'SOUTH', 'elk.port.index': p },
+          });
+        }
+
+        elkNodes.push({
+          id: chainId,
+          width: stackW,
+          height: stackH,
+          ports,
+          layoutOptions: {
+            'elk.algorithm': 'fixed',
+            'elk.padding': '[top=0,left=0,bottom=0,right=0]',
+            'elk.portConstraints': 'FIXED_SIDE',
+          },
+          children: chain.map((id, k) => {
+            const n = nodeMap[id];
+            const prevH = chain.slice(0, k).reduce((s, pid) => s + nodeMap[pid].h + STACK_GAP, 0);
+            return {
+              id: id,
+              width: n.w,
+              height: n.h,
+              x: (stackW - n.w) / 2,
+              y: prevH,
+            };
+          }),
         });
       });
 
-      return { scopeId, nodes, edges, nodeMap, stacks, stackEdges, stackIsBack, width, height };
+      // Add non-chain nodes with ports
+      for (const n of nodes) {
+        if (inChain.has(n.id)) continue;
+        const elkNode = {
+          id: n.id,
+          width: n.w,
+          height: n.h,
+          ports: makeElkPorts(n.id),
+          layoutOptions: {
+            'elk.portConstraints': 'FIXED_SIDE',
+          },
+        };
+
+        // For expanded scopes, create ports at positions matching the internal
+        // port nodes so external edges line up with the "in 0" / "out 0" nodes.
+        if (n.expanded && n.childLayout) {
+          const fixedPorts = [];
+          for (const cn of n.childLayout.nodes) {
+            if (!cn.isPort) continue;
+            // cn.x is relative to the child layout; offset by BORDER_PAD
+            // to get position relative to the scope node.
+            const portX = BORDER_PAD + cn.x + cn.w / 2;
+            if (cn.portDir === 'in') {
+              fixedPorts.push({
+                id: n.id + '_in_' + cn.id.split('_').pop(),
+                width: 1, height: 1,
+                x: portX, y: 0,
+                layoutOptions: {
+                  'elk.port.side': 'NORTH',
+                },
+              });
+            } else if (cn.portDir === 'out') {
+              fixedPorts.push({
+                id: n.id + '_out_' + cn.id.split('_').pop(),
+                width: 1, height: 1,
+                x: portX, y: n.h,
+                layoutOptions: {
+                  'elk.port.side': 'SOUTH',
+                },
+              });
+            }
+          }
+          if (fixedPorts.length > 0) {
+            elkNode.ports = fixedPorts;
+            elkNode.layoutOptions['elk.portConstraints'] = 'FIXED_POS';
+          }
+        }
+
+        if (n.isPort) {
+          if (n.portDir === 'in') {
+            elkNode.layoutOptions['org.eclipse.elk.layered.layering.layerConstraint'] = 'FIRST';
+          } else {
+            elkNode.layoutOptions['org.eclipse.elk.layered.layering.layerConstraint'] = 'LAST';
+          }
+        }
+        elkNodes.push(elkNode);
+      }
+
+      // Build edges, remapping chain members to their compound parent
+      // and connecting through ELK ports.
+      function elkNodeId(id) {
+        if (nodeChain[id] !== undefined) return '__chain_' + nodeChain[id];
+        return id;
+      }
+
+      // For chain nodes, map the original node's port to the chain's port
+      function elkSourcePort(e) {
+        const nid = elkNodeId(e.from);
+        return nid + '_out_' + (e.fromPort || '0');
+      }
+      function elkTargetPort(e) {
+        const nid = elkNodeId(e.to);
+        return nid + '_in_' + (e.toPort || '0');
+      }
+
+      const elkEdges = [];
+      const elkEdgeOrigIdx = [];  // maps elkEdge index -> original edge index
+      edges.forEach((e, i) => {
+        const fromElk = elkNodeId(e.from);
+        const toElk = elkNodeId(e.to);
+        // Skip edges internal to a chain
+        if (fromElk === toElk) return;
+        elkEdges.push({
+          id: 'e_' + i,
+          sources: [elkSourcePort(e)],
+          targets: [elkTargetPort(e)],
+          layoutOptions: {},
+        });
+        elkEdgeOrigIdx.push(i);
+      });
+
+      const elkGraph = {
+        id: 'root',
+        layoutOptions: {
+          'elk.algorithm': 'layered',
+          'elk.direction': 'DOWN',
+          'elk.layered.spacing.nodeNodeBetweenLayers': '40',
+          'elk.spacing.nodeNode': '20',
+          'elk.spacing.edgeNode': '15',
+          'elk.spacing.edgeEdge': '10',
+          'elk.layered.crossingMinimization.strategy': 'LAYER_SWEEP',
+          'elk.layered.nodePlacement.strategy': 'BRANDES_KOEPF',
+          'elk.padding': '[top=20,left=20,bottom=20,right=20]',
+          'elk.layered.feedbackEdges': 'true',
+        },
+        children: elkNodes,
+        edges: elkEdges,
+      };
+
+      const laid = await elk.layout(elkGraph);
+
+      // Read positions back into our node objects.
+      // For chain compound nodes, offset children by the compound's position.
+      const elkResultMap = {};
+      laid.children.forEach(en => elkResultMap[en.id] = en);
+
+      for (const n of nodes) {
+        if (inChain.has(n.id)) {
+          const ci = nodeChain[n.id];
+          const compound = elkResultMap['__chain_' + ci];
+          if (compound && compound.children) {
+            const child = compound.children.find(c => c.id === n.id);
+            if (child) {
+              n.x = compound.x + child.x;
+              n.y = compound.y + child.y;
+            }
+          }
+        } else {
+          const en = elkResultMap[n.id];
+          if (en) {
+            n.x = en.x;
+            n.y = en.y;
+          }
+        }
+      }
+
+      // Build edge routes from ELK's sections.
+      // Detect back-edges by checking if the edge routes upward (end.y < start.y).
+      const edgeRoutes = [];
+      (laid.edges || []).forEach((ee, ei) => {
+        const origIdx = elkEdgeOrigIdx[ei];
+        const origEdge = origIdx !== undefined ? edges[origIdx] : null;
+        const route = {
+          points: [],
+          isBack: false,
+          label: origEdge ? origEdge.label : '',
+          sent: origEdge ? origEdge.sent : 0,
+          feedbackColor: origEdge ? origEdge.feedbackColor : null,
+        };
+        if (ee.sections) {
+          for (const sec of ee.sections) {
+            route.points.push(sec.startPoint);
+            if (sec.bendPoints) route.points.push(...sec.bendPoints);
+            route.points.push(sec.endPoint);
+          }
+        }
+        // An edge that ends above where it starts is a back-edge
+        if (route.points.length >= 2) {
+          const first = route.points[0];
+          const last = route.points[route.points.length - 1];
+          if (last.y < first.y) route.isBack = true;
+        }
+        edgeRoutes.push(route);
+      });
+
+      const width = laid.width || 400;
+      const height = laid.height || 300;
+
+      return { scopeId, nodes, edges, nodeMap, edgeRoutes, width, height };
     }
 
     // == SVG rendering =========================================================
 
     function renderEdges(layout, group) {
-      const { stacks, stackEdges, stackIsBack, nodeMap } = layout;
+      const { edgeRoutes } = layout;
       const edgeGroup = svgEl('g', { class: 'edges' });
 
-      const outPorts = {}, inPorts = {};
-      stackEdges.forEach(e => {
-        const fsi = parseInt(e.from.split('_').pop());
-        const tsi = parseInt(e.to.split('_').pop());
-        const fId = stacks[fsi][stacks[fsi].length - 1];
-        const tId = stacks[tsi][0];
-        if (!outPorts[fId]) outPorts[fId] = new Set();
-        if (!inPorts[tId]) inPorts[tId] = new Set();
-        outPorts[fId].add(e.fromPort || '0');
-        inPorts[tId].add(e.toPort || '0');
-      });
-      for (const id in outPorts) outPorts[id] = [...outPorts[id]].sort((a, b) => Number(a) - Number(b));
-      for (const id in inPorts) inPorts[id] = [...inPorts[id]].sort((a, b) => Number(a) - Number(b));
+      edgeRoutes.forEach(route => {
+        if (route.points.length < 2) return;
 
-      stackEdges.forEach((e, i) => {
-        const fromStackIdx = parseInt(e.from.split('_').pop());
-        const toStackIdx = parseInt(e.to.split('_').pop());
-        const fromChain = stacks[fromStackIdx];
-        const toChain = stacks[toStackIdx];
-        const from = nodeMap[fromChain[fromChain.length - 1]];
-        const to = nodeMap[toChain[0]];
-        if (!from || !to) return;
+        const back = route.isBack;
+        const pts = route.points;
 
-        const fromId = fromChain[fromChain.length - 1];
-        const toId = toChain[0];
-        const fromPortList = outPorts[fromId] || ['0'];
-        const toPortList = inPorts[toId] || ['0'];
-        const fpi = fromPortList.indexOf(e.fromPort || '0');
-        const tpi = toPortList.indexOf(e.toPort || '0');
-
-        const margin = Math.min(20, from.w * 0.15);
-        const sx = from.x + margin + (fpi + 0.5) / fromPortList.length * (from.w - margin * 2);
-        const sy = from.y + from.h;
-        const tMargin = Math.min(20, to.w * 0.15);
-        const tx = to.x + tMargin + (tpi + 0.5) / toPortList.length * (to.w - tMargin * 2);
-        const ty = to.y;
-
-        const back = stackIsBack[i];
-        let d;
-        if (back) {
-          const rightX = Math.max(from.x + from.w, to.x + to.w) + 30;
-          d = 'M' + sx + ',' + sy +
-            ' C' + sx + ',' + (sy + 20) + ' ' + rightX + ',' + sy +
-            ' ' + rightX + ',' + ((sy + ty) / 2) +
-            ' C' + rightX + ',' + ty + ' ' + tx + ',' + (ty - 20) +
-            ' ' + tx + ',' + ty;
+        // Build SVG path from ELK's routed points
+        let d = 'M' + pts[0].x + ',' + pts[0].y;
+        if (pts.length === 2) {
+          // Simple straight line with a curve
+          const cy = Math.abs(pts[1].y - pts[0].y) * 0.3;
+          d += ' C' + pts[0].x + ',' + (pts[0].y + cy) +
+            ' ' + pts[1].x + ',' + (pts[1].y - cy) +
+            ' ' + pts[1].x + ',' + pts[1].y;
         } else {
-          const cy = Math.min(L.gapY * 0.4, Math.abs(ty - sy) * 0.35);
-          d = 'M' + sx + ',' + sy +
-            ' C' + sx + ',' + (sy + cy) + ' ' + tx + ',' + (ty - cy) +
-            ' ' + tx + ',' + ty;
+          // Follow ELK bend points with smooth segments
+          for (let k = 1; k < pts.length; k++) {
+            d += ' L' + pts[k].x + ',' + pts[k].y;
+          }
         }
 
-        const color = back ? '#c44' : (e.sent == null || e.sent === 0 ? '#555' : '#888');
-        const marker = back ? 'url(#arrow-back)' : (e.sent == null || e.sent === 0 ? 'url(#arrow-dim)' : 'url(#arrow)');
-        const strokeW = back ? '1.5' : '1.2';
-        const dasharray = (e.sent == null || e.sent === 0) && !back ? '4,3' : 'none';
+        const sent = route.sent || 0;
+        const fbColor = route.feedbackColor;
+        const color = fbColor ? fbColor : (sent === 0 ? '#555' : '#888');
+        const marker = fbColor
+          ? 'url(#arrow-fb-' + fbColor.replace('#', '') + ')'
+          : (sent === 0 ? 'url(#arrow-dim)' : 'url(#arrow)');
+        const strokeW = fbColor ? '2' : '1.2';
+        const dasharray = sent === 0 && !fbColor ? '4,3' : 'none';
 
         const path = svgEl('path', {
           d, fill: 'none', stroke: color,
           'stroke-width': strokeW, 'stroke-dasharray': dasharray,
           'marker-end': marker,
         });
-        if (e.label) {
-          const t = svgEl('title'); t.textContent = e.label; path.appendChild(t);
+        if (route.label) {
+          const t = svgEl('title'); t.textContent = route.label; path.appendChild(t);
         }
         edgeGroup.appendChild(path);
       });
@@ -1593,9 +1707,6 @@
           }
         }
 
-        const title = svgEl('title');
-        title.textContent = n.tooltip || n.label;
-        g.appendChild(title);
         nodeGroup.appendChild(g);
       });
 
@@ -1604,9 +1715,9 @@
 
     // == Main scope renderer ===================================================
 
-    function renderScopeDAG(scopeId) {
+    async function renderScopeDAG(scopeId) {
       const container = document.getElementById('graph-container');
-      const layout = computeLayout(scopeId);
+      const layout = await computeLayout(scopeId);
       if (!layout) {
         container.innerHTML = '<div class="no-data">No operators to display</div>';
         return;
@@ -1626,6 +1737,17 @@
           markerWidth: '7', markerHeight: '7', orient: 'auto-start-reverse',
         });
         marker.appendChild(svgEl('path', { d: 'M0,1 L10,5 L0,9z', fill: color }));
+        defs.appendChild(marker);
+      }
+      // Per-feedback-color arrow markers
+      const fbColorsUsed = new Set();
+      layout.edgeRoutes.forEach(r => { if (r.feedbackColor) fbColorsUsed.add(r.feedbackColor); });
+      for (const c of fbColorsUsed) {
+        const marker = svgEl('marker', {
+          id: 'arrow-fb-' + c.replace('#', ''), viewBox: '0 0 10 10', refX: '10', refY: '5',
+          markerWidth: '7', markerHeight: '7', orient: 'auto-start-reverse',
+        });
+        marker.appendChild(svgEl('path', { d: 'M0,1 L10,5 L0,9z', fill: c }));
         defs.appendChild(marker);
       }
       svg.appendChild(defs);

@@ -139,7 +139,7 @@ fn event_to_json(worker: usize, duration_ns: u64, event: &TimelyEvent) -> Option
     Some(format!("[{worker}, {duration_ns}, {event_json}]"))
 }
 
-const FLUSH_INTERVAL: Duration = Duration::from_millis(250);
+const FLUSH_INTERVAL: Duration = Duration::from_millis(100);
 
 /// Run the WebSocket server. Batches events and replays structural events to
 /// late-connecting clients.
