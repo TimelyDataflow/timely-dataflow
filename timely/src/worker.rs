@@ -673,7 +673,7 @@ impl<A: Allocate> Worker<A> {
         if let Some(l) = logging.as_mut() {
             l.log(crate::logging::OperatesEvent {
                 id: identifier,
-                addr: vec![],
+                addr: operator.path().to_vec(),
                 name: operator.name().to_string(),
             });
             l.flush();
