@@ -175,7 +175,7 @@ You would see structural events like:
 6. `OperatesEvent { id: _, addr: [0, 3],    name: "Inspect" }` — the inspect, in the root scope.
 
 Channel events in the root scope (`scope_addr: [0]`) connecting `Input` to the iterative scope:
-- `ChannelsEvent { scope_addr: [0], source: (1, 0), target: (2, 0), ... }` — from Input's output 0 to the iterative scope's input 0.
+- `ChannelsEvent { scope_addr: [0], source: (1, 0), target: (2, 0), ... }` — from Input (index 1) output 0 to the iterative scope (index 2) input 0.
 
 Channel events inside the iterative scope (`scope_addr: [0, 2]`):
 - `ChannelsEvent { scope_addr: [0, 2], source: (0, 0), target: (1, 0), ... }` — from child zero's output 0 (= scope input 0) to Map's input 0.
@@ -195,7 +195,7 @@ To reconstruct the dataflow graph from logged events:
 
 2. **Build per-scope channel graphs** from `ChannelsEvent` entries. Group channels by `scope_addr`. Within each scope, the `source` and `target` pairs give you directed edges between scope-local operator indices.
 
-3. **Stitch across scope boundaries** using child zero. When a channel in scope `S` has source or target operator index 0, it connects to the scope's external interface. Find the operator in `S`'s parent whose `addr` equals `S`, and link the corresponding port.
+3. **Stitch across scope boundaries** using child zero. When a channel in scope `S` has source or target operator index 0, it connects to the scope's external interface. Find the operator in `S`'s parent that represents this scope, and link the corresponding port.
 
 4. **Correlate runtime events** using the worker-unique `id` from `OperatesEvent` to join `ScheduleEvent`, `ShutdownEvent`, and other events. Use `ChannelsEvent::id` to join `MessagesEvent` records to their channel.
 

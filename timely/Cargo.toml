@@ -37,3 +37,7 @@ timely_communication = { path = "../communication", version = "0.27", default-fe
 timely_container = { path = "../container", version = "0.27" }
 smallvec = { version = "1.15.1", features = ["serde", "const_generics"] }
 tungstenite = { version = "0.26", optional = true }
+
+[[example]]
+name = "logging-live"
+required-features = ["visualizer"]
