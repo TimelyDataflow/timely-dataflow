@@ -1,0 +1,482 @@
+<!DOCTYPE HTML>
+<html lang="en" class="light sidebar-visible" dir="ltr">
+    <head>
+        <!-- Book generated using mdBook -->
+        <meta charset="UTF-8">
+        <title>Logging</title>
+
+
+        <!-- Custom HTML head -->
+
+        <meta name="description" content="">
+        <meta name="viewport" content="width=device-width, initial-scale=1">
+        <meta name="theme-color" content="#ffffff">
+
+        <link rel="icon" href="../favicon-de23e50b.svg">
+        <link rel="shortcut icon" href="../favicon-8114d1fc.png">
+        <link rel="stylesheet" href="../css/variables-8adf115d.css">
+        <link rel="stylesheet" href="../css/general-2459343d.css">
+        <link rel="stylesheet" href="../css/chrome-ae938929.css">
+        <link rel="stylesheet" href="../css/print-9e4910d8.css" media="print">
+
+        <!-- Fonts -->
+        <link rel="stylesheet" href="../fonts/fonts-9644e21d.css">
+
+        <!-- Highlight.js Stylesheets -->
+        <link rel="stylesheet" id="mdbook-highlight-css" href="../highlight-493f70e1.css">
+        <link rel="stylesheet" id="mdbook-tomorrow-night-css" href="../tomorrow-night-4c0ae647.css">
+        <link rel="stylesheet" id="mdbook-ayu-highlight-css" href="../ayu-highlight-3fdfc3ac.css">
+
+        <!-- Custom theme stylesheets -->
+
+
+        <!-- Provide site root and default themes to javascript -->
+        <script>
+            const path_to_root = "../";
+            const default_light_theme = "light";
+            const default_dark_theme = "navy";
+            window.path_to_searchindex_js = "../searchindex-8a694264.js";
+        </script>
+        <!-- Start loading toc.js asap -->
+        <script src="../toc-a61bd3eb.js"></script>
+    </head>
+    <body>
+    <div id="mdbook-help-container">
+        <div id="mdbook-help-popup">
+            <h2 class="mdbook-help-title">Keyboard shortcuts</h2>
+            <div>
+                <p>Press <kbd>←</kbd> or <kbd>→</kbd> to navigate between chapters</p>
+                <p>Press <kbd>S</kbd> or <kbd>/</kbd> to search in the book</p>
+                <p>Press <kbd>?</kbd> to show this help</p>
+                <p>Press <kbd>Esc</kbd> to hide this help</p>
+            </div>
+        </div>
+    </div>
+    <div id="mdbook-body-container">
+        <!-- Work around some values being stored in localStorage wrapped in quotes -->
+        <script>
+            try {
+                let theme = localStorage.getItem('mdbook-theme');
+                let sidebar = localStorage.getItem('mdbook-sidebar');
+
+                if (theme.startsWith('"') && theme.endsWith('"')) {
+                    localStorage.setItem('mdbook-theme', theme.slice(1, theme.length - 1));
+                }
+
+                if (sidebar.startsWith('"') && sidebar.endsWith('"')) {
+                    localStorage.setItem('mdbook-sidebar', sidebar.slice(1, sidebar.length - 1));
+                }
+            } catch (e) { }
+        </script>
+
+        <!-- Set the theme before any content is loaded, prevents flash -->
+        <script>
+            const default_theme = window.matchMedia("(prefers-color-scheme: dark)").matches ? default_dark_theme : default_light_theme;
+            let theme;
+            try { theme = localStorage.getItem('mdbook-theme'); } catch(e) { }
+            if (theme === null || theme === undefined) { theme = default_theme; }
+            const html = document.documentElement;
+            html.classList.remove('light')
+            html.classList.add(theme);
+            html.classList.add("js");
+        </script>
+
+        <input type="checkbox" id="mdbook-sidebar-toggle-anchor" class="hidden">
+
+        <!-- Hide / unhide sidebar before it is displayed -->
+        <script>
+            let sidebar = null;
+            const sidebar_toggle = document.getElementById("mdbook-sidebar-toggle-anchor");
+            if (document.body.clientWidth >= 1080) {
+                try { sidebar = localStorage.getItem('mdbook-sidebar'); } catch(e) { }
+                sidebar = sidebar || 'visible';
+            } else {
+                sidebar = 'hidden';
+                sidebar_toggle.checked = false;
+            }
+            if (sidebar === 'visible') {
+                sidebar_toggle.checked = true;
+            } else {
+                html.classList.remove('sidebar-visible');
+            }
+        </script>
+
+        <nav id="mdbook-sidebar" class="sidebar" aria-label="Table of contents">
+            <!-- populated by js -->
+            <mdbook-sidebar-scrollbox class="sidebar-scrollbox"></mdbook-sidebar-scrollbox>
+            <noscript>
+                <iframe class="sidebar-iframe-outer" src="../toc.html"></iframe>
+            </noscript>
+            <div id="mdbook-sidebar-resize-handle" class="sidebar-resize-handle">
+                <div class="sidebar-resize-indicator"></div>
+            </div>
+        </nav>
+
+        <div id="mdbook-page-wrapper" class="page-wrapper">
+
+            <div class="page">
+                <div id="mdbook-menu-bar-hover-placeholder"></div>
+                <div id="mdbook-menu-bar" class="menu-bar sticky">
+                    <div class="left-buttons">
+                        <label id="mdbook-sidebar-toggle" class="icon-button" for="mdbook-sidebar-toggle-anchor" title="Toggle Table of Contents" aria-label="Toggle Table of Contents" aria-controls="mdbook-sidebar">
+                            <span class=fa-svg><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 448 512"><!--! Font Awesome Free 6.2.0 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2022 Fonticons, Inc. --><path d="M0 96C0 78.3 14.3 64 32 64H416c17.7 0 32 14.3 32 32s-14.3 32-32 32H32C14.3 128 0 113.7 0 96zM0 256c0-17.7 14.3-32 32-32H416c17.7 0 32 14.3 32 32s-14.3 32-32 32H32c-17.7 0-32-14.3-32-32zM448 416c0 17.7-14.3 32-32 32H32c-17.7 0-32-14.3-32-32s14.3-32 32-32H416c17.7 0 32 14.3 32 32z"/></svg></span>
+                        </label>
+                        <button id="mdbook-theme-toggle" class="icon-button" type="button" title="Change theme" aria-label="Change theme" aria-haspopup="true" aria-expanded="false" aria-controls="mdbook-theme-list">
+                            <span class=fa-svg><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 576 512"><!--! Font Awesome Free 6.2.0 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2022 Fonticons, Inc. --><path d="M371.3 367.1c27.3-3.9 51.9-19.4 67.2-42.9L600.2 74.1c12.6-19.5 9.4-45.3-7.6-61.2S549.7-4.4 531.1 9.6L294.4 187.2c-24 18-38.2 46.1-38.4 76.1L371.3 367.1zm-19.6 25.4l-116-104.4C175.9 290.3 128 339.6 128 400c0 3.9 .2 7.8 .6 11.6c1.8 17.5-10.2 36.4-27.8 36.4H96c-17.7 0-32 14.3-32 32s14.3 32 32 32H240c61.9 0 112-50.1 112-112c0-2.5-.1-5-.2-7.5z"/></svg></span>
+                        </button>
+                        <ul id="mdbook-theme-list" class="theme-popup" aria-label="Themes" role="menu">
+                            <li role="none"><button role="menuitem" class="theme" id="mdbook-theme-default_theme">Auto</button></li>
+                            <li role="none"><button role="menuitem" class="theme" id="mdbook-theme-light">Light</button></li>
+                            <li role="none"><button role="menuitem" class="theme" id="mdbook-theme-rust">Rust</button></li>
+                            <li role="none"><button role="menuitem" class="theme" id="mdbook-theme-coal">Coal</button></li>
+                            <li role="none"><button role="menuitem" class="theme" id="mdbook-theme-navy">Navy</button></li>
+                            <li role="none"><button role="menuitem" class="theme" id="mdbook-theme-ayu">Ayu</button></li>
+                        </ul>
+                        <button id="mdbook-search-toggle" class="icon-button" type="button" title="Search (`/`)" aria-label="Toggle Searchbar" aria-expanded="false" aria-keyshortcuts="/ s" aria-controls="mdbook-searchbar">
+                            <span class=fa-svg><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512"><!--! Font Awesome Free 6.2.0 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2022 Fonticons, Inc. --><path d="M416 208c0 45.9-14.9 88.3-40 122.7L502.6 457.4c12.5 12.5 12.5 32.8 0 45.3s-32.8 12.5-45.3 0L330.7 376c-34.4 25.2-76.8 40-122.7 40C93.1 416 0 322.9 0 208S93.1 0 208 0S416 93.1 416 208zM208 352c79.5 0 144-64.5 144-144s-64.5-144-144-144S64 128.5 64 208s64.5 144 144 144z"/></svg></span>
+                        </button>
+                    </div>
+
+                    <h1 class="menu-title"></h1>
+
+                    <div class="right-buttons">
+                        <a href="../print.html" title="Print this book" aria-label="Print this book">
+                            <span class=fa-svg id="print-button"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512"><!--! Font Awesome Free 6.2.0 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2022 Fonticons, Inc. --><path d="M128 0C92.7 0 64 28.7 64 64v96h64V64H354.7L384 93.3V160h64V93.3c0-17-6.7-33.3-18.7-45.3L400 18.7C388 6.7 371.7 0 354.7 0H128zM384 352v32 64H128V384 368 352H384zm64 32h32c17.7 0 32-14.3 32-32V256c0-35.3-28.7-64-64-64H64c-35.3 0-64 28.7-64 64v96c0 17.7 14.3 32 32 32H64v64c0 35.3 28.7 64 64 64H384c35.3 0 64-28.7 64-64V384zm-16-88c-13.3 0-24-10.7-24-24s10.7-24 24-24s24 10.7 24 24s-10.7 24-24 24z"/></svg></span>
+                        </a>
+
+                    </div>
+                </div>
+
+                <div id="mdbook-search-wrapper" class="hidden">
+                    <form id="mdbook-searchbar-outer" class="searchbar-outer">
+                        <div class="search-wrapper">
+                            <input type="search" id="mdbook-searchbar" name="searchbar" placeholder="Search this book ..." aria-controls="mdbook-searchresults-outer" aria-describedby="searchresults-header">
+                            <div class="spinner-wrapper">
+                                <span class=fa-svg id="fa-spin"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512"><!--! Font Awesome Free 6.2.0 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2022 Fonticons, Inc. --><path d="M304 48c0-26.5-21.5-48-48-48s-48 21.5-48 48s21.5 48 48 48s48-21.5 48-48zm0 416c0-26.5-21.5-48-48-48s-48 21.5-48 48s21.5 48 48 48s48-21.5 48-48zM48 304c26.5 0 48-21.5 48-48s-21.5-48-48-48s-48 21.5-48 48s21.5 48 48 48zm464-48c0-26.5-21.5-48-48-48s-48 21.5-48 48s21.5 48 48 48s48-21.5 48-48zM142.9 437c18.7-18.7 18.7-49.1 0-67.9s-49.1-18.7-67.9 0s-18.7 49.1 0 67.9s49.1 18.7 67.9 0zm0-294.2c18.7-18.7 18.7-49.1 0-67.9S93.7 56.2 75 75s-18.7 49.1 0 67.9s49.1 18.7 67.9 0zM369.1 437c18.7 18.7 49.1 18.7 67.9 0s18.7-49.1 0-67.9s-49.1-18.7-67.9 0s-18.7 49.1 0 67.9z"/></svg></span>
+                            </div>
+                        </div>
+                    </form>
+                    <div id="mdbook-searchresults-outer" class="searchresults-outer hidden">
+                        <div id="mdbook-searchresults-header" class="searchresults-header"></div>
+                        <ul id="mdbook-searchresults">
+                        </ul>
+                    </div>
+                </div>
+
+                <!-- Apply ARIA attributes after the sidebar and the sidebar toggle button are added to the DOM -->
+                <script>
+                    document.getElementById('mdbook-sidebar-toggle').setAttribute('aria-expanded', sidebar === 'visible');
+                    document.getElementById('mdbook-sidebar').setAttribute('aria-hidden', sidebar !== 'visible');
+                    Array.from(document.querySelectorAll('#mdbook-sidebar a')).forEach(function(link) {
+                        link.setAttribute('tabIndex', sidebar === 'visible' ? 0 : -1);
+                    });
+                </script>
+
+                <div id="mdbook-content" class="content">
+                    <main>
+                        <h1 id="logging"><a class="header" href="#logging">Logging</a></h1>
+<p>Timely dataflow has a built-in logging infrastructure that lets you observe the internal behavior of a running computation. Every worker maintains a <code>Registry</code> of named logging streams. You can tap into these streams by registering closures that receive batches of events, and you can also create your own custom logging streams for application-level instrumentation.</p>
+<h2 id="tapping-into-logging"><a class="header" href="#tapping-into-logging">Tapping into logging</a></h2>
+<p>Each timely worker has a logging registry accessible via <code>worker.log_register()</code>. You register a logging callback by calling <code>insert</code> on the registry, providing a string name and a closure. The string name identifies which logging stream you want to listen to, and the closure is called with batches of events.</p>
+<p>Here is a minimal example that prints all timely system events:</p>
+<pre class="playground"><code class="language-rust no_run"><span class="boring">#![allow(unused)]
+</span><span class="boring">fn main() {
+</span>use timely::logging::TimelyEventBuilder;
+
+timely::execute_from_args(std::env::args(), |worker| {
+
+    // Register a callback for the "timely" logging stream.
+    worker.log_register().unwrap()
+        .insert::&lt;TimelyEventBuilder, _&gt;("timely", |time, data| {
+            if let Some(data) = data {
+                for event in data.iter() {
+                    println!("{:?}", event);
+                }
+            }
+        });
+
+    worker.dataflow::&lt;usize,_,_&gt;(|scope| {
+        // ... build your dataflow here ...
+    });
+
+}).unwrap();
+<span class="boring">}</span></code></pre>
+<p>The <code>insert</code> method is generic over two type parameters: a <em>container builder</em> type that describes how events are batched, and the closure type. Each built-in logging stream has a corresponding builder type alias (like <code>TimelyEventBuilder</code>) that you should use.</p>
+<p>The closure signature is <code>FnMut(&amp;Duration, &amp;mut Option&lt;Container&gt;)</code>:</p>
+<ul>
+<li>The <code>&amp;Duration</code> is the elapsed time since worker startup.</li>
+<li><code>&amp;mut Option&lt;Container&gt;</code> is <code>Some(container)</code> when delivering a batch of events, or <code>None</code> to signal a flush (e.g., when the worker is about to park or the stream is closing).</li>
+</ul>
+<p>Each event in the container is a tuple <code>(Duration, Event)</code> where the <code>Duration</code> is the timestamp at which the event was logged.</p>
+<h2 id="retrieving-loggers-for-custom-events"><a class="header" href="#retrieving-loggers-for-custom-events">Retrieving loggers for custom events</a></h2>
+<p>You can also create your own logging streams. Register a stream with <code>insert</code>, then retrieve a <code>Logger</code> handle with <code>get</code> to log events from within your dataflow:</p>
+<pre class="playground"><code class="language-rust no_run"><span class="boring">#![allow(unused)]
+</span><span class="boring">fn main() {
+</span>use std::time::Duration;
+use timely::container::CapacityContainerBuilder;
+
+timely::execute_from_args(std::env::args(), |worker| {
+
+    // Define a container builder for your event type.
+    type MyBuilder = CapacityContainerBuilder&lt;Vec&lt;(Duration, String)&gt;&gt;;
+
+    // Register the logging stream with a callback.
+    worker.log_register().unwrap()
+        .insert::&lt;MyBuilder, _&gt;("my-app/events", |_time, data| {
+            if let Some(data) = data {
+                for (ts, msg) in data.iter() {
+                    println!("[{:?}] {}", ts, msg);
+                }
+            }
+        });
+
+    // Retrieve a Logger handle to use later.
+    let my_logger = worker.log_register().unwrap()
+        .get::&lt;MyBuilder&gt;("my-app/events")
+        .expect("Logger was just registered");
+
+    worker.dataflow::&lt;usize,_,_&gt;(|scope| {
+        // ... build your dataflow ...
+    });
+
+    // Log events from your application logic.
+    my_logger.log("something happened".to_string());
+
+}).unwrap();
+<span class="boring">}</span></code></pre>
+<p>The <code>Logger</code> buffers events internally and flushes them to the registered closure when the buffer reaches capacity, when <code>flush()</code> is called explicitly, or when the logger is dropped.</p>
+<h2 id="logging-stream-names"><a class="header" href="#logging-stream-names">Logging stream names</a></h2>
+<p>Timely uses string names to identify logging streams. The built-in stream names are:</p>
+<div class="table-wrapper">
+<table>
+<thead>
+<tr><th>Stream name</th><th>Builder type</th><th>Event type</th><th>Description</th></tr>
+</thead>
+<tbody>
+<tr><td><code>"timely"</code></td><td><code>TimelyEventBuilder</code></td><td><code>TimelyEvent</code></td><td>Core system events: operator lifecycle, scheduling, messages, channels</td></tr>
+<tr><td><code>"timely/progress/{T}"</code></td><td><code>TimelyProgressEventBuilder&lt;T&gt;</code></td><td><code>TimelyProgressEvent&lt;T&gt;</code></td><td>Progress protocol messages between operators</td></tr>
+<tr><td><code>"timely/summary/{T}"</code></td><td><code>TimelySummaryEventBuilder&lt;TS&gt;</code></td><td><code>OperatesSummaryEvent&lt;TS&gt;</code></td><td>Operator connectivity summaries</td></tr>
+<tr><td><code>"timely/reachability/{T}"</code></td><td><code>TrackerEventBuilder&lt;T&gt;</code></td><td><code>TrackerEvent&lt;T&gt;</code></td><td>Reachability tracker updates</td></tr>
+</tbody>
+</table>
+</div>
+<p>The <code>{T}</code> in the progress, summary, and reachability stream names is the Rust type name of the dataflow’s timestamp, obtained from <code>std::any::type_name::&lt;T&gt;()</code> (e.g., <code>"timely/progress/usize"</code> for a dataflow using <code>usize</code> timestamps). This is because these events are generic over the timestamp type. Note that <code>type_name</code> is best-effort and not guaranteed to be stable across compiler versions, so these stream names should be treated accordingly.</p>
+<p>You can register a callback for these at any point before or after building a dataflow. If you register a callback for a stream name that is already in use, the new callback takes effect for subsequently created loggers but existing loggers continue to use the old callback.</p>
+<h2 id="the-timelyevent-variants"><a class="header" href="#the-timelyevent-variants">The <code>TimelyEvent</code> variants</a></h2>
+<p>The <code>TimelyEvent</code> enum is the primary event type for the <code>"timely"</code> logging stream. Its variants capture the lifecycle and activity of a timely computation:</p>
+<h3 id="operatesoperatesevent"><a class="header" href="#operatesoperatesevent"><code>Operates(OperatesEvent)</code></a></h3>
+<p>Logged when an operator is created. Contains the operator’s worker-unique <code>id</code>, its hierarchical <code>addr</code> (the address of the scope containing the operator, matching the convention used by <code>ChannelsEvent</code>), and its <code>name</code>. The full address of the operator itself can be reconstructed as <code>addr ++ [id]</code>.</p>
+<h3 id="channelschannelsevent"><a class="header" href="#channelschannelsevent"><code>Channels(ChannelsEvent)</code></a></h3>
+<p>Logged when a channel is created between operators. Contains the channel <code>id</code>, the <code>scope_addr</code> of the containing scope (not including the channel’s own id), <code>source</code> and <code>target</code> descriptors (each an <code>(operator_index, port)</code> pair), and a <code>typ</code> string naming the data type carried on the channel.</p>
+<h3 id="schedulescheduleevent"><a class="header" href="#schedulescheduleevent"><code>Schedule(ScheduleEvent)</code></a></h3>
+<p>Logged when an operator starts or stops executing. Contains the operator <code>id</code> and a <code>start_stop</code> field that is either <code>StartStop::Start</code> or <code>StartStop::Stop</code>. These events bracket each invocation of an operator’s logic, and can be used to measure how much time each operator consumes.</p>
+<h3 id="messagesmessagesevent"><a class="header" href="#messagesmessagesevent"><code>Messages(MessagesEvent)</code></a></h3>
+<p>Logged when a batch of messages is sent or received on a channel. Contains <code>is_send</code> (true for send, false for receive), the <code>channel</code> identifier, <code>source</code> and <code>target</code> worker indices, a <code>seq_no</code> sequence number, and the <code>record_count</code> of records in the batch.</p>
+<h3 id="pushprogresspushprogressevent"><a class="header" href="#pushprogresspushprogressevent"><code>PushProgress(PushProgressEvent)</code></a></h3>
+<p>Logged when external progress updates are pushed onto an operator. Contains the <code>op_id</code> of the operator receiving the update.</p>
+<h3 id="shutdownshutdownevent"><a class="header" href="#shutdownshutdownevent"><code>Shutdown(ShutdownEvent)</code></a></h3>
+<p>Logged when an operator is shut down. Contains the operator <code>id</code>.</p>
+<h3 id="parkparkevent"><a class="header" href="#parkparkevent"><code>Park(ParkEvent)</code></a></h3>
+<p>Logged when a worker parks (goes idle waiting for work) or unparks. <code>ParkEvent::Park(Some(duration))</code> indicates a timed park, <code>ParkEvent::Park(None)</code> an indefinite park, and <code>ParkEvent::Unpark</code> the resumption of work.</p>
+<h3 id="commchannelscommchannelsevent"><a class="header" href="#commchannelscommchannelsevent"><code>CommChannels(CommChannelsEvent)</code></a></h3>
+<p>Logged when a communication channel is established. Contains an <code>identifier</code> and a <code>kind</code> that is either <code>CommChannelKind::Progress</code> or <code>CommChannelKind::Data</code>.</p>
+<h3 id="textstring"><a class="header" href="#textstring"><code>Text(String)</code></a></h3>
+<p>An unstructured text event for ad-hoc logging.</p>
+<h2 id="connecting-operators-and-channels"><a class="header" href="#connecting-operators-and-channels">Connecting operators and channels</a></h2>
+<p>The <code>OperatesEvent</code> and <code>ChannelsEvent</code> logs together describe the structure of a dataflow graph. To make sense of them, it helps to understand how addresses, operator indices, and ports relate to each other.</p>
+<h3 id="from-a-channel-to-its-operators"><a class="header" href="#from-a-channel-to-its-operators">From a channel to its operators</a></h3>
+<p>Both <code>OperatesEvent</code> and <code>ChannelsEvent</code> use the same convention: their address field (<code>addr</code> and <code>scope_addr</code>, respectively) is the address of the <em>containing scope</em>, not the entity itself. For an operator, the full address can be reconstructed as <code>addr ++ [id]</code>. For a channel, the <code>scope_addr</code> tells you which scope the channel lives in, and the <code>source</code>/<code>target</code> descriptors of the form <code>(operator_index, port)</code> identify operators within that scope.</p>
+<p>To find the full address of a channel’s source or target operator, concatenate the channel’s <code>scope_addr</code> with the <code>operator_index</code>:</p>
+<pre><code class="language-text">operator address = scope_addr ++ [operator_index]
+</code></pre>
+<p>For example, if a channel has <code>scope_addr: [0]</code>, <code>source: (3, 0)</code>, and <code>target: (5, 1)</code>, then:</p>
+<ul>
+<li>The source operator has address <code>[0, 3]</code>, output port <code>0</code>.</li>
+<li>The target operator has address <code>[0, 5]</code>, input port <code>1</code>.</li>
+</ul>
+<p>These operators will have <code>addr: [0]</code> in their <code>OperatesEvent</code> logs (the containing scope), with <code>id</code> values corresponding to the operator indices <code>3</code> and <code>5</code>.</p>
+<h3 id="child-0-the-scope-boundary"><a class="header" href="#child-0-the-scope-boundary">Child 0: the scope boundary</a></h3>
+<p>Every subgraph has a special “child 0” that represents the boundary between the subgraph and its surrounding scope. Child 0 is not a real operator; it is a stand-in for the scope that contains the subgraph. You will not see an <code>OperatesEvent</code> for child 0, but you will see channels that connect to it.</p>
+<ul>
+<li>
+<p><strong>Child 0’s outputs</strong> correspond to data <em>entering</em> the subgraph. Output port <code>k</code> of child 0 is the <code>k</code>-th input of the subgraph operator as seen from the outer scope.</p>
+</li>
+<li>
+<p><strong>Child 0’s inputs</strong> correspond to data <em>leaving</em> the subgraph. Input port <code>k</code> of child 0 is the <code>k</code>-th output of the subgraph operator as seen from the outer scope.</p>
+</li>
+</ul>
+<p>So a channel with <code>target: (0, 2)</code> means “data leaves this subgraph and emerges at output port 2 of the operator that hosts this subgraph, in the outer scope.” A channel with <code>source: (0, 1)</code> means “data arrives from input port 1 of the hosting operator, entering the subgraph.”</p>
+<p>This convention lets you trace data flow across scope boundaries: follow a channel to child 0, then find the corresponding port on the subgraph operator in the parent scope.</p>
+<h3 id="operator-summaries-internal-connectivity"><a class="header" href="#operator-summaries-internal-connectivity">Operator summaries: internal connectivity</a></h3>
+<p>While <code>ChannelsEvent</code> logs describe the <em>external</em> wiring between operators, an <code>OperatesSummaryEvent</code> describes an operator’s <em>internal</em> topology: which of its inputs can result in data at which of its outputs, and what transformation is applied to timestamps along the way. This is the information reported by each operator during initialization, and it is what the progress tracking protocol uses to reason about which timestamps may still appear at downstream operators.</p>
+<p>The <code>summary</code> field is a <code>Connectivity&lt;TS&gt;</code>, which is a <code>Vec&lt;PortConnectivity&lt;TS&gt;&gt;</code> indexed by input port. Each <code>PortConnectivity&lt;TS&gt;</code> maps output port indices to an <code>Antichain&lt;TS&gt;</code> of timestamp summaries. A summary <code>s</code> at position <code>(input_i, output_j)</code> means: “a record arriving at input <code>i</code> with timestamp <code>t</code> could produce a record at output <code>j</code> with timestamp <code>t.join(s)</code>.” If an <code>(input, output)</code> pair has no entry, the operator guarantees that input can never cause output at that port.</p>
+<p>For example, a <code>map</code> operator has one input and one output with an identity summary (timestamps pass through unchanged). An operator that delays output by one tick would have a summary that advances the timestamp. An operator with two inputs and one output (like <code>concat</code>) would report that both inputs connect to the single output with identity summaries.</p>
+<p>This information is essential for understanding the progress guarantees of a dataflow. If you are trying to understand why a particular timestamp is not yet “complete” at some point in the graph, the operator summaries tell you which paths could still produce data at that timestamp.</p>
+<h2 id="other-event-types"><a class="header" href="#other-event-types">Other event types</a></h2>
+<h3 id="timelyprogresseventt"><a class="header" href="#timelyprogresseventt"><code>TimelyProgressEvent&lt;T&gt;</code></a></h3>
+<p>Events on the <code>"timely/progress/{T}"</code> streams capture the exchange of progress information between operators. Each event records whether it is a send or receive (<code>is_send</code>), the <code>source</code> worker, the <code>channel</code> and <code>seq_no</code>, the <code>identifier</code> of the operator, and two lists of updates: <code>messages</code> (updates to message counts at targets) and <code>internal</code> (updates to capabilities at sources). Each update is a tuple <code>(node, port, timestamp, delta)</code>.</p>
+<p>These events are primarily useful for debugging the progress tracking protocol or understanding how capabilities flow through a dataflow.</p>
+<h3 id="trackereventt"><a class="header" href="#trackereventt"><code>TrackerEvent&lt;T&gt;</code></a></h3>
+<p>Events on the <code>"timely/reachability/{T}"</code> streams record updates to the reachability tracker, which maintains the set of timestamps that could still arrive at each operator input. The variants are <code>SourceUpdate</code> and <code>TargetUpdate</code>, each carrying the node, port, timestamp, and delta of the update.</p>
+<h3 id="operatessummaryeventts"><a class="header" href="#operatessummaryeventts"><code>OperatesSummaryEvent&lt;TS&gt;</code></a></h3>
+<p>Events on the <code>"timely/summary/{T}"</code> streams record the internal connectivity summary of each operator. See <a href="#operator-summaries-internal-connectivity">Operator summaries: internal connectivity</a> above for a detailed explanation.</p>
+<h2 id="example-logging-multiple-streams"><a class="header" href="#example-logging-multiple-streams">Example: logging multiple streams</a></h2>
+<p>The following example registers callbacks for all four built-in logging streams and also creates a custom application-level logger:</p>
+<pre class="playground"><code class="language-rust no_run"><span class="boring">#![allow(unused)]
+</span><span class="boring">fn main() {
+</span>use std::time::Duration;
+use timely::logging::{
+    TimelyEventBuilder, TimelyProgressEventBuilder, TimelySummaryEventBuilder,
+};
+use timely::container::CapacityContainerBuilder;
+use timely::progress::reachability::logging::TrackerEventBuilder;
+
+timely::execute_from_args(std::env::args(), |worker| {
+
+    // Core timely events.
+    worker.log_register().unwrap()
+        .insert::&lt;TimelyEventBuilder, _&gt;("timely", |_time, data| {
+            if let Some(data) = data {
+                for event in data.iter() {
+                    println!("TIMELY: {:?}", event);
+                }
+            }
+        });
+
+    // Progress tracking events (for usize timestamps).
+    worker.log_register().unwrap()
+        .insert::&lt;TimelyProgressEventBuilder&lt;usize&gt;, _&gt;(
+            "timely/progress/usize", |_time, data| {
+                if let Some(data) = data {
+                    for event in data.iter() {
+                        println!("PROGRESS: {:?}", event);
+                    }
+                }
+            }
+        );
+
+    // Reachability tracker events.
+    worker.log_register().unwrap()
+        .insert::&lt;TrackerEventBuilder&lt;usize&gt;, _&gt;(
+            "timely/reachability/usize", |_time, data| {
+                if let Some(data) = data {
+                    for event in data.iter() {
+                        println!("REACHABILITY: {:?}", event);
+                    }
+                }
+            }
+        );
+
+    // Operator summary events.
+    worker.log_register().unwrap()
+        .insert::&lt;TimelySummaryEventBuilder&lt;usize&gt;, _&gt;(
+            "timely/summary/usize", |_time, data| {
+                if let Some(data) = data {
+                    for (_, event) in data.iter() {
+                        println!("SUMMARY: {:?}", event);
+                    }
+                }
+            }
+        );
+
+    // Custom application-level logger.
+    type RoundBuilder = CapacityContainerBuilder&lt;Vec&lt;(Duration, usize)&gt;&gt;;
+    worker.log_register().unwrap()
+        .insert::&lt;RoundBuilder, _&gt;("my-app/rounds", |_time, data| {
+            if let Some(data) = data {
+                for (ts, round) in data.iter() {
+                    println!("[{:?}] completed round {}", ts, round);
+                }
+            }
+        });
+
+    let round_logger = worker.log_register().unwrap()
+        .get::&lt;RoundBuilder&gt;("my-app/rounds")
+        .expect("Round logger absent");
+
+    worker.dataflow::&lt;usize,_,_&gt;(|scope| {
+        // ... build your dataflow ...
+    });
+
+    for round in 0..10 {
+        // ... do work ...
+        round_logger.log(round);
+    }
+
+}).unwrap();
+<span class="boring">}</span></code></pre>
+<h2 id="the-batchlogger-adapter"><a class="header" href="#the-batchlogger-adapter">The <code>BatchLogger</code> adapter</a></h2>
+<p>If you want to feed logging events into a timely dataflow stream (for example, to analyze logs in real time or write them to durable storage), the <code>BatchLogger</code> struct bridges the two. It wraps an <code>EventPusher</code> and converts logging callbacks into a stream of timely <code>Event</code>s with progress information:</p>
+<pre class="playground"><code class="language-rust no_run"><span class="boring">#![allow(unused)]
+</span><span class="boring">fn main() {
+</span>use timely::logging::BatchLogger;
+<span class="boring">}</span></code></pre>
+<p><code>BatchLogger::publish_batch</code> is called with each <code>(&amp;Duration, &amp;mut Option&lt;Container&gt;)</code> from the logging closure, and it translates these into <code>Event::Messages</code> and <code>Event::Progress</code> updates suitable for consumption by <code>capture</code> and <code>replay</code> infrastructure.</p>
+<h2 id="communication-thread-logging"><a class="header" href="#communication-thread-logging">Communication thread logging</a></h2>
+<p>The logging described above all runs on worker threads and is accessed through the worker’s <code>Registry</code>. In multi-process (cluster) deployments, timely also runs dedicated send and receive threads for TCP networking. These threads have their own logging, configured separately.</p>
+<p>Communication logging is configured via the <code>log_fn</code> field in <code>Config::Cluster</code>. This is a closure that receives a <code>CommunicationSetup</code> describing the thread (whether it is a sender or receiver, and which processes it connects) and returns an <code>Option&lt;Logger&lt;CommunicationEventBuilder&gt;&gt;</code>. By default, this closure returns <code>None</code> and no communication events are logged.</p>
+<p>The <code>CommunicationEvent</code> enum has three variants:</p>
+<ul>
+<li>
+<p><strong><code>Setup(CommunicationSetup)</code></strong>: Identifies the thread, recording whether it is a <code>sender</code> or receiver, the local <code>process</code> id, and the <code>remote</code> process id (if any).</p>
+</li>
+<li>
+<p><strong><code>State(StateEvent)</code></strong>: Logged when a communication thread starts or stops. Contains <code>send</code> (whether this is a send thread), <code>process</code> and <code>remote</code> ids, and <code>start</code> (true when starting, false when stopping).</p>
+</li>
+<li>
+<p><strong><code>Message(MessageEvent)</code></strong>: Logged for each message sent or received over the network. Contains <code>is_send</code> and the message <code>header</code> (which includes the channel, source, target, and length).</p>
+</li>
+</ul>
+<p>These events are only relevant when running across multiple processes. For single-process or single-thread configurations, no communication threads are created and these events will not appear.</p>
+
+                    </main>
+
+                    <nav class="nav-wrapper" aria-label="Page navigation">
+                        <!-- Mobile navigation buttons -->
+                            <a rel="prev" href="../chapter_5/chapter_5_2.html" class="mobile-nav-chapters previous" title="Previous chapter" aria-label="Previous chapter" aria-keyshortcuts="Left">
+                                <span class=fa-svg><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 320 512"><!--! Font Awesome Free 6.2.0 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2022 Fonticons, Inc. --><path d="M41.4 233.4c-12.5 12.5-12.5 32.8 0 45.3l160 160c12.5 12.5 32.8 12.5 45.3 0s12.5-32.8 0-45.3L109.3 256 246.6 118.6c12.5-12.5 12.5-32.8 0-45.3s-32.8-12.5-45.3 0l-160 160z"/></svg></span>
+                            </a>
+
+
+                        <div style="clear: both"></div>
+                    </nav>
+                </div>
+            </div>
+
+            <nav class="nav-wide-wrapper" aria-label="Page navigation">
+                    <a rel="prev" href="../chapter_5/chapter_5_2.html" class="nav-chapters previous" title="Previous chapter" aria-label="Previous chapter" aria-keyshortcuts="Left">
+                        <span class=fa-svg><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 320 512"><!--! Font Awesome Free 6.2.0 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2022 Fonticons, Inc. --><path d="M41.4 233.4c-12.5 12.5-12.5 32.8 0 45.3l160 160c12.5 12.5 32.8 12.5 45.3 0s12.5-32.8 0-45.3L109.3 256 246.6 118.6c12.5-12.5 12.5-32.8 0-45.3s-32.8-12.5-45.3 0l-160 160z"/></svg></span>
+                    </a>
+
+            </nav>
+
+        </div>
+
+        <template id=fa-eye><span class=fa-svg><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 576 512"><!--! Font Awesome Free 6.2.0 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2022 Fonticons, Inc. --><path d="M288 32c-80.8 0-145.5 36.8-192.6 80.6C48.6 156 17.3 208 2.5 243.7c-3.3 7.9-3.3 16.7 0 24.6C17.3 304 48.6 356 95.4 399.4C142.5 443.2 207.2 480 288 480s145.5-36.8 192.6-80.6c46.8-43.5 78.1-95.4 93-131.1c3.3-7.9 3.3-16.7 0-24.6c-14.9-35.7-46.2-87.7-93-131.1C433.5 68.8 368.8 32 288 32zM432 256c0 79.5-64.5 144-144 144s-144-64.5-144-144s64.5-144 144-144s144 64.5 144 144zM288 192c0 35.3-28.7 64-64 64c-11.5 0-22.3-3-31.6-8.4c-.2 2.8-.4 5.5-.4 8.4c0 53 43 96 96 96s96-43 96-96s-43-96-96-96c-2.8 0-5.6 .1-8.4 .4c5.3 9.3 8.4 20.1 8.4 31.6z"/></svg></span></template>
+        <template id=fa-eye-slash><span class=fa-svg><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 640 512"><!--! Font Awesome Free 6.2.0 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2022 Fonticons, Inc. --><path d="M38.8 5.1C28.4-3.1 13.3-1.2 5.1 9.2S-1.2 34.7 9.2 42.9l592 464c10.4 8.2 25.5 6.3 33.7-4.1s6.3-25.5-4.1-33.7L525.6 386.7c39.6-40.6 66.4-86.1 79.9-118.4c3.3-7.9 3.3-16.7 0-24.6c-14.9-35.7-46.2-87.7-93-131.1C465.5 68.8 400.8 32 320 32c-68.2 0-125 26.3-169.3 60.8L38.8 5.1zM223.1 149.5C248.6 126.2 282.7 112 320 112c79.5 0 144 64.5 144 144c0 24.9-6.3 48.3-17.4 68.7L408 294.5c5.2-11.8 8-24.8 8-38.5c0-53-43-96-96-96c-2.8 0-5.6 .1-8.4 .4c5.3 9.3 8.4 20.1 8.4 31.6c0 10.2-2.4 19.8-6.6 28.3l-90.3-70.8zm223.1 298L373 389.9c-16.4 6.5-34.3 10.1-53 10.1c-79.5 0-144-64.5-144-144c0-6.9 .5-13.6 1.4-20.2L83.1 161.5C60.3 191.2 44 220.8 34.5 243.7c-3.3 7.9-3.3 16.7 0 24.6c14.9 35.7 46.2 87.7 93 131.1C174.5 443.2 239.2 480 320 480c47.8 0 89.9-12.9 126.2-32.5z"/></svg></span></template>
+        <template id=fa-copy><span class=fa-svg><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512"><!--! Font Awesome Free 6.2.0 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2022 Fonticons, Inc. --><path d="M502.6 70.63l-61.25-61.25C435.4 3.371 427.2 0 418.7 0H255.1c-35.35 0-64 28.66-64 64l.0195 256C192 355.4 220.7 384 256 384h192c35.2 0 64-28.8 64-64V93.25C512 84.77 508.6 76.63 502.6 70.63zM464 320c0 8.836-7.164 16-16 16H255.1c-8.838 0-16-7.164-16-16L239.1 64.13c0-8.836 7.164-16 16-16h128L384 96c0 17.67 14.33 32 32 32h47.1V320zM272 448c0 8.836-7.164 16-16 16H63.1c-8.838 0-16-7.164-16-16L47.98 192.1c0-8.836 7.164-16 16-16H160V128H63.99c-35.35 0-64 28.65-64 64l.0098 256C.002 483.3 28.66 512 64 512h192c35.2 0 64-28.8 64-64v-32h-47.1L272 448z"/></svg></span></template>
+        <template id=fa-play><span class=fa-svg><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 384 512"><!--! Font Awesome Free 6.2.0 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2022 Fonticons, Inc. --><path d="M73 39c-14.8-9.1-33.4-9.4-48.5-.9S0 62.6 0 80V432c0 17.4 9.4 33.4 24.5 41.9s33.7 8.1 48.5-.9L361 297c14.3-8.7 23-24.2 23-41s-8.7-32.2-23-41L73 39z"/></svg></span></template>
+        <template id=fa-clock-rotate-left><span class=fa-svg><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512"><!--! Font Awesome Free 6.2.0 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2022 Fonticons, Inc. --><path d="M75 75L41 41C25.9 25.9 0 36.6 0 57.9V168c0 13.3 10.7 24 24 24H134.1c21.4 0 32.1-25.9 17-41l-30.8-30.8C155 85.5 203 64 256 64c106 0 192 86 192 192s-86 192-192 192c-40.8 0-78.6-12.7-109.7-34.4c-14.5-10.1-34.4-6.6-44.6 7.9s-6.6 34.4 7.9 44.6C151.2 495 201.7 512 256 512c141.4 0 256-114.6 256-256S397.4 0 256 0C185.3 0 121.3 28.7 75 75zm181 53c-13.3 0-24 10.7-24 24V256c0 6.4 2.5 12.5 7 17l72 72c9.4 9.4 24.6 9.4 33.9 0s9.4-24.6 0-33.9l-65-65V152c0-13.3-10.7-24-24-24z"/></svg></span></template>
+
+
+
+        <script>
+            window.playground_copyable = true;
+        </script>
+
+
+        <script src="../elasticlunr-ef4e11c1.min.js"></script>
+        <script src="../mark-09e88c2c.min.js"></script>
+        <script src="../searcher-c2a407aa.js"></script>
+
+        <script src="../clipboard-1626706a.min.js"></script>
+        <script src="../highlight-abc7f01d.js"></script>
+        <script src="../book-a0b12cfe.js"></script>
+
+        <!-- Custom JS scripts -->
+
+
+
+    </div>
+    </body>
+</html>
