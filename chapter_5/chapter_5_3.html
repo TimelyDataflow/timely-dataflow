@@ -3,7 +3,7 @@
     <head>
         <!-- Book generated using mdBook -->
         <meta charset="UTF-8">
-        <title>Scopes</title>
+        <title>Containers</title>
 
 
         <!-- Custom HTML head -->
@@ -174,114 +174,38 @@
 
                 <div id="mdbook-content" class="content">
                     <main>
-                        <h1 id="scopes"><a class="header" href="#scopes">Scopes</a></h1>
-<p>The first bit of complexity we will introduce is the timely dataflow <em>scope</em>. A scope is a region of dataflow, much like how curly braces provide scopes in imperative languages:</p>
-<pre class="playground"><code class="language-rust"><span class="boring">#![allow(unused)]
-</span><span class="boring">fn main() {
-</span>{
-    // this is an outer scope
-
-    {
-        // this is an inner scope
-    }
-}
-<span class="boring">}</span></code></pre>
-<p>You can create a new scope in any other scope by invoking the <code>scoped</code> method:</p>
-<pre class="playground"><code class="language-rust">extern crate timely;
-
-use timely::dataflow::Scope;
-
-fn main() {
-    timely::example(|scope| {
-
-        // Create a new scope with the same (u64) timestamp.
-        scope.scoped::&lt;u64,_,_&gt;("SubScope", |subscope| {
-            // probably want something here
-        })
-
-    });
-}</code></pre>
-<p>The main thing that a scope does for you is allow you to enrich the timestamp of all streams that are brought into it. For example, perhaps the timestamp type in your base dataflow scope is <code>usize</code>, your nested scope could augment this to <code>(usize, u32)</code>, or whatever additional timestamp type you might want. In the example above, we choose to keep the same timestamp, <code>u64</code>.</p>
-<p>Why are additional timestamps useful? They allow operators in the nested scope to change their behavior based on the enriched timestamp, without worrying the streams and operators outside the scope about this detail. We will soon see the example of <em>iterative</em> dataflow, where a scope allows cycles within it, but does not bother operators outside the scope with that detail.</p>
-<h2 id="entering-and-exiting-scopes"><a class="header" href="#entering-and-exiting-scopes">Entering and exiting scopes</a></h2>
-<p>In addition to <em>creating</em> scopes, we will also need to get streams of data into and out of scopes.</p>
-<p>There are two simple methods, <code>enter</code> and <code>leave</code>, that allow streams of data into and out of scopes. It is important that you use them! If you try to use a stream in a nested scope, Rust will be confused because it can’t get the timestamps of your streams to typecheck.</p>
-<pre class="playground"><code class="language-rust">extern crate timely;
-
-use timely::dataflow::Scope;
-use timely::dataflow::operators::*;
-
-fn main() {
-    timely::example(|scope| {
-
-        let stream = (0 .. 10).to_stream(scope).container::&lt;Vec&lt;_&gt;&gt;();
-
-        // Create a new scope with the same (u64) timestamp.
-        let result = scope.scoped::&lt;u64,_,_&gt;("SubScope", |subscope| {
-            stream.enter(subscope)
-                  .inspect_batch(|t, xs| println!("{:?}, {:?}", t, xs))
-                  .leave()
-        });
-
-    });
-}</code></pre>
-<p>Notice how we can both <code>enter</code> a stream and <code>leave</code> in a single sequence of operations.</p>
-<p>The <code>enter</code> operator introduces each batch of records as a batch with an enriched timestamp, which usually means “the same” or “with a new zero coordinate”. The <code>leave</code> just de-enriches the timestamp, correspondingly “the same” or “without that new coordinate”. The <code>leave</code> operator results in a stream fit for consumption in the containing scope.</p>
-<h2 id="regions"><a class="header" href="#regions">Regions</a></h2>
-<p>There is a handy shortcut for scopes that do not change the timestamp type, a <code>region</code>.</p>
-<pre class="playground"><code class="language-rust">extern crate timely;
-
-use timely::dataflow::Scope;
-use timely::dataflow::operators::*;
-
-fn main() {
-    timely::example(|scope| {
-
-        let stream = (0 .. 10).to_stream(scope).container::&lt;Vec&lt;_&gt;&gt;();
-
-        // Create a new scope with the same (u64) timestamp.
-        let result = scope.region(|subscope| {
-            stream.enter(subscope)
-                  .inspect_batch(|t, xs| println!("{:?}, {:?}", t, xs))
-                  .leave()
-        });
-
-    });
-}</code></pre>
-<p>Regions are mostly here to help you organize your dataflow. A region presents itself to its surrounding dataflow as a single operator, and that can make it easier for you or others to reason about the logical structure of your dataflow.</p>
-<p><strong>IMPORTANT</strong> Although you can probably write a program that uses <code>region()</code> but then skips the calls to <code>enter</code> and <code>leave</code>, because the timestamp types are the same, this is very naughty and please do not do this.</p>
-<h2 id="iteration"><a class="header" href="#iteration">Iteration</a></h2>
-<p>Iteration is a particularly neat form of nested scope in which all timestamps are enriched with an iteration counter. This counter starts at zero for streams that <code>enter</code> the scope, may increment in the context of the loop (next section gives examples of this), and is removed when the <code>leave</code> method is called.</p>
-<p>The enriched timestamp type is <code>timely::order::Product&lt;TOuter, TInner&gt;</code>, for an outer timestamp type <code>TOuter</code> and an iteration counter type <code>TInner</code>. However, there is a convenience method that can allow you to skip thinking too hard about this.</p>
-<pre class="playground"><code class="language-rust">extern crate timely;
-
-use timely::dataflow::Scope;
-use timely::dataflow::operators::*;
-
-fn main() {
-    timely::example(|scope| {
-
-        let stream = (0 .. 10).to_stream(scope).container::&lt;Vec&lt;_&gt;&gt;();
-
-        // Create a new scope with a (u64, u32) timestamp.
-        let result = scope.iterative::&lt;u32,_,_&gt;(|subscope| {
-            stream.enter(subscope)
-                  .inspect_batch(|t, xs| println!("{:?}, {:?}", t, xs))
-                  .leave()
-        });
-
-    });
-}</code></pre>
+                        <h1 id="containers"><a class="header" href="#containers">Containers</a></h1>
+<p>On a high level, Timely sends along dataflow edges. Underneath however, it needs to send and process batches of data to amortize processing overhead. In this section, we walk through the container abstraction, which is how Timely interfaces with batches of data.</p>
+<p>A container represents a batch of data with an interface to enable progress tracking and extracting data. Progress tracking requires that containers have a length, which does not change independent of container modifications. Reading data out of a container is useful for several high-level operators and sessions, but not otherwise required.</p>
+<p>Progress tracking requires that the length of a container stays the same between sending and receiving a container. The length must be additive, meaning that two containers combined must result in a container that has the sum of the lengths of the original containers. (Vectors satisfy the properties, but sets do not.)</p>
+<p>The container trait defines two associated types, <code>Item</code> for moving data, and <code>ItemRef</code> for reading data. Both are lifetimed, meaning an implelemntation can select to return owned data or references, depending on the constraints imposed by its data representation. Related, the trait defines an <code>iter()</code> function that reads the contents, and a <code>drain()</code> that removes the contents.</p>
+<p>In timely, we decouple write- and read-halves of a containers, as expressed by the <code>PushInto</code> trait. It describes how a target can absorb a datum as self, without requiring that the container knows about self. This allows a container to absorb an owned type and merely present dereferenced variants of the owned type when reading. For example, a container could accept <code>String</code> objects, but only permit reading <code>&amp;str</code>.</p>
+<h2 id="capacity-considerations"><a class="header" href="#capacity-considerations">Capacity considerations</a></h2>
+<p>Timely wants to send containers of consistent size. In the past, this was a vector of 1024 elements, but this concept scales poorly to data that has a different layout.</p>
+<p>What we want to achieve is:</p>
+<ul>
+<li>Timely makes progress when processing large amounts of data. An implementation that buffers all data and only releases it once time advances does not have this property.</li>
+<li>Containers have consistent size to minimize stress for the memory allocator.</li>
+</ul>
+<h2 id="core-operators"><a class="header" href="#core-operators">Core operators</a></h2>
+<p>In Timely, we provide a set of <code>core</code> operators that are generic on the container type they can handle.
+In most cases, the <code>core</code> operators are an immediate generalization of their non-core variant, providing the semantically equivalent functionality.</p>
+<h2 id="limitations"><a class="header" href="#limitations">Limitations</a></h2>
+<p>Each operator over arbitrary containers either returns an equal container, or needs to be parameterized to indicate the desired output type.
+This is problematic when composing a high-level operator from smaller building blocks, such as the broadcast operator.
+The broadcast operator for vectors maps each datum to a <code>(target, datum)</code> pair, where it repeats <code>datum</code> for each target.
+Subsequent operators exchange the data and unwrap the <code>datum</code> from the tuple.
+Defining this with specific containers in mind is simple, however, we do not have a mechanism to express this for arbitrary containers.</p>
 
                     </main>
 
                     <nav class="nav-wrapper" aria-label="Page navigation">
                         <!-- Mobile navigation buttons -->
-                            <a rel="prev" href="../chapter_4/chapter_4.html" class="mobile-nav-chapters previous" title="Previous chapter" aria-label="Previous chapter" aria-keyshortcuts="Left">
+                            <a rel="prev" href="../chapter_5/chapter_5_2.html" class="mobile-nav-chapters previous" title="Previous chapter" aria-label="Previous chapter" aria-keyshortcuts="Left">
                                 <span class=fa-svg><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 320 512"><!--! Font Awesome Free 6.2.0 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2022 Fonticons, Inc. --><path d="M41.4 233.4c-12.5 12.5-12.5 32.8 0 45.3l160 160c12.5 12.5 32.8 12.5 45.3 0s12.5-32.8 0-45.3L109.3 256 246.6 118.6c12.5-12.5 12.5-32.8 0-45.3s-32.8-12.5-45.3 0l-160 160z"/></svg></span>
                             </a>
 
-                            <a rel="next prefetch" href="../chapter_4/chapter_4_2.html" class="mobile-nav-chapters next" title="Next chapter" aria-label="Next chapter" aria-keyshortcuts="Right">
+                            <a rel="next prefetch" href="../chapter_5/chapter_5_4.html" class="mobile-nav-chapters next" title="Next chapter" aria-label="Next chapter" aria-keyshortcuts="Right">
                                 <span class=fa-svg><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 320 512"><!--! Font Awesome Free 6.2.0 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2022 Fonticons, Inc. --><path d="M278.6 233.4c12.5 12.5 12.5 32.8 0 45.3l-160 160c-12.5 12.5-32.8 12.5-45.3 0s-12.5-32.8 0-45.3L210.7 256 73.4 118.6c-12.5-12.5-12.5-32.8 0-45.3s32.8-12.5 45.3 0l160 160z"/></svg></span>
                             </a>
 
@@ -291,11 +215,11 @@ fn main() {
             </div>
 
             <nav class="nav-wide-wrapper" aria-label="Page navigation">
-                    <a rel="prev" href="../chapter_4/chapter_4.html" class="nav-chapters previous" title="Previous chapter" aria-label="Previous chapter" aria-keyshortcuts="Left">
+                    <a rel="prev" href="../chapter_5/chapter_5_2.html" class="nav-chapters previous" title="Previous chapter" aria-label="Previous chapter" aria-keyshortcuts="Left">
                         <span class=fa-svg><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 320 512"><!--! Font Awesome Free 6.2.0 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2022 Fonticons, Inc. --><path d="M41.4 233.4c-12.5 12.5-12.5 32.8 0 45.3l160 160c12.5 12.5 32.8 12.5 45.3 0s12.5-32.8 0-45.3L109.3 256 246.6 118.6c12.5-12.5 12.5-32.8 0-45.3s-32.8-12.5-45.3 0l-160 160z"/></svg></span>
                     </a>
 
-                    <a rel="next prefetch" href="../chapter_4/chapter_4_2.html" class="nav-chapters next" title="Next chapter" aria-label="Next chapter" aria-keyshortcuts="Right">
+                    <a rel="next prefetch" href="../chapter_5/chapter_5_4.html" class="nav-chapters next" title="Next chapter" aria-label="Next chapter" aria-keyshortcuts="Right">
                         <span class=fa-svg><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 320 512"><!--! Font Awesome Free 6.2.0 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2022 Fonticons, Inc. --><path d="M278.6 233.4c12.5 12.5 12.5 32.8 0 45.3l-160 160c-12.5 12.5-32.8 12.5-45.3 0s-12.5-32.8 0-45.3L210.7 256 73.4 118.6c-12.5-12.5-12.5-32.8 0-45.3s32.8-12.5 45.3 0l160 160z"/></svg></span>
                     </a>
             </nav>

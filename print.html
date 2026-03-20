@@ -36,10 +36,10 @@
             const path_to_root = "";
             const default_light_theme = "light";
             const default_dark_theme = "navy";
-            window.path_to_searchindex_js = "searchindex-8a694264.js";
+            window.path_to_searchindex_js = "searchindex-00c36cf0.js";
         </script>
         <!-- Start loading toc.js asap -->
-        <script src="toc-a61bd3eb.js"></script>
+        <script src="toc-369bdbb9.js"></script>
     </head>
     <body>
     <div id="mdbook-help-container">
@@ -2400,29 +2400,288 @@ path.results_in(&amp;u64::max_value()) == None;</code></pre>
 <p>Now, just before a worker might hypothetically receive a message at <code>(l1, t1)</code>, we freeze the system. We stop performing new actions, and instead resolve all progress updates for actions actually performed. Let these progress update batches circulate, so that the worker in question now has a complete and current view of the frozen state of the system. All pointstamp counts should now be non-negative.</p>
 <p>The additional progress updated batches received as part of stabilizing the system can only have a net positive effect on <code>(l1, t1)</code> if they have a net negative effect on some poinstamp strictly less than it. However, as the final accumulation is non-negative, this can only happen if the strictly prior pointstamp had a positive accumulation before stabilization. If no such pointstamp has a positive accumulation before stabilization, it is not possible for <code>(l1, t1)</code> to have a positive accumulation at stabilization, and consequently there cannot be a message waiting to be received.</p>
 <div style="break-before: page; page-break-before: always;"></div>
+<h1 id="containers-1"><a class="header" href="#containers-1">Containers</a></h1>
+<p>On a high level, Timely sends along dataflow edges. Underneath however, it needs to send and process batches of data to amortize processing overhead. In this section, we walk through the container abstraction, which is how Timely interfaces with batches of data.</p>
+<p>A container represents a batch of data with an interface to enable progress tracking and extracting data. Progress tracking requires that containers have a length, which does not change independent of container modifications. Reading data out of a container is useful for several high-level operators and sessions, but not otherwise required.</p>
+<p>Progress tracking requires that the length of a container stays the same between sending and receiving a container. The length must be additive, meaning that two containers combined must result in a container that has the sum of the lengths of the original containers. (Vectors satisfy the properties, but sets do not.)</p>
+<p>The container trait defines two associated types, <code>Item</code> for moving data, and <code>ItemRef</code> for reading data. Both are lifetimed, meaning an implelemntation can select to return owned data or references, depending on the constraints imposed by its data representation. Related, the trait defines an <code>iter()</code> function that reads the contents, and a <code>drain()</code> that removes the contents.</p>
+<p>In timely, we decouple write- and read-halves of a containers, as expressed by the <code>PushInto</code> trait. It describes how a target can absorb a datum as self, without requiring that the container knows about self. This allows a container to absorb an owned type and merely present dereferenced variants of the owned type when reading. For example, a container could accept <code>String</code> objects, but only permit reading <code>&amp;str</code>.</p>
+<h2 id="capacity-considerations"><a class="header" href="#capacity-considerations">Capacity considerations</a></h2>
+<p>Timely wants to send containers of consistent size. In the past, this was a vector of 1024 elements, but this concept scales poorly to data that has a different layout.</p>
+<p>What we want to achieve is:</p>
+<ul>
+<li>Timely makes progress when processing large amounts of data. An implementation that buffers all data and only releases it once time advances does not have this property.</li>
+<li>Containers have consistent size to minimize stress for the memory allocator.</li>
+</ul>
+<h2 id="core-operators"><a class="header" href="#core-operators">Core operators</a></h2>
+<p>In Timely, we provide a set of <code>core</code> operators that are generic on the container type they can handle.
+In most cases, the <code>core</code> operators are an immediate generalization of their non-core variant, providing the semantically equivalent functionality.</p>
+<h2 id="limitations"><a class="header" href="#limitations">Limitations</a></h2>
+<p>Each operator over arbitrary containers either returns an equal container, or needs to be parameterized to indicate the desired output type.
+This is problematic when composing a high-level operator from smaller building blocks, such as the broadcast operator.
+The broadcast operator for vectors maps each datum to a <code>(target, datum)</code> pair, where it repeats <code>datum</code> for each target.
+Subsequent operators exchange the data and unwrap the <code>datum</code> from the tuple.
+Defining this with specific containers in mind is simple, however, we do not have a mechanism to express this for arbitrary containers.</p>
+<div style="break-before: page; page-break-before: always;"></div>
 <h1 id="logging"><a class="header" href="#logging">Logging</a></h1>
-<p>Timely dataflow has a built-in logging infrastructure that lets you observe the internal behavior of a running computation. Every worker maintains a <code>Registry</code> of named logging streams. You can tap into these streams by registering closures that receive batches of events, and you can also create your own custom logging streams for application-level instrumentation.</p>
-<h2 id="tapping-into-logging"><a class="header" href="#tapping-into-logging">Tapping into logging</a></h2>
-<p>Each timely worker has a logging registry accessible via <code>worker.log_register()</code>. You register a logging callback by calling <code>insert</code> on the registry, providing a string name and a closure. The string name identifies which logging stream you want to listen to, and the closure is called with batches of events.</p>
-<p>Here is a minimal example that prints all timely system events:</p>
+<p>Timely dataflow provides a comprehensive logging infrastructure that records structural and runtime events as the dataflow executes.
+These events allow you to reconstruct the dataflow graph, understand how data flows across scope boundaries, and profile operator execution.</p>
+<p>All events are logged to named log streams, and each event carries a <code>Duration</code> timestamp (elapsed time since the worker started).
+The primary log stream is <code>"timely"</code>, which carries <code>TimelyEvent</code> variants.
+Additional typed log streams exist for progress, summary, and reachability information.</p>
+<h2 id="structural-events"><a class="header" href="#structural-events">Structural Events</a></h2>
+<p>These events describe the shape of the dataflow graph. They are logged once during construction.</p>
+<h3 id="operatesevent"><a class="header" href="#operatesevent">OperatesEvent</a></h3>
+<p>Logged when an operator is created within a scope.</p>
+<div class="table-wrapper">
+<table>
+<thead>
+<tr><th>Field</th><th>Type</th><th>Description</th></tr>
+</thead>
+<tbody>
+<tr><td><code>id</code></td><td><code>usize</code></td><td>Worker-unique identifier for the operator, allocated by the worker.</td></tr>
+<tr><td><code>addr</code></td><td><code>Vec&lt;usize&gt;</code></td><td>Hierarchical address: the path from the root scope to this operator.</td></tr>
+<tr><td><code>name</code></td><td><code>String</code></td><td>Human-readable name (e.g. <code>"Map"</code>, <code>"Feedback"</code>, <code>"Subgraph"</code>).</td></tr>
+</tbody>
+</table>
+</div>
+<p>The <code>addr</code> field encodes the nesting structure.
+For example, an address of <code>[0, 2, 1]</code> means: child 0 of the root, then child 2 within that scope, then child 1 within that.
+Within any scope, child indices start at 1 for actual operators; index 0 is reserved (see <a href="#scope-boundary-conventions">Scope Boundary Conventions</a> below).</p>
+<p>The <code>id</code> field is a flat, worker-unique integer.
+It is the key used by all other events (<code>ScheduleEvent</code>, <code>ShutdownEvent</code>, <code>MessagesEvent</code> via channels, etc.) to refer to this operator.
+Two different workers will generally assign different <code>id</code> values to corresponding operators, but the <code>addr</code> will be the same.</p>
+<h3 id="channelsevent"><a class="header" href="#channelsevent">ChannelsEvent</a></h3>
+<p>Logged when a data channel is created between two operators (or between an operator and a scope boundary).</p>
+<div class="table-wrapper">
+<table>
+<thead>
+<tr><th>Field</th><th>Type</th><th>Description</th></tr>
+</thead>
+<tbody>
+<tr><td><code>id</code></td><td><code>usize</code></td><td>Worker-unique channel identifier.</td></tr>
+<tr><td><code>scope_addr</code></td><td><code>Vec&lt;usize&gt;</code></td><td>Address of the scope that <em>contains</em> this channel.</td></tr>
+<tr><td><code>source</code></td><td><code>(usize, usize)</code></td><td><code>(operator_index, output_port)</code> of the source within the containing scope.</td></tr>
+<tr><td><code>target</code></td><td><code>(usize, usize)</code></td><td><code>(operator_index, input_port)</code> of the target within the containing scope.</td></tr>
+<tr><td><code>typ</code></td><td><code>String</code></td><td>The container type transported on this channel, as a string.</td></tr>
+</tbody>
+</table>
+</div>
+<p>The <code>source</code> and <code>target</code> tuples use <strong>scope-local</strong> operator indices (not the worker-unique <code>id</code> from <code>OperatesEvent</code>).
+To resolve them, find the <code>OperatesEvent</code> whose <code>addr</code> equals <code>scope_addr</code> with the operator index appended.
+For example, if <code>scope_addr</code> is <code>[0, 2]</code> and <code>source</code> is <code>(3, 0)</code>, the source operator has address <code>[0, 2, 3]</code> and you want output port 0.</p>
+<p>When either the source or target operator index is 0, the channel crosses a scope boundary. See <a href="#scope-boundary-conventions">Scope Boundary Conventions</a>.</p>
+<h3 id="commchannelsevent"><a class="header" href="#commchannelsevent">CommChannelsEvent</a></h3>
+<p>Logged when a communication channel (for inter-worker exchange) is established.</p>
+<div class="table-wrapper">
+<table>
+<thead>
+<tr><th>Field</th><th>Type</th><th>Description</th></tr>
+</thead>
+<tbody>
+<tr><td><code>identifier</code></td><td><code>usize</code></td><td>Communication channel identifier.</td></tr>
+<tr><td><code>kind</code></td><td><code>CommChannelKind</code></td><td>Either <code>Progress</code> or <code>Data</code>.</td></tr>
+</tbody>
+</table>
+</div>
+<h2 id="runtime-events"><a class="header" href="#runtime-events">Runtime Events</a></h2>
+<p>These events describe what happens as the dataflow executes.</p>
+<h3 id="scheduleevent"><a class="header" href="#scheduleevent">ScheduleEvent</a></h3>
+<p>Logged when an operator begins or finishes a scheduling invocation.</p>
+<div class="table-wrapper">
+<table>
+<thead>
+<tr><th>Field</th><th>Type</th><th>Description</th></tr>
+</thead>
+<tbody>
+<tr><td><code>id</code></td><td><code>usize</code></td><td>Worker-unique operator identifier (same as <code>OperatesEvent::id</code>).</td></tr>
+<tr><td><code>start_stop</code></td><td><code>StartStop</code></td><td><code>Start</code> when the operator begins executing, <code>Stop</code> when it returns.</td></tr>
+</tbody>
+</table>
+</div>
+<p>A matched pair of <code>Start</code> and <code>Stop</code> events brackets one invocation of the operator’s <code>schedule()</code> method.
+These pairs let you measure per-operator execution time.</p>
+<h3 id="messagesevent"><a class="header" href="#messagesevent">MessagesEvent</a></h3>
+<p>Logged when a batch of data is sent or received on a channel.</p>
+<div class="table-wrapper">
+<table>
+<thead>
+<tr><th>Field</th><th>Type</th><th>Description</th></tr>
+</thead>
+<tbody>
+<tr><td><code>is_send</code></td><td><code>bool</code></td><td><code>true</code> for a send, <code>false</code> for a receive.</td></tr>
+<tr><td><code>channel</code></td><td><code>usize</code></td><td>Channel identifier (same as <code>ChannelsEvent::id</code>).</td></tr>
+<tr><td><code>source</code></td><td><code>usize</code></td><td>Source worker index.</td></tr>
+<tr><td><code>target</code></td><td><code>usize</code></td><td>Target worker index.</td></tr>
+<tr><td><code>seq_no</code></td><td><code>usize</code></td><td>Sequence number for this (source, target) pair on this channel.</td></tr>
+<tr><td><code>record_count</code></td><td><code>i64</code></td><td>Number of records in the batch.</td></tr>
+</tbody>
+</table>
+</div>
+<p>For channels that stay within a single worker, <code>source</code> and <code>target</code> will be the same worker index.
+For exchange (inter-worker) channels, they may differ.
+The <code>record_count</code> comes from the container’s <code>Accountable</code> trait implementation (e.g. <code>Vec::len()</code> cast to <code>i64</code>).</p>
+<h3 id="shutdownevent"><a class="header" href="#shutdownevent">ShutdownEvent</a></h3>
+<p>Logged when an operator is permanently shut down.</p>
+<div class="table-wrapper">
+<table>
+<thead>
+<tr><th>Field</th><th>Type</th><th>Description</th></tr>
+</thead>
+<tbody>
+<tr><td><code>id</code></td><td><code>usize</code></td><td>Worker-unique operator identifier.</td></tr>
+</tbody>
+</table>
+</div>
+<h3 id="pushprogressevent"><a class="header" href="#pushprogressevent">PushProgressEvent</a></h3>
+<p>Logged when frontier changes are pushed to an operator.</p>
+<div class="table-wrapper">
+<table>
+<thead>
+<tr><th>Field</th><th>Type</th><th>Description</th></tr>
+</thead>
+<tbody>
+<tr><td><code>op_id</code></td><td><code>usize</code></td><td>Worker-unique operator identifier.</td></tr>
+</tbody>
+</table>
+</div>
+<h3 id="parkevent"><a class="header" href="#parkevent">ParkEvent</a></h3>
+<p>Logged when a worker parks (goes idle waiting for external events) or wakes up.</p>
+<div class="table-wrapper">
+<table>
+<thead>
+<tr><th>Variant</th><th>Description</th></tr>
+</thead>
+<tbody>
+<tr><td><code>Park(Option&lt;Duration&gt;)</code></td><td>Worker parks, with an optional maximum sleep duration.</td></tr>
+<tr><td><code>Unpark</code></td><td>Worker wakes from a parked state.</td></tr>
+</tbody>
+</table>
+</div>
+<h3 id="textstring"><a class="header" href="#textstring">Text(String)</a></h3>
+<p>An unstructured text event for ad-hoc logging.</p>
+<h2 id="scope-boundary-conventions"><a class="header" href="#scope-boundary-conventions">Scope Boundary Conventions</a></h2>
+<p>Understanding scope boundaries is essential for interpreting <code>ChannelsEvent</code> data and reconstructing the full dataflow graph across nested scopes.</p>
+<h3 id="child-zero"><a class="header" href="#child-zero">Child Zero</a></h3>
+<p>By convention, <strong>child index 0</strong> within any scope is a pseudo-operator representing the scope’s own boundary — its interface with its parent.
+It is not a real operator; you will not see an <code>OperatesEvent</code> for child zero.
+Instead, child zero is the mechanism by which channels inside a scope connect to channels outside.</p>
+<p>Child zero’s ports are <strong>inverted</strong> relative to the scope’s external interface:</p>
+<ul>
+<li><strong>Child zero’s outputs</strong> are the scope’s <strong>inputs</strong> (data arriving from the parent).</li>
+<li><strong>Child zero’s inputs</strong> are the scope’s <strong>outputs</strong> (data leaving to the parent).</li>
+</ul>
+<p>This inversion makes the internal wiring uniform: every channel inside a scope connects an operator output to an operator input, even when one end is the scope boundary.</p>
+<h3 id="connecting-parent-and-child"><a class="header" href="#connecting-parent-and-child">Connecting Parent and Child</a></h3>
+<p>When a scope (say, an iterative scope) appears as operator <code>K</code> in its parent, and you look inside that scope, the relationship is:</p>
+<div class="table-wrapper">
+<table>
+<thead>
+<tr><th>Parent perspective</th><th>Child perspective</th></tr>
+</thead>
+<tbody>
+<tr><td>Operator <code>K</code>, input port <code>i</code></td><td>Child zero, output port <code>i</code></td></tr>
+<tr><td>Operator <code>K</code>, output port <code>j</code></td><td>Child zero, input port <code>j</code></td></tr>
+</tbody>
+</table>
+</div>
+<p>So if you see a <code>ChannelsEvent</code> in the parent scope with <code>target: (K, i)</code>, the data enters the child scope and appears as if it came from child zero’s output port <code>i</code>.
+Inside the child scope, a <code>ChannelsEvent</code> with <code>source: (0, i)</code> connects that incoming data to whatever internal operator consumes it.</p>
+<p>Similarly, data produced inside the child scope that should leave the scope is connected via a <code>ChannelsEvent</code> with <code>target: (0, j)</code> inside the child scope, and emerges as output port <code>j</code> of operator <code>K</code> in the parent scope.</p>
+<h3 id="worked-example"><a class="header" href="#worked-example">Worked Example</a></h3>
+<p>Consider a dataflow with an iterative scope:</p>
+<pre><code class="language-text">worker.dataflow(|scope| {                      // root scope, addr [0]
+    input                                       // operator at [0, 1]
+        .enter(scope.iterative(|inner| {        // iterative scope at [0, 2]
+            inner
+                .map(...)                        // operator at [0, 2, 1]
+                .filter(...)                     // operator at [0, 2, 2]
+        }))
+        .inspect(...)                           // operator at [0, 3]
+});
+</code></pre>
+<p>You would see structural events like:</p>
+<ol>
+<li><code>OperatesEvent { id: _, addr: [0],       name: "Dataflow" }</code> — the root scope itself.</li>
+<li><code>OperatesEvent { id: _, addr: [0, 1],    name: "Input" }</code> — the input operator.</li>
+<li><code>OperatesEvent { id: _, addr: [0, 2],    name: "Iterative" }</code> — the iterative scope (appears as an operator in the root).</li>
+<li><code>OperatesEvent { id: _, addr: [0, 2, 1], name: "Map" }</code> — the map, inside the iterative scope.</li>
+<li><code>OperatesEvent { id: _, addr: [0, 2, 2], name: "Filter" }</code> — the filter, inside the iterative scope.</li>
+<li><code>OperatesEvent { id: _, addr: [0, 3],    name: "Inspect" }</code> — the inspect, in the root scope.</li>
+</ol>
+<p>Channel events in the root scope (<code>scope_addr: [0]</code>) connecting <code>Input</code> to the iterative scope:</p>
+<ul>
+<li><code>ChannelsEvent { scope_addr: [0], source: (1, 0), target: (2, 0), ... }</code> — from Input (index 1) output 0 to the iterative scope (index 2) input 0.</li>
+</ul>
+<p>Channel events inside the iterative scope (<code>scope_addr: [0, 2]</code>):</p>
+<ul>
+<li><code>ChannelsEvent { scope_addr: [0, 2], source: (0, 0), target: (1, 0), ... }</code> — from child zero’s output 0 (= scope input 0) to Map’s input 0.</li>
+<li><code>ChannelsEvent { scope_addr: [0, 2], source: (1, 0), target: (2, 0), ... }</code> — from Map’s output 0 to Filter’s input 0.</li>
+<li><code>ChannelsEvent { scope_addr: [0, 2], source: (2, 0), target: (0, 0), ... }</code> — from Filter’s output 0 to child zero’s input 0 (= scope output 0).</li>
+</ul>
+<p>And back in the root scope:</p>
+<ul>
+<li><code>ChannelsEvent { scope_addr: [0], source: (2, 0), target: (3, 0), ... }</code> — from the iterative scope’s output 0 to Inspect’s input 0.</li>
+</ul>
+<p>This chain shows data flowing: Input → [into scope via child zero] → Map → Filter → [out of scope via child zero] → Inspect.</p>
+<h3 id="reconstructing-the-full-graph"><a class="header" href="#reconstructing-the-full-graph">Reconstructing the Full Graph</a></h3>
+<p>To reconstruct the dataflow graph from logged events:</p>
+<ol>
+<li>
+<p><strong>Build the operator tree</strong> from <code>OperatesEvent</code> entries, using <code>addr</code> to establish parent-child relationships. Any operator whose <code>addr</code> has length <code>n</code> is a child of the operator (scope) whose <code>addr</code> is the first <code>n-1</code> elements.</p>
+</li>
+<li>
+<p><strong>Build per-scope channel graphs</strong> from <code>ChannelsEvent</code> entries. Group channels by <code>scope_addr</code>. Within each scope, the <code>source</code> and <code>target</code> pairs give you directed edges between scope-local operator indices.</p>
+</li>
+<li>
+<p><strong>Stitch across scope boundaries</strong> using child zero. When a channel in scope <code>S</code> has source or target operator index 0, it connects to the scope’s external interface. Find the operator in <code>S</code>’s parent that represents this scope, and link the corresponding port.</p>
+</li>
+<li>
+<p><strong>Correlate runtime events</strong> using the worker-unique <code>id</code> from <code>OperatesEvent</code> to join <code>ScheduleEvent</code>, <code>ShutdownEvent</code>, and other events. Use <code>ChannelsEvent::id</code> to join <code>MessagesEvent</code> records to their channel.</p>
+</li>
+</ol>
+<h3 id="operator-summaries-internal-connectivity"><a class="header" href="#operator-summaries-internal-connectivity">Operator Summaries: Internal Connectivity</a></h3>
+<p>While <code>ChannelsEvent</code> logs describe the <em>external</em> wiring between operators, an <code>OperatesSummaryEvent</code> describes an operator’s <em>internal</em> topology: which of its inputs can result in data at which of its outputs, and what transformation is applied to timestamps along the way. This is the information reported by each operator during initialization, and it is what the progress tracking protocol uses to reason about which timestamps may still appear at downstream operators.</p>
+<p>The <code>summary</code> field is a <code>Connectivity&lt;TS&gt;</code>, which is a <code>Vec&lt;PortConnectivity&lt;TS&gt;&gt;</code> indexed by input port. Each <code>PortConnectivity&lt;TS&gt;</code> maps output port indices to an <code>Antichain&lt;TS&gt;</code> of timestamp summaries. A summary <code>s</code> at position <code>(input_i, output_j)</code> means: “a record arriving at input <code>i</code> with timestamp <code>t</code> could produce a record at output <code>j</code> with timestamp <code>t.join(s)</code>.” If an <code>(input, output)</code> pair has no entry, the operator guarantees that input can never cause output at that port.</p>
+<p>For example, a <code>map</code> operator has one input and one output with an identity summary (timestamps pass through unchanged). An operator that delays output by one tick would have a summary that advances the timestamp. An operator with two inputs and one output (like <code>concat</code>) would report that both inputs connect to the single output with identity summaries.</p>
+<p>This information is essential for understanding the progress guarantees of a dataflow. If you are trying to understand why a particular timestamp is not yet “complete” at some point in the graph, the operator summaries tell you which paths could still produce data at that timestamp.</p>
+<h2 id="additional-log-streams"><a class="header" href="#additional-log-streams">Additional Log Streams</a></h2>
+<p>Beyond the main <code>"timely"</code> stream, there are typed log streams for deeper introspection:</p>
+<div class="table-wrapper">
+<table>
+<thead>
+<tr><th>Stream name</th><th>Builder type</th><th>Event type</th><th>Description</th></tr>
+</thead>
+<tbody>
+<tr><td><code>"timely"</code></td><td><code>TimelyEventBuilder</code></td><td><code>TimelyEvent</code></td><td>Core system events: operator lifecycle, scheduling, messages, channels</td></tr>
+<tr><td><code>"timely/progress/&lt;T&gt;"</code></td><td><code>TimelyProgressEventBuilder&lt;T&gt;</code></td><td><code>TimelyProgressEvent&lt;T&gt;</code></td><td>Progress protocol messages between operators</td></tr>
+<tr><td><code>"timely/summary/&lt;T&gt;"</code></td><td><code>TimelySummaryEventBuilder&lt;TS&gt;</code></td><td><code>OperatesSummaryEvent&lt;TS&gt;</code></td><td>Operator connectivity summaries (see above)</td></tr>
+<tr><td><code>"timely/reachability/&lt;T&gt;"</code></td><td><code>TrackerEventBuilder&lt;T&gt;</code></td><td><code>TrackerEvent&lt;T&gt;</code></td><td>Reachability tracker updates</td></tr>
+</tbody>
+</table>
+</div>
+<p>The <code>&lt;T&gt;</code> in the stream names is the Rust type name of the dataflow’s timestamp, obtained from <code>std::any::type_name::&lt;T&gt;()</code> (e.g., <code>"timely/progress/usize"</code> for a dataflow using <code>usize</code> timestamps). Note that <code>type_name</code> is best-effort and not guaranteed to be stable across compiler versions, so these stream names should be treated accordingly.</p>
+<p><strong><code>TimelyProgressEvent&lt;T&gt;</code></strong> captures the exchange of progress information between operators. Each event records whether it is a send or receive (<code>is_send</code>), the <code>source</code> worker, the <code>channel</code> and <code>seq_no</code>, the <code>identifier</code> of the operator, and two lists of updates: <code>messages</code> (updates to message counts at targets) and <code>internal</code> (updates to capabilities at sources). Each update is a tuple <code>(node, port, timestamp, delta)</code>. These are primarily useful for debugging the progress tracking protocol.</p>
+<p><strong><code>TrackerEvent&lt;T&gt;</code></strong> records updates to the reachability tracker, which maintains the set of timestamps that could still arrive at each operator input. The variants are <code>SourceUpdate</code> and <code>TargetUpdate</code>, each carrying the node, port, timestamp, and delta of the update.</p>
+<h2 id="registering-a-logger"><a class="header" href="#registering-a-logger">Registering a Logger</a></h2>
+<p>To consume logging events, register a callback with the worker’s log registry. The <code>insert</code> method takes a string name and a closure:</p>
 <pre class="playground"><code class="language-rust no_run"><span class="boring">#![allow(unused)]
 </span><span class="boring">fn main() {
 </span>use timely::logging::TimelyEventBuilder;
 
 timely::execute_from_args(std::env::args(), |worker| {
 
-    // Register a callback for the "timely" logging stream.
     worker.log_register().unwrap()
         .insert::&lt;TimelyEventBuilder, _&gt;("timely", |time, data| {
             if let Some(data) = data {
-                for event in data.iter() {
-                    println!("{:?}", event);
+                for (elapsed, event) in data.iter() {
+                    println!("{elapsed:?}\t{event:?}");
                 }
             }
         });
 
     worker.dataflow::&lt;usize,_,_&gt;(|scope| {
-        // ... build your dataflow here ...
+        // ... build your dataflow ...
     });
 
 }).unwrap();
@@ -2434,8 +2693,9 @@ timely::execute_from_args(std::env::args(), |worker| {
 <li><code>&amp;mut Option&lt;Container&gt;</code> is <code>Some(container)</code> when delivering a batch of events, or <code>None</code> to signal a flush (e.g., when the worker is about to park or the stream is closing).</li>
 </ul>
 <p>Each event in the container is a tuple <code>(Duration, Event)</code> where the <code>Duration</code> is the timestamp at which the event was logged.</p>
-<h2 id="retrieving-loggers-for-custom-events"><a class="header" href="#retrieving-loggers-for-custom-events">Retrieving loggers for custom events</a></h2>
-<p>You can also create your own logging streams. Register a stream with <code>insert</code>, then retrieve a <code>Logger</code> handle with <code>get</code> to log events from within your dataflow:</p>
+<p>You can register a callback for a stream at any point before or after building a dataflow. If you register a callback for a stream name that is already in use, the new callback takes effect for subsequently created loggers but existing loggers continue to use the old callback.</p>
+<h2 id="custom-logging-streams"><a class="header" href="#custom-logging-streams">Custom Logging Streams</a></h2>
+<p>You can create your own logging streams. Register a stream with <code>insert</code>, then retrieve a <code>Logger</code> handle with <code>get</code> to log events from your application code:</p>
 <pre class="playground"><code class="language-rust no_run"><span class="boring">#![allow(unused)]
 </span><span class="boring">fn main() {
 </span>use std::time::Duration;
@@ -2471,188 +2731,23 @@ timely::execute_from_args(std::env::args(), |worker| {
 }).unwrap();
 <span class="boring">}</span></code></pre>
 <p>The <code>Logger</code> buffers events internally and flushes them to the registered closure when the buffer reaches capacity, when <code>flush()</code> is called explicitly, or when the logger is dropped.</p>
-<h2 id="logging-stream-names"><a class="header" href="#logging-stream-names">Logging stream names</a></h2>
-<p>Timely uses string names to identify logging streams. The built-in stream names are:</p>
-<div class="table-wrapper">
-<table>
-<thead>
-<tr><th>Stream name</th><th>Builder type</th><th>Event type</th><th>Description</th></tr>
-</thead>
-<tbody>
-<tr><td><code>"timely"</code></td><td><code>TimelyEventBuilder</code></td><td><code>TimelyEvent</code></td><td>Core system events: operator lifecycle, scheduling, messages, channels</td></tr>
-<tr><td><code>"timely/progress/{T}"</code></td><td><code>TimelyProgressEventBuilder&lt;T&gt;</code></td><td><code>TimelyProgressEvent&lt;T&gt;</code></td><td>Progress protocol messages between operators</td></tr>
-<tr><td><code>"timely/summary/{T}"</code></td><td><code>TimelySummaryEventBuilder&lt;TS&gt;</code></td><td><code>OperatesSummaryEvent&lt;TS&gt;</code></td><td>Operator connectivity summaries</td></tr>
-<tr><td><code>"timely/reachability/{T}"</code></td><td><code>TrackerEventBuilder&lt;T&gt;</code></td><td><code>TrackerEvent&lt;T&gt;</code></td><td>Reachability tracker updates</td></tr>
-</tbody>
-</table>
-</div>
-<p>The <code>{T}</code> in the progress, summary, and reachability stream names is the Rust type name of the dataflow’s timestamp, obtained from <code>std::any::type_name::&lt;T&gt;()</code> (e.g., <code>"timely/progress/usize"</code> for a dataflow using <code>usize</code> timestamps). This is because these events are generic over the timestamp type. Note that <code>type_name</code> is best-effort and not guaranteed to be stable across compiler versions, so these stream names should be treated accordingly.</p>
-<p>You can register a callback for these at any point before or after building a dataflow. If you register a callback for a stream name that is already in use, the new callback takes effect for subsequently created loggers but existing loggers continue to use the old callback.</p>
-<h2 id="the-timelyevent-variants"><a class="header" href="#the-timelyevent-variants">The <code>TimelyEvent</code> variants</a></h2>
-<p>The <code>TimelyEvent</code> enum is the primary event type for the <code>"timely"</code> logging stream. Its variants capture the lifecycle and activity of a timely computation:</p>
-<h3 id="operatesoperatesevent"><a class="header" href="#operatesoperatesevent"><code>Operates(OperatesEvent)</code></a></h3>
-<p>Logged when an operator is created. Contains the operator’s worker-unique <code>id</code>, its hierarchical <code>addr</code> (the address of the scope containing the operator, matching the convention used by <code>ChannelsEvent</code>), and its <code>name</code>. The full address of the operator itself can be reconstructed as <code>addr ++ [id]</code>.</p>
-<h3 id="channelschannelsevent"><a class="header" href="#channelschannelsevent"><code>Channels(ChannelsEvent)</code></a></h3>
-<p>Logged when a channel is created between operators. Contains the channel <code>id</code>, the <code>scope_addr</code> of the containing scope (not including the channel’s own id), <code>source</code> and <code>target</code> descriptors (each an <code>(operator_index, port)</code> pair), and a <code>typ</code> string naming the data type carried on the channel.</p>
-<h3 id="schedulescheduleevent"><a class="header" href="#schedulescheduleevent"><code>Schedule(ScheduleEvent)</code></a></h3>
-<p>Logged when an operator starts or stops executing. Contains the operator <code>id</code> and a <code>start_stop</code> field that is either <code>StartStop::Start</code> or <code>StartStop::Stop</code>. These events bracket each invocation of an operator’s logic, and can be used to measure how much time each operator consumes.</p>
-<h3 id="messagesmessagesevent"><a class="header" href="#messagesmessagesevent"><code>Messages(MessagesEvent)</code></a></h3>
-<p>Logged when a batch of messages is sent or received on a channel. Contains <code>is_send</code> (true for send, false for receive), the <code>channel</code> identifier, <code>source</code> and <code>target</code> worker indices, a <code>seq_no</code> sequence number, and the <code>record_count</code> of records in the batch.</p>
-<h3 id="pushprogresspushprogressevent"><a class="header" href="#pushprogresspushprogressevent"><code>PushProgress(PushProgressEvent)</code></a></h3>
-<p>Logged when external progress updates are pushed onto an operator. Contains the <code>op_id</code> of the operator receiving the update.</p>
-<h3 id="shutdownshutdownevent"><a class="header" href="#shutdownshutdownevent"><code>Shutdown(ShutdownEvent)</code></a></h3>
-<p>Logged when an operator is shut down. Contains the operator <code>id</code>.</p>
-<h3 id="parkparkevent"><a class="header" href="#parkparkevent"><code>Park(ParkEvent)</code></a></h3>
-<p>Logged when a worker parks (goes idle waiting for work) or unparks. <code>ParkEvent::Park(Some(duration))</code> indicates a timed park, <code>ParkEvent::Park(None)</code> an indefinite park, and <code>ParkEvent::Unpark</code> the resumption of work.</p>
-<h3 id="commchannelscommchannelsevent"><a class="header" href="#commchannelscommchannelsevent"><code>CommChannels(CommChannelsEvent)</code></a></h3>
-<p>Logged when a communication channel is established. Contains an <code>identifier</code> and a <code>kind</code> that is either <code>CommChannelKind::Progress</code> or <code>CommChannelKind::Data</code>.</p>
-<h3 id="textstring"><a class="header" href="#textstring"><code>Text(String)</code></a></h3>
-<p>An unstructured text event for ad-hoc logging.</p>
-<h2 id="connecting-operators-and-channels"><a class="header" href="#connecting-operators-and-channels">Connecting operators and channels</a></h2>
-<p>The <code>OperatesEvent</code> and <code>ChannelsEvent</code> logs together describe the structure of a dataflow graph. To make sense of them, it helps to understand how addresses, operator indices, and ports relate to each other.</p>
-<h3 id="from-a-channel-to-its-operators"><a class="header" href="#from-a-channel-to-its-operators">From a channel to its operators</a></h3>
-<p>Both <code>OperatesEvent</code> and <code>ChannelsEvent</code> use the same convention: their address field (<code>addr</code> and <code>scope_addr</code>, respectively) is the address of the <em>containing scope</em>, not the entity itself. For an operator, the full address can be reconstructed as <code>addr ++ [id]</code>. For a channel, the <code>scope_addr</code> tells you which scope the channel lives in, and the <code>source</code>/<code>target</code> descriptors of the form <code>(operator_index, port)</code> identify operators within that scope.</p>
-<p>To find the full address of a channel’s source or target operator, concatenate the channel’s <code>scope_addr</code> with the <code>operator_index</code>:</p>
-<pre><code class="language-text">operator address = scope_addr ++ [operator_index]
-</code></pre>
-<p>For example, if a channel has <code>scope_addr: [0]</code>, <code>source: (3, 0)</code>, and <code>target: (5, 1)</code>, then:</p>
-<ul>
-<li>The source operator has address <code>[0, 3]</code>, output port <code>0</code>.</li>
-<li>The target operator has address <code>[0, 5]</code>, input port <code>1</code>.</li>
-</ul>
-<p>These operators will have <code>addr: [0]</code> in their <code>OperatesEvent</code> logs (the containing scope), with <code>id</code> values corresponding to the operator indices <code>3</code> and <code>5</code>.</p>
-<h3 id="child-0-the-scope-boundary"><a class="header" href="#child-0-the-scope-boundary">Child 0: the scope boundary</a></h3>
-<p>Every subgraph has a special “child 0” that represents the boundary between the subgraph and its surrounding scope. Child 0 is not a real operator; it is a stand-in for the scope that contains the subgraph. You will not see an <code>OperatesEvent</code> for child 0, but you will see channels that connect to it.</p>
-<ul>
-<li>
-<p><strong>Child 0’s outputs</strong> correspond to data <em>entering</em> the subgraph. Output port <code>k</code> of child 0 is the <code>k</code>-th input of the subgraph operator as seen from the outer scope.</p>
-</li>
-<li>
-<p><strong>Child 0’s inputs</strong> correspond to data <em>leaving</em> the subgraph. Input port <code>k</code> of child 0 is the <code>k</code>-th output of the subgraph operator as seen from the outer scope.</p>
-</li>
-</ul>
-<p>So a channel with <code>target: (0, 2)</code> means “data leaves this subgraph and emerges at output port 2 of the operator that hosts this subgraph, in the outer scope.” A channel with <code>source: (0, 1)</code> means “data arrives from input port 1 of the hosting operator, entering the subgraph.”</p>
-<p>This convention lets you trace data flow across scope boundaries: follow a channel to child 0, then find the corresponding port on the subgraph operator in the parent scope.</p>
-<h3 id="operator-summaries-internal-connectivity"><a class="header" href="#operator-summaries-internal-connectivity">Operator summaries: internal connectivity</a></h3>
-<p>While <code>ChannelsEvent</code> logs describe the <em>external</em> wiring between operators, an <code>OperatesSummaryEvent</code> describes an operator’s <em>internal</em> topology: which of its inputs can result in data at which of its outputs, and what transformation is applied to timestamps along the way. This is the information reported by each operator during initialization, and it is what the progress tracking protocol uses to reason about which timestamps may still appear at downstream operators.</p>
-<p>The <code>summary</code> field is a <code>Connectivity&lt;TS&gt;</code>, which is a <code>Vec&lt;PortConnectivity&lt;TS&gt;&gt;</code> indexed by input port. Each <code>PortConnectivity&lt;TS&gt;</code> maps output port indices to an <code>Antichain&lt;TS&gt;</code> of timestamp summaries. A summary <code>s</code> at position <code>(input_i, output_j)</code> means: “a record arriving at input <code>i</code> with timestamp <code>t</code> could produce a record at output <code>j</code> with timestamp <code>t.join(s)</code>.” If an <code>(input, output)</code> pair has no entry, the operator guarantees that input can never cause output at that port.</p>
-<p>For example, a <code>map</code> operator has one input and one output with an identity summary (timestamps pass through unchanged). An operator that delays output by one tick would have a summary that advances the timestamp. An operator with two inputs and one output (like <code>concat</code>) would report that both inputs connect to the single output with identity summaries.</p>
-<p>This information is essential for understanding the progress guarantees of a dataflow. If you are trying to understand why a particular timestamp is not yet “complete” at some point in the graph, the operator summaries tell you which paths could still produce data at that timestamp.</p>
-<h2 id="other-event-types"><a class="header" href="#other-event-types">Other event types</a></h2>
-<h3 id="timelyprogresseventt"><a class="header" href="#timelyprogresseventt"><code>TimelyProgressEvent&lt;T&gt;</code></a></h3>
-<p>Events on the <code>"timely/progress/{T}"</code> streams capture the exchange of progress information between operators. Each event records whether it is a send or receive (<code>is_send</code>), the <code>source</code> worker, the <code>channel</code> and <code>seq_no</code>, the <code>identifier</code> of the operator, and two lists of updates: <code>messages</code> (updates to message counts at targets) and <code>internal</code> (updates to capabilities at sources). Each update is a tuple <code>(node, port, timestamp, delta)</code>.</p>
-<p>These events are primarily useful for debugging the progress tracking protocol or understanding how capabilities flow through a dataflow.</p>
-<h3 id="trackereventt"><a class="header" href="#trackereventt"><code>TrackerEvent&lt;T&gt;</code></a></h3>
-<p>Events on the <code>"timely/reachability/{T}"</code> streams record updates to the reachability tracker, which maintains the set of timestamps that could still arrive at each operator input. The variants are <code>SourceUpdate</code> and <code>TargetUpdate</code>, each carrying the node, port, timestamp, and delta of the update.</p>
-<h3 id="operatessummaryeventts"><a class="header" href="#operatessummaryeventts"><code>OperatesSummaryEvent&lt;TS&gt;</code></a></h3>
-<p>Events on the <code>"timely/summary/{T}"</code> streams record the internal connectivity summary of each operator. See <a href="#operator-summaries-internal-connectivity">Operator summaries: internal connectivity</a> above for a detailed explanation.</p>
-<h2 id="example-logging-multiple-streams"><a class="header" href="#example-logging-multiple-streams">Example: logging multiple streams</a></h2>
-<p>The following example registers callbacks for all four built-in logging streams and also creates a custom application-level logger:</p>
-<pre class="playground"><code class="language-rust no_run"><span class="boring">#![allow(unused)]
-</span><span class="boring">fn main() {
-</span>use std::time::Duration;
-use timely::logging::{
-    TimelyEventBuilder, TimelyProgressEventBuilder, TimelySummaryEventBuilder,
-};
-use timely::container::CapacityContainerBuilder;
-use timely::progress::reachability::logging::TrackerEventBuilder;
-
-timely::execute_from_args(std::env::args(), |worker| {
-
-    // Core timely events.
-    worker.log_register().unwrap()
-        .insert::&lt;TimelyEventBuilder, _&gt;("timely", |_time, data| {
-            if let Some(data) = data {
-                for event in data.iter() {
-                    println!("TIMELY: {:?}", event);
-                }
-            }
-        });
-
-    // Progress tracking events (for usize timestamps).
-    worker.log_register().unwrap()
-        .insert::&lt;TimelyProgressEventBuilder&lt;usize&gt;, _&gt;(
-            "timely/progress/usize", |_time, data| {
-                if let Some(data) = data {
-                    for event in data.iter() {
-                        println!("PROGRESS: {:?}", event);
-                    }
-                }
-            }
-        );
-
-    // Reachability tracker events.
-    worker.log_register().unwrap()
-        .insert::&lt;TrackerEventBuilder&lt;usize&gt;, _&gt;(
-            "timely/reachability/usize", |_time, data| {
-                if let Some(data) = data {
-                    for event in data.iter() {
-                        println!("REACHABILITY: {:?}", event);
-                    }
-                }
-            }
-        );
-
-    // Operator summary events.
-    worker.log_register().unwrap()
-        .insert::&lt;TimelySummaryEventBuilder&lt;usize&gt;, _&gt;(
-            "timely/summary/usize", |_time, data| {
-                if let Some(data) = data {
-                    for (_, event) in data.iter() {
-                        println!("SUMMARY: {:?}", event);
-                    }
-                }
-            }
-        );
-
-    // Custom application-level logger.
-    type RoundBuilder = CapacityContainerBuilder&lt;Vec&lt;(Duration, usize)&gt;&gt;;
-    worker.log_register().unwrap()
-        .insert::&lt;RoundBuilder, _&gt;("my-app/rounds", |_time, data| {
-            if let Some(data) = data {
-                for (ts, round) in data.iter() {
-                    println!("[{:?}] completed round {}", ts, round);
-                }
-            }
-        });
-
-    let round_logger = worker.log_register().unwrap()
-        .get::&lt;RoundBuilder&gt;("my-app/rounds")
-        .expect("Round logger absent");
-
-    worker.dataflow::&lt;usize,_,_&gt;(|scope| {
-        // ... build your dataflow ...
-    });
-
-    for round in 0..10 {
-        // ... do work ...
-        round_logger.log(round);
-    }
-
-}).unwrap();
-<span class="boring">}</span></code></pre>
-<h2 id="the-batchlogger-adapter"><a class="header" href="#the-batchlogger-adapter">The <code>BatchLogger</code> adapter</a></h2>
-<p>If you want to feed logging events into a timely dataflow stream (for example, to analyze logs in real time or write them to durable storage), the <code>BatchLogger</code> struct bridges the two. It wraps an <code>EventPusher</code> and converts logging callbacks into a stream of timely <code>Event</code>s with progress information:</p>
-<pre class="playground"><code class="language-rust no_run"><span class="boring">#![allow(unused)]
-</span><span class="boring">fn main() {
-</span>use timely::logging::BatchLogger;
-<span class="boring">}</span></code></pre>
-<p><code>BatchLogger::publish_batch</code> is called with each <code>(&amp;Duration, &amp;mut Option&lt;Container&gt;)</code> from the logging closure, and it translates these into <code>Event::Messages</code> and <code>Event::Progress</code> updates suitable for consumption by <code>capture</code> and <code>replay</code> infrastructure.</p>
-<h2 id="communication-thread-logging"><a class="header" href="#communication-thread-logging">Communication thread logging</a></h2>
+<p>You can also use <code>BatchLogger</code> to forward events into a timely capture stream for downstream processing via the <code>capture</code> and <code>replay</code> infrastructure.</p>
+<h2 id="communication-thread-logging"><a class="header" href="#communication-thread-logging">Communication Thread Logging</a></h2>
 <p>The logging described above all runs on worker threads and is accessed through the worker’s <code>Registry</code>. In multi-process (cluster) deployments, timely also runs dedicated send and receive threads for TCP networking. These threads have their own logging, configured separately.</p>
 <p>Communication logging is configured via the <code>log_fn</code> field in <code>Config::Cluster</code>. This is a closure that receives a <code>CommunicationSetup</code> describing the thread (whether it is a sender or receiver, and which processes it connects) and returns an <code>Option&lt;Logger&lt;CommunicationEventBuilder&gt;&gt;</code>. By default, this closure returns <code>None</code> and no communication events are logged.</p>
 <p>The <code>CommunicationEvent</code> enum has three variants:</p>
-<ul>
-<li>
-<p><strong><code>Setup(CommunicationSetup)</code></strong>: Identifies the thread, recording whether it is a <code>sender</code> or receiver, the local <code>process</code> id, and the <code>remote</code> process id (if any).</p>
-</li>
-<li>
-<p><strong><code>State(StateEvent)</code></strong>: Logged when a communication thread starts or stops. Contains <code>send</code> (whether this is a send thread), <code>process</code> and <code>remote</code> ids, and <code>start</code> (true when starting, false when stopping).</p>
-</li>
-<li>
-<p><strong><code>Message(MessageEvent)</code></strong>: Logged for each message sent or received over the network. Contains <code>is_send</code> and the message <code>header</code> (which includes the channel, source, target, and length).</p>
-</li>
-</ul>
+<div class="table-wrapper">
+<table>
+<thead>
+<tr><th>Variant</th><th>Description</th></tr>
+</thead>
+<tbody>
+<tr><td><code>Setup(CommunicationSetup)</code></td><td>Identifies the thread: whether it is a <code>sender</code> or receiver, the local <code>process</code> id, and the <code>remote</code> process id.</td></tr>
+<tr><td><code>State(StateEvent)</code></td><td>Thread start or stop. Contains <code>send</code> (is this a send thread), <code>process</code> and <code>remote</code> ids, and <code>start</code> (true when starting, false when stopping).</td></tr>
+<tr><td><code>Message(MessageEvent)</code></td><td>Message send or receive. Contains <code>is_send</code> and the message <code>header</code> (which includes channel, source, target, and length).</td></tr>
+</tbody>
+</table>
+</div>
 <p>These events are only relevant when running across multiple processes. For single-process or single-thread configurations, no communication threads are created and these events will not appear.</p>
 
                     </main>
