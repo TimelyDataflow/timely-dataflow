@@ -23,7 +23,7 @@ timely::execute_from_args(std::env::args(), |worker| {
             }
         });
 
-    worker.dataflow(|scope| {
+    worker.dataflow::<usize,_,_>(|scope| {
         // ... build your dataflow here ...
     });
 
@@ -67,7 +67,7 @@ timely::execute_from_args(std::env::args(), |worker| {
         .get::<MyBuilder>("my-app/events")
         .expect("Logger was just registered");
 
-    worker.dataflow(|scope| {
+    worker.dataflow::<usize,_,_>(|scope| {
         // ... build your dataflow ...
     });
 
@@ -267,7 +267,7 @@ timely::execute_from_args(std::env::args(), |worker| {
         .get::<RoundBuilder>("my-app/rounds")
         .expect("Round logger absent");
 
-    worker.dataflow(|scope| {
+    worker.dataflow::<usize,_,_>(|scope| {
         // ... build your dataflow ...
     });
 
