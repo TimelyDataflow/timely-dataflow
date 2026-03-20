@@ -288,3 +288,19 @@ use timely::logging::BatchLogger;
 ```
 
 `BatchLogger::publish_batch` is called with each `(&Duration, &mut Option<Container>)` from the logging closure, and it translates these into `Event::Messages` and `Event::Progress` updates suitable for consumption by `capture` and `replay` infrastructure.
+
+## Communication thread logging
+
+The logging described above all runs on worker threads and is accessed through the worker's `Registry`. In multi-process (cluster) deployments, timely also runs dedicated send and receive threads for TCP networking. These threads have their own logging, configured separately.
+
+Communication logging is configured via the `log_fn` field in `Config::Cluster`. This is a closure that receives a `CommunicationSetup` describing the thread (whether it is a sender or receiver, and which processes it connects) and returns an `Option<Logger<CommunicationEventBuilder>>`. By default, this closure returns `None` and no communication events are logged.
+
+The `CommunicationEvent` enum has three variants:
+
+- **`Setup(CommunicationSetup)`**: Identifies the thread, recording whether it is a `sender` or receiver, the local `process` id, and the `remote` process id (if any).
+
+- **`State(StateEvent)`**: Logged when a communication thread starts or stops. Contains `send` (whether this is a send thread), `process` and `remote` ids, and `start` (true when starting, false when stopping).
+
+- **`Message(MessageEvent)`**: Logged for each message sent or received over the network. Contains `is_send` and the message `header` (which includes the channel, source, target, and length).
+
+These events are only relevant when running across multiple processes. For single-process or single-thread configurations, no communication threads are created and these events will not appear.
