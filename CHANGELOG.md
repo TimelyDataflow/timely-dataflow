@@ -7,6 +7,19 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.28.0](https://github.com/TimelyDataflow/timely-dataflow/compare/timely-v0.27.0...timely-v0.28.0) - 2026-03-20
+
+### Other
+
+- Correct logged operator addr; improve documentation ([#767](https://github.com/TimelyDataflow/timely-dataflow/pull/767))
+- Improve logging documentation, examples, and consistency ([#766](https://github.com/TimelyDataflow/timely-dataflow/pull/766))
+- Convert `Tracker` structs to columnar ([#762](https://github.com/TimelyDataflow/timely-dataflow/pull/762))
+- Demonstrate lazy scheduling ([#754](https://github.com/TimelyDataflow/timely-dataflow/pull/754))
+- More work on #757 ([#759](https://github.com/TimelyDataflow/timely-dataflow/pull/759))
+- Partial progress on #757 ([#758](https://github.com/TimelyDataflow/timely-dataflow/pull/758))
+- Convert `Operate` to a builder trait ([#756](https://github.com/TimelyDataflow/timely-dataflow/pull/756))
+- Remove set_external_summary ([#592](https://github.com/TimelyDataflow/timely-dataflow/pull/592))
+
 ## [0.27.0](https://github.com/TimelyDataflow/timely-dataflow/compare/timely-v0.26.1...timely-v0.27.0) - 2026-03-03
 
 ### Other
