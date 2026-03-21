@@ -36,7 +36,7 @@
             const path_to_root = "";
             const default_light_theme = "light";
             const default_dark_theme = "navy";
-            window.path_to_searchindex_js = "searchindex-00c36cf0.js";
+            window.path_to_searchindex_js = "searchindex-92b30ef5.js";
         </script>
         <!-- Start loading toc.js asap -->
         <script src="toc-369bdbb9.js"></script>
@@ -2662,7 +2662,48 @@ Inside the child scope, a <code>ChannelsEvent</code> with <code>source: (0, i)</
 </div>
 <p>The <code>&lt;T&gt;</code> in the stream names is the Rust type name of the dataflow’s timestamp, obtained from <code>std::any::type_name::&lt;T&gt;()</code> (e.g., <code>"timely/progress/usize"</code> for a dataflow using <code>usize</code> timestamps). Note that <code>type_name</code> is best-effort and not guaranteed to be stable across compiler versions, so these stream names should be treated accordingly.</p>
 <p><strong><code>TimelyProgressEvent&lt;T&gt;</code></strong> captures the exchange of progress information between operators. Each event records whether it is a send or receive (<code>is_send</code>), the <code>source</code> worker, the <code>channel</code> and <code>seq_no</code>, the <code>identifier</code> of the operator, and two lists of updates: <code>messages</code> (updates to message counts at targets) and <code>internal</code> (updates to capabilities at sources). Each update is a tuple <code>(node, port, timestamp, delta)</code>. These are primarily useful for debugging the progress tracking protocol.</p>
-<p><strong><code>TrackerEvent&lt;T&gt;</code></strong> records updates to the reachability tracker, which maintains the set of timestamps that could still arrive at each operator input. The variants are <code>SourceUpdate</code> and <code>TargetUpdate</code>, each carrying the node, port, timestamp, and delta of the update.</p>
+<p><strong><code>TrackerEvent&lt;T&gt;</code></strong> records updates to the reachability tracker, which maintains the set of timestamps that could still arrive at each operator port. Each scope (subgraph) has its own tracker, identified by <code>tracker_id</code> — this is the worker-unique <code>id</code> of the scope operator (the same <code>id</code> from <code>OperatesEvent</code>).</p>
+<p>The tracker monitors two kinds of locations:</p>
+<ul>
+<li><strong>Targets</strong> (operator input ports): timestamps of messages that may still arrive.</li>
+<li><strong>Sources</strong> (operator output ports): timestamps of capabilities that operators still hold.</li>
+</ul>
+<p>The <code>TrackerEvent</code> enum has two variants:</p>
+<div class="table-wrapper">
+<table>
+<thead>
+<tr><th>Variant</th><th>Fields</th><th>Description</th></tr>
+</thead>
+<tbody>
+<tr><td><code>SourceUpdate</code></td><td><code>tracker_id</code>, <code>updates</code></td><td>Changes to capability counts at operator output ports.</td></tr>
+<tr><td><code>TargetUpdate</code></td><td><code>tracker_id</code>, <code>updates</code></td><td>Changes to message counts at operator input ports.</td></tr>
+</tbody>
+</table>
+</div>
+<p>Each entry in <code>updates</code> is a tuple <code>(node, port, timestamp, delta)</code>:</p>
+<div class="table-wrapper">
+<table>
+<thead>
+<tr><th>Field</th><th>Type</th><th>Description</th></tr>
+</thead>
+<tbody>
+<tr><td><code>node</code></td><td><code>usize</code></td><td>Scope-local operator index (same convention as <code>ChannelsEvent</code> source/target indices, including 0 for the scope boundary).</td></tr>
+<tr><td><code>port</code></td><td><code>usize</code></td><td>Port index on that operator.</td></tr>
+<tr><td><code>timestamp</code></td><td><code>T</code></td><td>The timestamp being updated.</td></tr>
+<tr><td><code>delta</code></td><td><code>i64</code></td><td>The change in count: positive means a new capability or pending message; negative means one was retired.</td></tr>
+</tbody>
+</table>
+</div>
+<p>A <code>SourceUpdate</code> with positive <code>delta</code> means an operator has acquired (or retained) a capability to produce data at that timestamp on that output port. A negative <code>delta</code> means it has released one. Similarly, a <code>TargetUpdate</code> with positive <code>delta</code> means messages at that timestamp may still arrive at that input port; negative means some have been accounted for.</p>
+<p>The frontier at any location is the set of timestamps with positive accumulated count. When all counts at a target reach zero for a given timestamp, the operator knows no more messages at that timestamp will arrive — this is the mechanism by which operators learn they can “close” a timestamp and make progress.</p>
+<h3 id="using-reachability-logging-for-debugging"><a class="header" href="#using-reachability-logging-for-debugging">Using Reachability Logging for Debugging</a></h3>
+<p>The <code>TrackerEvent</code> stream is particularly useful for diagnosing progress-tracking issues — for example, understanding why a dataflow appears stuck or why a particular timestamp hasn’t completed.</p>
+<p><strong>Reconstructing capability state.</strong> Since each event carries a <code>delta</code>, you can reconstruct the current capability state at any point by accumulating deltas. For each <code>(tracker_id, node, port, timestamp)</code>, sum the deltas from all <code>SourceUpdate</code> events. A positive sum means the operator currently holds a capability at that timestamp on that port. When the sum reaches zero, the capability has been fully released.</p>
+<p>The same applies to <code>TargetUpdate</code> events for message counts: a positive accumulated count at a target means messages at that timestamp may still be in flight.</p>
+<p><strong>Identifying a stuck dataflow.</strong> When a dataflow hangs, the accumulated state tells you exactly which operators hold capabilities and at which timestamps. Cross-reference the <code>tracker_id</code> with <code>OperatesEvent</code> to identify the scope, and the <code>node</code> with operator addresses within that scope (recall that <code>node</code> is a scope-local index, and the operator’s full address is the scope’s <code>addr</code> with <code>node</code> appended).</p>
+<p>For example, if accumulated <code>SourceUpdate</code> deltas show that node 5 in tracker 7 holds a capability at timestamp <code>(42, 3)</code>, and <code>OperatesEvent</code> tells you tracker 7 is the scope at address <code>[0, 2]</code>, then the operator at address <code>[0, 2, 5]</code> holds the capability. Look up its name in the <code>OperatesEvent</code> log to identify it.</p>
+<p><strong>Understanding why a frontier hasn’t advanced.</strong> The frontier at an operator’s input can only advance when all upstream capabilities that could produce data at the current frontier timestamps have been released. The <code>SourceUpdate</code> events let you identify which operators still hold such capabilities. Trace the graph (using <code>ChannelsEvent</code> and operator summaries from <code>OperatesSummaryEvent</code>) from those capabilities forward to the stuck operator’s input to understand the dependency chain.</p>
+<p><strong>Matching scopes to log streams.</strong> Each scope has its own tracker and its own log stream. A dataflow using <code>usize</code> timestamps with a nested iterative scope would produce two reachability streams: <code>"timely/reachability/usize"</code> for the root scope, and something like <code>"timely/reachability/Product&lt;usize, u64&gt;"</code> for the iterative scope (where the <code>u64</code> is the iteration counter). Register loggers for each stream you want to observe.</p>
 <h2 id="registering-a-logger"><a class="header" href="#registering-a-logger">Registering a Logger</a></h2>
 <p>To consume logging events, register a callback with the worker’s log registry. The <code>insert</code> method takes a string name and a closure:</p>
 <pre class="playground"><code class="language-rust no_run"><span class="boring">#![allow(unused)]
