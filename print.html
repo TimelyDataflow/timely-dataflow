@@ -36,7 +36,7 @@
             const path_to_root = "";
             const default_light_theme = "light";
             const default_dark_theme = "navy";
-            window.path_to_searchindex_js = "searchindex-92b30ef5.js";
+            window.path_to_searchindex_js = "searchindex-3f977f42.js";
         </script>
         <!-- Start loading toc.js asap -->
         <script src="toc-369bdbb9.js"></script>
@@ -1537,6 +1537,41 @@ fn main() {
 <p>The <code>worker.step()</code> call is the heart of data processing in timely dataflow. The system will do a swing through each dataflow operator and call in to its closure once. Each operator has the opportunity to drain its input and produce some output, and depending on how they are coded they may do just that.</p>
 <p>Importantly, this is also where we start moving data around. Until we call <code>worker.step()</code> all data are just sitting in queues. The parts of our computation that do clever things like filtering down the data, or projecting out just a few small fields, or pre-aggregating the data before we act on it, these all happen here and don’t happen until we call this.</p>
 <p>Make sure to call <code>worker.step()</code> now and again, like you would your parents.</p>
+<h2 id="stepping-until-caught-up"><a class="header" href="#stepping-until-caught-up">Stepping until caught up</a></h2>
+<p>The <code>worker.step()</code> method returns <code>true</code> if any dataflow operator remains incomplete — meaning it could still receive data or produce output. This includes input operators whose handles have not been dropped. A common mistake is to write:</p>
+<pre><code class="language-rust ignore">while worker.step() {
+    // wait for the dataflow to finish
+}</code></pre>
+<p>This loop will <strong>never terminate</strong> as long as any input handle is still open, because the input operator is always incomplete while it could still receive data. The system has no way to know you are done sending; from its perspective, another <code>input.send()</code> could arrive at any moment.</p>
+<p>Instead, use a probe to step until the dataflow has caught up to the input:</p>
+<pre class="playground"><code class="language-rust"><span class="boring">extern crate timely;
+</span><span class="boring">use timely::dataflow::InputHandle;
+</span><span class="boring">use timely::dataflow::operators::{Input, Inspect, Probe};
+</span><span class="boring">fn main() {
+</span><span class="boring">    timely::execute_from_args(std::env::args().take(1), |worker| {
+</span><span class="boring">        let mut input = InputHandle::new();
+</span><span class="boring">        let probe = worker.dataflow(|scope|
+</span><span class="boring">            scope.input_from(&amp;mut input)
+</span><span class="boring">                 .container::&lt;Vec&lt;_&gt;&gt;()
+</span><span class="boring">                 .inspect(|x| println!("seen: {:?}", x))
+</span><span class="boring">                 .probe()
+</span><span class="boring">                 .0
+</span><span class="boring">        );
+</span>for round in 0..10 {
+    input.send(round);
+    input.advance_to(round + 1);
+    while probe.less_than(input.time()) {
+        worker.step();
+    }
+}
+<span class="boring">    }).unwrap();
+</span><span class="boring">}</span></code></pre>
+<p>The probe reports whether there are still timestamps less than the argument that could appear at the probed point in the dataflow. By stepping until <code>probe.less_than(input.time())</code> is false, you ensure the dataflow has processed everything up through the current round before moving on.</p>
+<p>The <code>while worker.step()</code> pattern is only appropriate after all inputs have been closed (by dropping their handles), at which point it correctly runs the dataflow to completion:</p>
+<pre><code class="language-rust ignore">drop(input);
+while worker.step() {
+    // drain remaining work after closing input
+}</code></pre>
 <div style="break-before: page; page-break-before: always;"></div>
 <h1 id="extending-dataflows"><a class="header" href="#extending-dataflows">Extending Dataflows</a></h1>
 <p>This might be surprising to see in the “Running Timely Dataflows” section, but it is worth pointing out. Just because we built one dataflow doesn’t mean that we have to stop there. We can run one dataflow for a while, and then create a second dataflow and run it. While we are running those (just one <code>worker.step()</code> calls into both) we could create a third and start running that too.</p>
