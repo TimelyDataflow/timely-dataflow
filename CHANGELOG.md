@@ -7,6 +7,34 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.28.0](https://github.com/TimelyDataflow/timely-dataflow/compare/timely-v0.27.0...timely-v0.28.0) - 2026-03-25
+
+### Added
+
+- Per-input frontier interest via `FrontierInterest` enum (`Always`, `IfCapability`, `Never`), enabling lazy scheduling where operators only wake on frontier changes when they hold capabilities. Replaces `set_notify(bool)` with `set_notify_for(input, FrontierInterest)`. ([#754](https://github.com/TimelyDataflow/timely-dataflow/pull/754))
+- New `event_driven.rs` example demonstrating lazy scheduling within regions ([#754](https://github.com/TimelyDataflow/timely-dataflow/pull/754))
+- Logging chapter in the mdbook with detailed documentation of `TimelyEvent` variants, operator/channel mapping, scope boundary conventions, and reachability logging ([#766](https://github.com/TimelyDataflow/timely-dataflow/pull/766), [#767](https://github.com/TimelyDataflow/timely-dataflow/pull/767), [#768](https://github.com/TimelyDataflow/timely-dataflow/pull/768))
+- Documentation on execution idioms: stepping, running to completion, and event-driven patterns ([#770](https://github.com/TimelyDataflow/timely-dataflow/pull/770))
+
+### Changed
+
+- **Breaking:** `Operate` is now a builder trait. `get_internal_summary` is renamed to `initialize` and consumes `self`, returning `(Connectivity, SharedProgress, Box<dyn Schedule>)`. Custom operators must be updated. ([#756](https://github.com/TimelyDataflow/timely-dataflow/pull/756))
+- **Breaking:** `MutableAntichain::new_bottom` renamed to `from_elem` ([#758](https://github.com/TimelyDataflow/timely-dataflow/pull/758))
+- **Breaking:** `BytesMut::try_regenerate` now returns `Option<bool>` instead of panicking on type mismatch ([#759](https://github.com/TimelyDataflow/timely-dataflow/pull/759))
+- **Breaking:** `vec::Partition` trait signature simplified; type parameters `D2` and `F` moved from the trait to the method ([#759](https://github.com/TimelyDataflow/timely-dataflow/pull/759))
+- Default progress mode changed from `Eager` to `Demand` for more efficient progress tracking ([#758](https://github.com/TimelyDataflow/timely-dataflow/pull/758))
+- Progress tracking `Tracker` internals converted to columnar representation for better cache locality ([#762](https://github.com/TimelyDataflow/timely-dataflow/pull/762))
+- Updated to columnar 0.12 ([#769](https://github.com/TimelyDataflow/timely-dataflow/pull/769))
+
+### Removed
+
+- **Breaking:** `Operate::set_external_summary` removed; operators are no longer scheduled during dataflow construction. Probe initialization corrected to not require this. ([#592](https://github.com/TimelyDataflow/timely-dataflow/pull/592))
+- **Breaking:** `Input::epoch()` removed; use `Input::time()` instead ([#758](https://github.com/TimelyDataflow/timely-dataflow/pull/758))
+
+### Fixed
+
+- Extensive mdbook documentation fixes: broken links, outdated API signatures, untested examples converted to compile-checked blocks ([#760](https://github.com/TimelyDataflow/timely-dataflow/pull/760))
+
 ## [0.27.0](https://github.com/TimelyDataflow/timely-dataflow/compare/timely-v0.26.1...timely-v0.27.0) - 2026-03-03
 
 ### Other
