@@ -128,6 +128,92 @@ pub mod link {
     }
 }
 
+/// A thread-safe linked-list event pusher and iterator.
+pub mod link_sync {
+
+    use std::borrow::Cow;
+    use std::sync::{Arc, Mutex};
+
+    use super::{Event, EventPusher, EventIterator};
+
+    /// A linked list of Event<T, C> usable across threads.
+    pub struct EventLink<T, C> {
+        /// An event, if one exists.
+        ///
+        /// An event might not exist, if either we want to insert a `None` and have the output iterator pause,
+        /// or in the case of the very first linked list element, which has no event when constructed.
+        pub event: Option<Event<T, C>>,
+        /// The next event, if it exists.
+        pub next: Mutex<Option<Arc<EventLink<T, C>>>>,
+    }
+
+    impl<T, C> EventLink<T, C> {
+        /// Allocates a new `EventLink`.
+        pub fn new() -> EventLink<T, C> {
+            EventLink { event: None, next: Mutex::new(None) }
+        }
+    }
+
+    impl<T, C> EventPusher<T, C> for Arc<EventLink<T, C>> {
+        fn push(&mut self, event: Event<T, C>) {
+            let mut guard = self.next.lock().unwrap();
+            *guard = Some(Arc::new(EventLink { event: Some(event), next: Mutex::new(None) }));
+            let next = Arc::clone(guard.as_ref().unwrap());
+            drop(guard);
+            *self = next;
+        }
+    }
+
+    impl<T: Clone, C: Clone> EventIterator<T, C> for Arc<EventLink<T, C>> {
+        fn next(&mut self) -> Option<Cow<'_, Event<T, C>>> {
+            let is_some = self.next.lock().unwrap().is_some();
+            if is_some {
+                let next = Arc::clone(self.next.lock().unwrap().as_ref().unwrap());
+                *self = next;
+                if let Some(this) = Arc::get_mut(self) {
+                    this.event.take().map(Cow::Owned)
+                }
+                else {
+                    self.event.as_ref().map(Cow::Borrowed)
+                }
+            }
+            else {
+                None
+            }
+        }
+    }
+
+    // Drop implementation to prevent stack overflow through naive drop impl.
+    impl<T, C> Drop for EventLink<T, C> {
+        fn drop(&mut self) {
+            while let Some(link) = self.next.get_mut().unwrap().take() {
+                if let Ok(head) = Arc::try_unwrap(link) {
+                    *self = head;
+                }
+            }
+        }
+    }
+
+    impl<T, C> Default for EventLink<T, C> {
+        fn default() -> Self {
+            Self::new()
+        }
+    }
+
+    #[test]
+    fn avoid_stack_overflow_in_drop() {
+        #[cfg(miri)]
+        let limit = 1_000;
+        #[cfg(not(miri))]
+        let limit = 1_000_000;
+        let mut event1 = Arc::new(EventLink::<(),()>::new());
+        let _event2 = Arc::clone(&event1);
+        for _ in 0 .. limit {
+            event1.push(Event::Progress(vec![]));
+        }
+    }
+}
+
 /// A binary event pusher and iterator.
 pub mod binary {
 
