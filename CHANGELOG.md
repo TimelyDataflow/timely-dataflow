@@ -7,6 +7,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.28.1](https://github.com/TimelyDataflow/timely-dataflow/compare/timely-v0.28.0...timely-v0.28.1) - 2026-04-03
+
+### Other
+
+- Arc based event iterator ([#772](https://github.com/TimelyDataflow/timely-dataflow/pull/772))
+
 ## [0.28.0](https://github.com/TimelyDataflow/timely-dataflow/compare/timely-v0.27.0...timely-v0.28.0) - 2026-03-25
 
 ### Added
