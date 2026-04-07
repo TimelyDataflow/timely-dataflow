@@ -11,26 +11,17 @@ pub mod child;
 
 pub use self::child::Child;
 
-/// The information a child scope needs from its parent.
-pub trait ScopeParent: AsWorker+Clone {
-    /// The timestamp associated with data in this scope.
-    type Timestamp : Timestamp;
-}
-
-impl<A: Allocate> ScopeParent for crate::worker::Worker<A> {
-    type Timestamp = ();
-}
-
-
 /// The fundamental operations required to add and connect operators in a timely dataflow graph.
 ///
 /// Importantly, this is often a *shared* object, backed by a `Rc<RefCell<>>` wrapper. Each method
 /// takes a shared reference, but can be thought of as first calling `.clone()` and then calling the
 /// method. Each method does not hold the `RefCell`'s borrow, and should prevent accidental panics.
-pub trait Scope: ScopeParent {
+pub trait Scope: AsWorker+Clone {
 
     /// The allocator type used by the scope.
     type Allocator: Allocate;
+    /// The timestamp associated with data in this scope.
+    type Timestamp : Timestamp;
 
     /// A useful name describing the scope.
     fn name(&self) -> String;
@@ -102,7 +93,7 @@ pub trait Scope: ScopeParent {
     /// ```
     fn scoped<T, R, F>(&self, name: &str, func: F) -> R
     where
-        T: Timestamp+Refines<<Self as ScopeParent>::Timestamp>,
+        T: Timestamp+Refines<<Self as Scope>::Timestamp>,
         F: FnOnce(&mut Child<Self::Allocator, T>) -> R;
 
     /// Creates a iterative dataflow subgraph.
@@ -130,9 +121,9 @@ pub trait Scope: ScopeParent {
     fn iterative<T, R, F>(&self, func: F) -> R
     where
         T: Timestamp,
-        F: FnOnce(&mut Child<Self::Allocator, Product<<Self as ScopeParent>::Timestamp, T>>) -> R,
+        F: FnOnce(&mut Child<Self::Allocator, Product<<Self as Scope>::Timestamp, T>>) -> R,
     {
-        self.scoped::<Product<<Self as ScopeParent>::Timestamp, T>,R,F>("Iterative", func)
+        self.scoped::<Product<<Self as Scope>::Timestamp, T>,R,F>("Iterative", func)
     }
 
     /// Creates a dataflow region with the same timestamp.
@@ -159,7 +150,7 @@ pub trait Scope: ScopeParent {
     /// ```
     fn region<R, F>(&self, func: F) -> R
     where
-        F: FnOnce(&mut Child<Self::Allocator, <Self as ScopeParent>::Timestamp>) -> R,
+        F: FnOnce(&mut Child<Self::Allocator, <Self as Scope>::Timestamp>) -> R,
     {
         self.region_named("Region", func)
     }
@@ -191,9 +182,9 @@ pub trait Scope: ScopeParent {
     /// ```
     fn region_named<R, F>(&self, name: &str, func: F) -> R
     where
-        F: FnOnce(&mut Child<Self::Allocator, <Self as ScopeParent>::Timestamp>) -> R,
+        F: FnOnce(&mut Child<Self::Allocator, <Self as Scope>::Timestamp>) -> R,
     {
-        self.scoped::<<Self as ScopeParent>::Timestamp,R,F>(name, func)
+        self.scoped::<<Self as Scope>::Timestamp,R,F>(name, func)
     }
 
 }

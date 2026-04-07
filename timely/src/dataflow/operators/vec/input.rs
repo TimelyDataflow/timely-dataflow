@@ -1,7 +1,7 @@
 //! Create new `Streams` connected to external inputs.
 
 use crate::container::CapacityContainerBuilder;
-use crate::dataflow::{StreamVec, ScopeParent, Scope};
+use crate::dataflow::{StreamVec, Scope};
 use crate::dataflow::operators::core::{Input as InputCore};
 
 // TODO : This is an exogenous input, but it would be nice to wrap a Subgraph in something
@@ -46,7 +46,7 @@ pub trait Input : Scope {
     ///     }
     /// });
     /// ```
-    fn new_input<D: Clone+'static>(&mut self) -> (Handle<<Self as ScopeParent>::Timestamp, D>, StreamVec<Self, D>);
+    fn new_input<D: Clone+'static>(&mut self) -> (Handle<<Self as Scope>::Timestamp, D>, StreamVec<Self, D>);
 
     /// Create a new stream from a supplied interactive handle.
     ///
@@ -79,16 +79,16 @@ pub trait Input : Scope {
     ///     }
     /// });
     /// ```
-    fn input_from<D: Clone+'static>(&mut self, handle: &mut Handle<<Self as ScopeParent>::Timestamp, D>) -> StreamVec<Self, D>;
+    fn input_from<D: Clone+'static>(&mut self, handle: &mut Handle<<Self as Scope>::Timestamp, D>) -> StreamVec<Self, D>;
 }
 
 use crate::order::TotalOrder;
-impl<G: Scope> Input for G where <G as ScopeParent>::Timestamp: TotalOrder {
-    fn new_input<D: Clone+'static>(&mut self) -> (Handle<<G as ScopeParent>::Timestamp, D>, StreamVec<G, D>) {
+impl<G: Scope> Input for G where <G as Scope>::Timestamp: TotalOrder {
+    fn new_input<D: Clone+'static>(&mut self) -> (Handle<<G as Scope>::Timestamp, D>, StreamVec<G, D>) {
         InputCore::new_input(self)
     }
 
-    fn input_from<D: Clone+'static>(&mut self, handle: &mut Handle<<G as ScopeParent>::Timestamp, D>) -> StreamVec<G, D> {
+    fn input_from<D: Clone+'static>(&mut self, handle: &mut Handle<<G as Scope>::Timestamp, D>) -> StreamVec<G, D> {
         InputCore::input_from(self, handle)
     }
 }

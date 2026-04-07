@@ -15,7 +15,7 @@ use crate::logging::TimelyLogger as Logger;
 use crate::logging::TimelyProgressLogger as ProgressLogger;
 use crate::worker::{AsWorker, Config, Worker};
 
-use super::{ScopeParent, Scope};
+use super::Scope;
 
 /// Type alias for iterative child scope.
 pub type Iterative<'a, A, TOuter, TInner> = Child<'a, A, Product<TOuter, TInner>>;
@@ -88,20 +88,14 @@ where
     }
 }
 
-impl<A, T> ScopeParent for Child<'_, A, T>
-where
-    A: Allocate,
-    T: Timestamp,
-{
-    type Timestamp = T;
-}
-
 impl<A, T> Scope for Child<'_, A, T>
 where
     A: Allocate,
     T: Timestamp,
 {
     type Allocator = A;
+    type Timestamp = T;
+
     fn name(&self) -> String { self.subgraph.borrow().name.clone() }
     fn addr(&self) -> Rc<[usize]> { Rc::clone(&self.subgraph.borrow().path) }
 
