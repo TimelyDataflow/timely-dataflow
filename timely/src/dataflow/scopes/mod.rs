@@ -96,7 +96,7 @@ pub trait Scope: ScopeParent {
     ///     });
     /// });
     /// ```
-    fn scoped<T, R, F>(&mut self, name: &str, func: F) -> R
+    fn scoped<T, R, F>(&self, name: &str, func: F) -> R
     where
         T: Timestamp+Refines<<Self as ScopeParent>::Timestamp>,
         F: FnOnce(&mut Child<Self, T>) -> R;
@@ -123,7 +123,7 @@ pub trait Scope: ScopeParent {
     ///     });
     /// });
     /// ```
-    fn iterative<T, R, F>(&mut self, func: F) -> R
+    fn iterative<T, R, F>(&self, func: F) -> R
     where
         T: Timestamp,
         F: FnOnce(&mut Child<Self, Product<<Self as ScopeParent>::Timestamp, T>>) -> R,
@@ -153,7 +153,7 @@ pub trait Scope: ScopeParent {
     ///     });
     /// });
     /// ```
-    fn region<R, F>(&mut self, func: F) -> R
+    fn region<R, F>(&self, func: F) -> R
     where
         F: FnOnce(&mut Child<Self, <Self as ScopeParent>::Timestamp>) -> R,
     {
@@ -185,7 +185,7 @@ pub trait Scope: ScopeParent {
     ///     });
     /// });
     /// ```
-    fn region_named<R, F>(&mut self, name: &str, func: F) -> R
+    fn region_named<R, F>(&self, name: &str, func: F) -> R
     where
         F: FnOnce(&mut Child<Self, <Self as ScopeParent>::Timestamp>) -> R,
     {

@@ -125,32 +125,33 @@ where
     }
 
     #[inline]
-    fn scoped<T2, R, F>(&mut self, name: &str, func: F) -> R
+    fn scoped<T2, R, F>(&self, name: &str, func: F) -> R
     where
         T2: Timestamp+Refines<T>,
         F: FnOnce(&mut Child<Self, T2>) -> R,
     {
-        let index = self.subgraph.borrow_mut().allocate_child_id();
-        let identifier = self.new_identifier();
-        let path = self.addr_for_child(index);
+        let mut outer = self.clone();
+        let index = outer.subgraph.borrow_mut().allocate_child_id();
+        let identifier = outer.new_identifier();
+        let path = outer.addr_for_child(index);
 
         let type_name = std::any::type_name::<T2>();
-        let progress_logging = self.logger_for(&format!("timely/progress/{type_name}"));
-        let summary_logging  = self.logger_for(&format!("timely/summary/{type_name}"));
+        let progress_logging = outer.logger_for(&format!("timely/progress/{type_name}"));
+        let summary_logging  = outer.logger_for(&format!("timely/summary/{type_name}"));
 
         let subscope = RefCell::new(SubgraphBuilder::new_from(path, identifier, self.logging(), summary_logging, name));
         let result = {
             let mut builder = Child {
                 subgraph: &subscope,
-                parent: self.clone(),
-                logging: self.logging.clone(),
+                parent: outer.clone(),
+                logging: outer.logging.clone(),
                 progress_logging,
             };
             func(&mut builder)
         };
-        let subscope = subscope.into_inner().build(self);
+        let subscope = subscope.into_inner().build(&mut outer);
 
-        self.add_operator_with_indices(Box::new(subscope), index, identifier);
+        outer.add_operator_with_indices(Box::new(subscope), index, identifier);
 
         result
     }
