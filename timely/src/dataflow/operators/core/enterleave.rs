@@ -14,7 +14,7 @@
 //!     let output = outer.region(|inner| {
 //!         stream.enter(inner)
 //!               .inspect(|x| println!("in nested scope: {:?}", x))
-//!               .leave()
+//!               .leave(outer)
 //!     });
 //! });
 //! ```
@@ -38,6 +38,9 @@ use crate::dataflow::scopes::Child;
 pub trait Enter<G: Scope, T: Timestamp+Refines<G::Timestamp>, C> {
     /// Moves the `Stream` argument into a child of its current `Scope`.
     ///
+    /// The destination scope must be a child of the stream's scope.
+    /// The method checks this property at runtime, and will panic if not respected.
+    ///
     /// # Examples
     /// ```
     /// use timely::dataflow::scopes::Scope;
@@ -46,31 +49,43 @@ pub trait Enter<G: Scope, T: Timestamp+Refines<G::Timestamp>, C> {
     /// timely::example(|outer| {
     ///     let stream = (0..9).to_stream(outer).container::<Vec<_>>();
     ///     let output = outer.region(|inner| {
-    ///         stream.enter(inner).leave()
+    ///         stream.enter(inner).leave(outer)
     ///     });
     /// });
     /// ```
-    fn enter<'a>(self, _: &Child<'a, G, T>) -> Stream<Child<'a, G, T>, C>;
+    fn enter<'a>(self, inner: &Child<'a, G, T>) -> Stream<Child<'a, G, T>, C>;
 }
 
 impl<G: Scope, T: Timestamp+Refines<G::Timestamp>, C: Container> Enter<G, T, C> for Stream<G, C> {
-    fn enter<'a>(self, scope: &Child<'a, G, T>) -> Stream<Child<'a, G, T>, C> {
+    fn enter<'a>(self, inner: &Child<'a, G, T>) -> Stream<Child<'a, G, T>, C> {
 
         use crate::scheduling::Scheduler;
+
+        // Validate that `inner` is a child of `self`'s scope.
+        let inner_addr = inner.addr();
+        let outer_addr = self.scope().addr();
+        assert!(
+            inner_addr.len() == outer_addr.len() + 1
+                && inner_addr[..outer_addr.len()] == outer_addr[..],
+            "Enter::enter: `inner` is not a child of the stream's scope \
+            (inner addr: {:?}, outer addr: {:?})",
+            inner_addr,
+            outer_addr,
+        );
 
         let (targets, registrar) = Tee::<T, C>::new();
         let ingress = IngressNub {
             targets: Counter::new(targets),
             phantom: PhantomData,
-            activator: scope.activator_for(scope.addr()),
+            activator: inner.activator_for(inner_addr),
             active: false,
         };
         let produced = Rc::clone(ingress.targets.produced());
-        let input = scope.subgraph.borrow_mut().new_input(produced);
-        let channel_id = scope.clone().new_identifier();
+        let input = inner.subgraph.borrow_mut().new_input(produced);
+        let channel_id = inner.clone().new_identifier();
 
-        if let Some(logger) = scope.logging() {
-            let pusher = LogPusher::new(ingress, channel_id, scope.index(), logger);
+        if let Some(logger) = inner.logging() {
+            let pusher = LogPusher::new(ingress, channel_id, inner.index(), logger);
             self.connect_to(input, pusher, channel_id);
         } else {
             self.connect_to(input, ingress, channel_id);
@@ -79,7 +94,7 @@ impl<G: Scope, T: Timestamp+Refines<G::Timestamp>, C: Container> Enter<G, T, C> 
         Stream::new(
             Source::new(0, input.port),
             registrar,
-            scope.clone(),
+            inner.clone(),
         )
     }
 }
@@ -87,6 +102,11 @@ impl<G: Scope, T: Timestamp+Refines<G::Timestamp>, C: Container> Enter<G, T, C> 
 /// Extension trait to move a `Stream` to the parent of its current `Scope`.
 pub trait Leave<G: Scope, C> {
     /// Moves a `Stream` to the parent of its current `Scope`.
+    ///
+    /// The parent scope must be supplied as an argument.
+    ///
+    /// The destination scope must be the parent of the stream's scope.
+    /// The method checks this property at runtime, and will panic if not respected.
     ///
     /// # Examples
     /// ```
@@ -96,17 +116,29 @@ pub trait Leave<G: Scope, C> {
     /// timely::example(|outer| {
     ///     let stream = (0..9).to_stream(outer).container::<Vec<_>>();
     ///     let output = outer.region(|inner| {
-    ///         stream.enter(inner).leave()
+    ///         stream.enter(inner).leave(outer)
     ///     });
     /// });
     /// ```
-    fn leave(self) -> Stream<G, C>;
+    fn leave(self, outer: &G) -> Stream<G, C>;
 }
 
 impl<G: Scope, C: Container, T: Timestamp+Refines<G::Timestamp>> Leave<G, C> for Stream<Child<'_, G, T>, C> {
-    fn leave(self) -> Stream<G, C> {
+    fn leave(self, outer: &G) -> Stream<G, C> {
 
         let scope = self.scope();
+
+        // Validate that `self`'s scope is a child of `outer`.
+        let inner_addr = scope.addr();
+        let outer_addr = outer.addr();
+        assert!(
+            inner_addr.len() == outer_addr.len() + 1
+                && inner_addr[..outer_addr.len()] == outer_addr[..],
+            "Leave::leave: `outer` is not the parent of the stream's scope \
+            (stream addr: {:?}, outer addr: {:?})",
+            inner_addr,
+            outer_addr,
+        );
 
         let output = scope.subgraph.borrow_mut().new_output();
         let target = Target::new(0, output.port);
@@ -124,7 +156,7 @@ impl<G: Scope, C: Container, T: Timestamp+Refines<G::Timestamp>> Leave<G, C> for
         Stream::new(
             output,
             registrar,
-            scope.parent,
+            outer.clone(),
         )
     }
 }
@@ -262,7 +294,7 @@ mod test {
                 scope.region(|inner| {
 
                     let data = data.enter(inner);
-                    inner.region(|inner2| data.enter(inner2).leave()).leave()
+                    inner.region(|inner2| data.enter(inner2).leave(inner)).leave(scope)
                 })
                     .inspect(move |x| println!("worker {}:\thello {}", index, x))
                     .probe_with(&probe);

@@ -90,7 +90,7 @@ pub trait Scope: ScopeParent {
     ///     let input = worker.dataflow::<u64,_,_>(|child1| {
     ///         let (input, stream) = child1.new_input::<Vec<String>>();
     ///         let output = child1.scoped::<Product<u64,u32>,_,_>("ScopeName", |child2| {
-    ///             stream.enter(child2).leave()
+    ///             stream.enter(child2).leave(child1)
     ///         });
     ///         input
     ///     });
@@ -117,7 +117,7 @@ pub trait Scope: ScopeParent {
     ///     let input = worker.dataflow::<u64,_,_>(|child1| {
     ///         let (input, stream) = child1.new_input::<Vec<String>>();
     ///         let output = child1.iterative::<u32,_,_>(|child2| {
-    ///             stream.enter(child2).leave()
+    ///             stream.enter(child2).leave(child1)
     ///         });
     ///         input
     ///     });
@@ -147,7 +147,7 @@ pub trait Scope: ScopeParent {
     ///     let input = worker.dataflow::<u64,_,_>(|child1| {
     ///         let (input, stream) = child1.new_input::<Vec<String>>();
     ///         let output = child1.region(|child2| {
-    ///             stream.enter(child2).leave()
+    ///             stream.enter(child2).leave(child1)
     ///         });
     ///         input
     ///     });
@@ -179,7 +179,7 @@ pub trait Scope: ScopeParent {
     ///     let input = worker.dataflow::<u64,_,_>(|child1| {
     ///         let (input, stream) = child1.new_input::<Vec<String>>();
     ///         let output = child1.region_named("region", |child2| {
-    ///             stream.enter(child2).leave()
+    ///             stream.enter(child2).leave(child1)
     ///         });
     ///         input
     ///     });
