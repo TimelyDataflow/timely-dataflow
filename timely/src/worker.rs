@@ -16,6 +16,7 @@ use crate::progress::timestamp::{Refines};
 use crate::progress::SubgraphBuilder;
 use crate::progress::operate::Operate;
 use crate::dataflow::scopes::Child;
+use crate::dataflow::scopes::child::ChildInner;
 use crate::logging::TimelyLogger;
 
 /// Different ways in which timely's progress tracking can work.
@@ -660,10 +661,12 @@ impl<A: Allocate> Worker<A> {
 
         let result = {
             let mut builder = Child {
-                subgraph: &subscope,
+                inner: ChildInner {
+                    subgraph: &subscope,
+                    logging: logging.clone(),
+                    progress_logging,
+                },
                 parent: self.clone(),
-                logging: logging.clone(),
-                progress_logging,
             };
             func(&mut resources, &mut builder)
         };

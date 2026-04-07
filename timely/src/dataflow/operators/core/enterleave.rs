@@ -66,7 +66,7 @@ impl<G: Scope, T: Timestamp+Refines<G::Timestamp>, C: Container> Enter<G, T, C> 
             active: false,
         };
         let produced = Rc::clone(ingress.targets.produced());
-        let input = scope.subgraph.borrow_mut().new_input(produced);
+        let input = scope.subgraph().borrow_mut().new_input(produced);
         let channel_id = scope.clone().new_identifier();
 
         if let Some(logger) = scope.logging() {
@@ -108,7 +108,7 @@ impl<G: Scope, C: Container, T: Timestamp+Refines<G::Timestamp>> Leave<G, C> for
 
         let scope = self.scope();
 
-        let output = scope.subgraph.borrow_mut().new_output();
+        let output = scope.subgraph().borrow_mut().new_output();
         let target = Target::new(0, output.port);
         let (targets, registrar) = Tee::<G::Timestamp, C>::new();
         let egress = EgressNub { targets, phantom: PhantomData };
