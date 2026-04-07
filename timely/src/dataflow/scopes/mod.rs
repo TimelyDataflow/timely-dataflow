@@ -28,6 +28,10 @@ impl<A: Allocate> ScopeParent for crate::worker::Worker<A> {
 /// takes a shared reference, but can be thought of as first calling `.clone()` and then calling the
 /// method. Each method does not hold the `RefCell`'s borrow, and should prevent accidental panics.
 pub trait Scope: ScopeParent {
+
+    /// The allocator type used by the scope.
+    type Allocator: Allocate;
+
     /// A useful name describing the scope.
     fn name(&self) -> String;
 
@@ -99,7 +103,7 @@ pub trait Scope: ScopeParent {
     fn scoped<T, R, F>(&self, name: &str, func: F) -> R
     where
         T: Timestamp+Refines<<Self as ScopeParent>::Timestamp>,
-        F: FnOnce(&mut Child<Self, T>) -> R;
+        F: FnOnce(&mut Child<Self::Allocator, T>) -> R;
 
     /// Creates a iterative dataflow subgraph.
     ///
@@ -126,7 +130,7 @@ pub trait Scope: ScopeParent {
     fn iterative<T, R, F>(&self, func: F) -> R
     where
         T: Timestamp,
-        F: FnOnce(&mut Child<Self, Product<<Self as ScopeParent>::Timestamp, T>>) -> R,
+        F: FnOnce(&mut Child<Self::Allocator, Product<<Self as ScopeParent>::Timestamp, T>>) -> R,
     {
         self.scoped::<Product<<Self as ScopeParent>::Timestamp, T>,R,F>("Iterative", func)
     }
@@ -155,7 +159,7 @@ pub trait Scope: ScopeParent {
     /// ```
     fn region<R, F>(&self, func: F) -> R
     where
-        F: FnOnce(&mut Child<Self, <Self as ScopeParent>::Timestamp>) -> R,
+        F: FnOnce(&mut Child<Self::Allocator, <Self as ScopeParent>::Timestamp>) -> R,
     {
         self.region_named("Region", func)
     }
@@ -187,7 +191,7 @@ pub trait Scope: ScopeParent {
     /// ```
     fn region_named<R, F>(&self, name: &str, func: F) -> R
     where
-        F: FnOnce(&mut Child<Self, <Self as ScopeParent>::Timestamp>) -> R,
+        F: FnOnce(&mut Child<Self::Allocator, <Self as ScopeParent>::Timestamp>) -> R,
     {
         self.scoped::<<Self as ScopeParent>::Timestamp,R,F>(name, func)
     }
