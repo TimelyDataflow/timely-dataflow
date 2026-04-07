@@ -28,7 +28,7 @@ where
     T: Timestamp,
 {
     /// The subgraph under assembly.
-    pub subgraph: &'a RefCell<SubgraphBuilder<G::Timestamp, T>>,
+    pub subgraph: &'a RefCell<SubgraphBuilder<T>>,
     /// A copy of the child's parent scope.
     pub parent:   G,
     /// The log writer for this scope.

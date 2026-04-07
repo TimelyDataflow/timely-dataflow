@@ -36,9 +36,8 @@ use crate::worker::ProgressMode;
 /// This collects all the information necessary to get a `Subgraph` up and
 /// running, and is important largely through its `build` method which
 /// actually creates a `Subgraph`.
-pub struct SubgraphBuilder<TOuter, TInner>
+pub struct SubgraphBuilder<TInner>
 where
-    TOuter: Timestamp,
     TInner: Timestamp,
 {
     /// The name of this subgraph.
@@ -63,7 +62,7 @@ where
     input_messages: Vec<Rc<RefCell<ChangeBatch<TInner>>>>,
 
     // expressed capabilities, used to filter changes against.
-    output_capabilities: Vec<MutableAntichain<TOuter>>,
+    outputs: usize,
 
     /// Logging handle
     logging: Option<Logger>,
@@ -71,9 +70,8 @@ where
     summary_logging: Option<SummaryLogger<TInner::Summary>>,
 }
 
-impl<TOuter, TInner> SubgraphBuilder<TOuter, TInner>
+impl<TInner> SubgraphBuilder<TInner>
 where
-    TOuter: Timestamp,
     TInner: Timestamp,
 {
     /// Allocates a new input to the subgraph and returns the target to that input in the outer graph.
@@ -84,8 +82,8 @@ where
 
     /// Allocates a new output from the subgraph and returns the source of that output in the outer graph.
     pub fn new_output(&mut self) -> Source {
-        self.output_capabilities.push(MutableAntichain::new());
-        Source::new(self.index, self.output_capabilities.len() - 1)
+        self.outputs += 1;
+        Source::new(self.index, self.outputs - 1)
     }
 
     /// Introduces a dependence from the source to the target.
@@ -105,7 +103,7 @@ where
         summary_logging: Option<SummaryLogger<TInner::Summary>>,
         name: &str,
     )
-        -> SubgraphBuilder<TOuter, TInner>
+        -> SubgraphBuilder<TInner>
     {
         // Put an empty placeholder for "outer scope" representative.
         let children = vec![PerOperatorState::empty(0, 0)];
@@ -120,7 +118,7 @@ where
             child_count: 1,
             edge_stash: Vec::new(),
             input_messages: Vec::new(),
-            output_capabilities: Vec::new(),
+            outputs: 0,
             logging,
             summary_logging,
         }
@@ -150,7 +148,7 @@ where
     }
 
     /// Now that initialization is complete, actually build a subgraph.
-    pub fn build<A: crate::worker::AsWorker>(mut self, worker: &mut A) -> Subgraph<TOuter, TInner> {
+    pub fn build<A: crate::worker::AsWorker, TOuter: Timestamp>(mut self, worker: &mut A) -> Subgraph<TOuter, TInner> {
         // at this point, the subgraph is frozen. we should initialize any internal state which
         // may have been determined after construction (e.g. the numbers of inputs and outputs).
         // we also need to determine what to return as a summary and initial capabilities, which
@@ -161,7 +159,7 @@ where
         assert!(self.children.iter().enumerate().all(|(i,x)| i == x.index));
 
         let inputs = self.input_messages.len();
-        let outputs = self.output_capabilities.len();
+        let outputs = self.outputs;
 
         // Create empty child zero representative.
         self.children[0] = PerOperatorState::empty(outputs, inputs);
@@ -217,7 +215,7 @@ where
             maybe_shutdown: Vec::new(),
             children: self.children,
             input_messages: self.input_messages,
-            output_capabilities: self.output_capabilities,
+            output_capabilities: vec![MutableAntichain::new(); self.outputs],
 
             local_pointstamp: ChangeBatch::new(),
             final_pointstamp: ChangeBatch::new(),
