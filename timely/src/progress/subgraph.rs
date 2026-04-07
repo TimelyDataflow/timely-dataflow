@@ -74,7 +74,7 @@ where
 impl<TOuter, TInner> SubgraphBuilder<TOuter, TInner>
 where
     TOuter: Timestamp,
-    TInner: Timestamp+Refines<TOuter>,
+    TInner: Timestamp,
 {
     /// Allocates a new input to the subgraph and returns the target to that input in the outer graph.
     pub fn new_input(&mut self, shared_counts: Rc<RefCell<ChangeBatch<TInner>>>) -> Target {
@@ -241,7 +241,7 @@ where
 pub struct Subgraph<TOuter, TInner>
 where
     TOuter: Timestamp,
-    TInner: Timestamp+Refines<TOuter>,
+    TInner: Timestamp,
 {
     name: String,           // an informative name.
     /// Path of identifiers from the root.

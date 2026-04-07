@@ -25,7 +25,7 @@ pub type Iterative<'a, G, T> = Child<'a, G, Product<<G as ScopeParent>::Timestam
 pub struct Child<'a, G, T>
 where
     G: ScopeParent,
-    T: Timestamp+Refines<G::Timestamp>
+    T: Timestamp,
 {
     /// The subgraph under assembly.
     pub subgraph: &'a RefCell<SubgraphBuilder<G::Timestamp, T>>,
@@ -40,7 +40,7 @@ where
 impl<G, T> Child<'_, G, T>
 where
     G: ScopeParent,
-    T: Timestamp+Refines<G::Timestamp>
+    T: Timestamp,
 {
     /// This worker's unique identifier.
     ///
@@ -53,7 +53,7 @@ where
 impl<G, T> AsWorker for Child<'_, G, T>
 where
     G: ScopeParent,
-    T: Timestamp+Refines<G::Timestamp>
+    T: Timestamp,
 {
     fn config(&self) -> &Config { self.parent.config() }
     fn index(&self) -> usize { self.parent.index() }
@@ -81,7 +81,7 @@ where
 impl<G, T> Scheduler for Child<'_, G, T>
 where
     G: ScopeParent,
-    T: Timestamp+Refines<G::Timestamp>
+    T: Timestamp,
 {
     fn activations(&self) -> Rc<RefCell<Activations>> {
         self.parent.activations()
@@ -91,7 +91,7 @@ where
 impl<G, T> ScopeParent for Child<'_, G, T>
 where
     G: ScopeParent,
-    T: Timestamp+Refines<G::Timestamp>
+    T: Timestamp,
 {
     type Timestamp = T;
 }
@@ -99,7 +99,7 @@ where
 impl<G, T> Scope for Child<'_, G, T>
 where
     G: ScopeParent,
-    T: Timestamp+Refines<G::Timestamp>,
+    T: Timestamp,
 {
     fn name(&self) -> String { self.subgraph.borrow().name.clone() }
     fn addr(&self) -> Rc<[usize]> { Rc::clone(&self.subgraph.borrow().path) }
@@ -159,7 +159,7 @@ where
 impl<G, T> Clone for Child<'_, G, T>
 where
     G: ScopeParent,
-    T: Timestamp+Refines<G::Timestamp>
+    T: Timestamp,
 {
     fn clone(&self) -> Self {
         Child {
