@@ -39,7 +39,10 @@ Why are additional timestamps useful? They allow operators in the nested scope t
 
 In addition to *creating* scopes, we will also need to get streams of data into and out of scopes.
 
-There are two simple methods, `enter` and `leave`, that allow streams of data into and out of scopes. It is important that you use them! If you try to use a stream in a nested scope, Rust will be confused because it can't get the timestamps of your streams to typecheck.
+There are two simple methods, `enter` and `leave`, that allow streams of data into and out of scopes.
+Both methods take the destination scope as an argument, the inner scope for `enter` and the outer scope for `leave`.
+It is important that you use them!
+If you try to use a stream in a nested scope, Rust will be confused because it can't get the timestamps of your streams to typecheck.
 
 ```rust
 extern crate timely;
@@ -56,7 +59,7 @@ fn main() {
         let result = scope.scoped::<u64,_,_>("SubScope", |subscope| {
             stream.enter(subscope)
                   .inspect_batch(|t, xs| println!("{:?}, {:?}", t, xs))
-                  .leave()
+                  .leave(scope)
         });
 
     });
@@ -65,7 +68,9 @@ fn main() {
 
 Notice how we can both `enter` a stream and `leave` in a single sequence of operations.
 
-The `enter` operator introduces each batch of records as a batch with an enriched timestamp, which usually means "the same" or "with a new zero coordinate". The `leave` just de-enriches the timestamp, correspondingly "the same" or "without that new coordinate". The `leave` operator results in a stream fit for consumption in the containing scope.
+The `enter` operator introduces each batch of records as a batch with an enriched timestamp, which usually means "the same" or "with a new zero coordinate".
+The `leave` de-enriches the timestamp, correspondingly "the same" or "without that new coordinate".
+The `leave` operator results in a stream fit for consumption in the containing scope.
 
 ## Regions
 
@@ -86,7 +91,7 @@ fn main() {
         let result = scope.region(|subscope| {
             stream.enter(subscope)
                   .inspect_batch(|t, xs| println!("{:?}, {:?}", t, xs))
-                  .leave()
+                  .leave(scope)
         });
 
     });
@@ -118,7 +123,7 @@ fn main() {
         let result = scope.iterative::<u32,_,_>(|subscope| {
             stream.enter(subscope)
                   .inspect_batch(|t, xs| println!("{:?}, {:?}", t, xs))
-                  .leave()
+                  .leave(scope)
         });
 
     });

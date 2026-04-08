@@ -1,5 +1,7 @@
 //! Create cycles in a timely dataflow graph.
 
+use timely_communication::Allocate;
+
 use crate::Container;
 use crate::dataflow::channels::pact::Pipeline;
 use crate::dataflow::operators::generic::builder_rc::OperatorBuilder;
@@ -39,7 +41,7 @@ pub trait Feedback<G: Scope> {
 }
 
 /// Creates a `Stream` and a `Handle` to later bind the source of that `Stream`.
-pub trait LoopVariable<'a, G: Scope, T: Timestamp> {
+pub trait LoopVariable<'a, A: Allocate, TOuter: Timestamp, TInner: Timestamp> {
     /// Creates a `Stream` and a `Handle` to later bind the source of that `Stream`.
     ///
     /// The resulting `Stream` will have its data defined by a future call to `connect_loop` with
@@ -65,7 +67,7 @@ pub trait LoopVariable<'a, G: Scope, T: Timestamp> {
     ///     });
     /// });
     /// ```
-    fn loop_variable<C: Container>(&mut self, summary: T::Summary) -> (Handle<Iterative<'a, G, T>, C>, Stream<Iterative<'a, G, T>, C>);
+    fn loop_variable<C: Container>(&mut self, summary: TInner::Summary) -> (Handle<Iterative<'a, A, TOuter, TInner>, C>, Stream<Iterative<'a, A, TOuter, TInner>, C>);
 }
 
 impl<G: Scope> Feedback<G> for G {
@@ -79,8 +81,8 @@ impl<G: Scope> Feedback<G> for G {
     }
 }
 
-impl<'a, G: Scope, T: Timestamp> LoopVariable<'a, G, T> for Iterative<'a, G, T> {
-    fn loop_variable<C: Container>(&mut self, summary: T::Summary) -> (Handle<Iterative<'a, G, T>, C>, Stream<Iterative<'a, G, T>, C>) {
+impl<'a, A: Allocate, TOuter: Timestamp, TInner: Timestamp> LoopVariable<'a, A, TOuter, TInner> for Iterative<'a, A, TOuter, TInner> {
+    fn loop_variable<C: Container>(&mut self, summary: TInner::Summary) -> (Handle<Iterative<'a, A, TOuter, TInner>, C>, Stream<Iterative<'a, A, TOuter, TInner>, C>) {
         self.feedback(Product::new(Default::default(), summary))
     }
 }

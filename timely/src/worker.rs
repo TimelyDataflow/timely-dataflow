@@ -589,7 +589,7 @@ impl<A: Allocate> Worker<A> {
     pub fn dataflow<T, R, F>(&mut self, func: F) -> R
     where
         T: Refines<()>,
-        F: FnOnce(&mut Child<Self, T>)->R,
+        F: FnOnce(&mut Child<A, T>)->R,
     {
         self.dataflow_core("Dataflow", self.logging(), Box::new(()), |_, child| func(child))
     }
@@ -612,7 +612,7 @@ impl<A: Allocate> Worker<A> {
     pub fn dataflow_named<T, R, F>(&mut self, name: &str, func: F) -> R
     where
         T: Refines<()>,
-        F: FnOnce(&mut Child<Self, T>)->R,
+        F: FnOnce(&mut Child<A, T>)->R,
     {
         self.dataflow_core(name, self.logging(), Box::new(()), |_, child| func(child))
     }
@@ -645,7 +645,7 @@ impl<A: Allocate> Worker<A> {
     pub fn dataflow_core<T, R, F, V>(&mut self, name: &str, mut logging: Option<TimelyLogger>, mut resources: V, func: F) -> R
     where
         T: Refines<()>,
-        F: FnOnce(&mut V, &mut Child<Self, T>)->R,
+        F: FnOnce(&mut V, &mut Child<A, T>)->R,
         V: Any+'static,
     {
         let dataflow_index = self.allocate_dataflow_index();
@@ -661,7 +661,7 @@ impl<A: Allocate> Worker<A> {
         let result = {
             let mut builder = Child {
                 subgraph: &subscope,
-                parent: self.clone(),
+                worker: self.clone(),
                 logging: logging.clone(),
                 progress_logging,
             };

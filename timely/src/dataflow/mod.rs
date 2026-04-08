@@ -15,7 +15,7 @@
 //! ```
 
 pub use self::stream::{Stream, StreamVec};
-pub use self::scopes::{Scope, ScopeParent};
+pub use self::scopes::Scope;
 
 pub use self::operators::core::input::Handle as InputHandle;
 pub use self::operators::vec::input::Handle as InputHandleVec;

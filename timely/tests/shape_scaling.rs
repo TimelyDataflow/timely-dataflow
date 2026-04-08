@@ -67,7 +67,7 @@ fn subgraph_scaling(scale: u64) {
             use timely::dataflow::Scope;
             let _outputs = scope.region(|inner| {
                 use timely::dataflow::operators::{Enter, Leave};
-                parts.into_iter().map(|part| part.enter(inner).leave()).collect::<Vec<_>>()
+                parts.into_iter().map(|part| part.enter(inner).leave(scope)).collect::<Vec<_>>()
             });
         });
     })
