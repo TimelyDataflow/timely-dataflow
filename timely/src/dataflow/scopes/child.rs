@@ -22,77 +22,41 @@ pub type Iterative<'a, A, TOuter, TInner> = Child<'a, A, Product<TOuter, TInner>
 
 /// A `Child` wraps a `Subgraph` and manages the addition
 /// of `Operate`s and the connection of edges between them.
-pub struct Child<'a, A, T>
-where
-    A: Allocate,
-    T: Timestamp,
-{
+pub struct Child<'a, A: Allocate, T: Timestamp> {
     /// The subgraph under assembly.
-    pub subgraph: &'a RefCell<SubgraphBuilder<T>>,
+    pub(crate) subgraph: &'a RefCell<SubgraphBuilder<T>>,
     /// A copy of the worker hosting this scope.
-    pub worker:   Worker<A>,
+    pub(crate) worker:   Worker<A>,
     /// The log writer for this scope.
-    pub logging:  Option<Logger>,
+    pub(crate) logging:  Option<Logger>,
     /// The progress log writer for this scope.
-    pub progress_logging:  Option<ProgressLogger<T>>,
+    pub(crate) progress_logging:  Option<ProgressLogger<T>>,
 }
 
-impl<A, T> Child<'_, A, T>
-where
-    A: Allocate,
-    T: Timestamp,
-{
-    /// This worker's unique identifier.
-    ///
-    /// Ranges from `0` to `self.peers() - 1`.
+impl<A: Allocate, T: Timestamp> Child<'_, A, T> {
+    /// This worker's index out of `0 .. self.peers()`.
     pub fn index(&self) -> usize { self.worker.index() }
     /// The total number of workers in the computation.
     pub fn peers(&self) -> usize { self.worker.peers() }
 }
 
-impl<A, T> AsWorker for Child<'_, A, T>
-where
-    A: Allocate,
-    T: Timestamp,
-{
+impl<A: Allocate, T: Timestamp> AsWorker for Child<'_, A, T> {
     fn config(&self) -> &Config { self.worker.config() }
     fn index(&self) -> usize { self.worker.index() }
     fn peers(&self) -> usize { self.worker.peers() }
-    fn allocate<D: Exchangeable>(&mut self, identifier: usize, address: Rc<[usize]>) -> (Vec<Box<dyn Push<D>>>, Box<dyn Pull<D>>) {
-        self.worker.allocate(identifier, address)
-    }
-    fn pipeline<D: 'static>(&mut self, identifier: usize, address: Rc<[usize]>) -> (ThreadPusher<D>, ThreadPuller<D>) {
-        self.worker.pipeline(identifier, address)
-    }
-    fn broadcast<D: Exchangeable + Clone>(&mut self, identifier: usize, address: Rc<[usize]>) -> (Box<dyn Push<D>>, Box<dyn Pull<D>>) {
-        self.worker.broadcast(identifier, address)
-    }
-    fn new_identifier(&mut self) -> usize {
-        self.worker.new_identifier()
-    }
-    fn peek_identifier(&self) -> usize {
-        self.worker.peek_identifier()
-    }
-    fn log_register(&self) -> Option<::std::cell::RefMut<'_, crate::logging_core::Registry>> {
-        self.worker.log_register()
-    }
+    fn allocate<D: Exchangeable>(&mut self, identifier: usize, address: Rc<[usize]>) -> (Vec<Box<dyn Push<D>>>, Box<dyn Pull<D>>) { self.worker.allocate(identifier, address) }
+    fn pipeline<D: 'static>(&mut self, identifier: usize, address: Rc<[usize]>) -> (ThreadPusher<D>, ThreadPuller<D>) { self.worker.pipeline(identifier, address) }
+    fn broadcast<D: Exchangeable + Clone>(&mut self, identifier: usize, address: Rc<[usize]>) -> (Box<dyn Push<D>>, Box<dyn Pull<D>>) { self.worker.broadcast(identifier, address) }
+    fn new_identifier(&mut self) -> usize { self.worker.new_identifier() }
+    fn peek_identifier(&self) -> usize { self.worker.peek_identifier() }
+    fn log_register(&self) -> Option<::std::cell::RefMut<'_, crate::logging_core::Registry>> { self.worker.log_register() }
 }
 
-impl<A, T> Scheduler for Child<'_, A, T>
-where
-    A: Allocate,
-    T: Timestamp,
-{
-    fn activations(&self) -> Rc<RefCell<Activations>> {
-        self.worker.activations()
-    }
+impl<A: Allocate, T: Timestamp> Scheduler for Child<'_, A, T> {
+    fn activations(&self) -> Rc<RefCell<Activations>> { self.worker.activations() }
 }
 
-impl<A, T> Scope for Child<'_, A, T>
-where
-    A: Allocate,
-    T: Timestamp,
-{
+impl<A: Allocate, T: Timestamp> Scope for Child<'_, A, T> {
     type Allocator = A;
     type Timestamp = T;
 
@@ -152,11 +116,7 @@ where
     }
 }
 
-impl<A, T> Clone for Child<'_, A, T>
-where
-    A: Allocate,
-    T: Timestamp,
-{
+impl<A: Allocate, T: Timestamp> Clone for Child<'_, A, T> {
     fn clone(&self) -> Self {
         Child {
             subgraph: self.subgraph,
