@@ -36,7 +36,7 @@
             const path_to_root = "";
             const default_light_theme = "light";
             const default_dark_theme = "navy";
-            window.path_to_searchindex_js = "searchindex-3f977f42.js";
+            window.path_to_searchindex_js = "searchindex-6e091a1a.js";
         </script>
         <!-- Start loading toc.js asap -->
         <script src="toc-369bdbb9.js"></script>
@@ -1613,7 +1613,10 @@ fn main() {
 <p>Why are additional timestamps useful? They allow operators in the nested scope to change their behavior based on the enriched timestamp, without worrying the streams and operators outside the scope about this detail. We will soon see the example of <em>iterative</em> dataflow, where a scope allows cycles within it, but does not bother operators outside the scope with that detail.</p>
 <h2 id="entering-and-exiting-scopes"><a class="header" href="#entering-and-exiting-scopes">Entering and exiting scopes</a></h2>
 <p>In addition to <em>creating</em> scopes, we will also need to get streams of data into and out of scopes.</p>
-<p>There are two simple methods, <code>enter</code> and <code>leave</code>, that allow streams of data into and out of scopes. It is important that you use them! If you try to use a stream in a nested scope, Rust will be confused because it can’t get the timestamps of your streams to typecheck.</p>
+<p>There are two simple methods, <code>enter</code> and <code>leave</code>, that allow streams of data into and out of scopes.
+Both methods take the destination scope as an argument, the inner scope for <code>enter</code> and the outer scope for <code>leave</code>.
+It is important that you use them!
+If you try to use a stream in a nested scope, Rust will be confused because it can’t get the timestamps of your streams to typecheck.</p>
 <pre class="playground"><code class="language-rust">extern crate timely;
 
 use timely::dataflow::Scope;
@@ -1628,13 +1631,15 @@ fn main() {
         let result = scope.scoped::&lt;u64,_,_&gt;("SubScope", |subscope| {
             stream.enter(subscope)
                   .inspect_batch(|t, xs| println!("{:?}, {:?}", t, xs))
-                  .leave()
+                  .leave(scope)
         });
 
     });
 }</code></pre>
 <p>Notice how we can both <code>enter</code> a stream and <code>leave</code> in a single sequence of operations.</p>
-<p>The <code>enter</code> operator introduces each batch of records as a batch with an enriched timestamp, which usually means “the same” or “with a new zero coordinate”. The <code>leave</code> just de-enriches the timestamp, correspondingly “the same” or “without that new coordinate”. The <code>leave</code> operator results in a stream fit for consumption in the containing scope.</p>
+<p>The <code>enter</code> operator introduces each batch of records as a batch with an enriched timestamp, which usually means “the same” or “with a new zero coordinate”.
+The <code>leave</code> de-enriches the timestamp, correspondingly “the same” or “without that new coordinate”.
+The <code>leave</code> operator results in a stream fit for consumption in the containing scope.</p>
 <h2 id="regions"><a class="header" href="#regions">Regions</a></h2>
 <p>There is a handy shortcut for scopes that do not change the timestamp type, a <code>region</code>.</p>
 <pre class="playground"><code class="language-rust">extern crate timely;
@@ -1651,7 +1656,7 @@ fn main() {
         let result = scope.region(|subscope| {
             stream.enter(subscope)
                   .inspect_batch(|t, xs| println!("{:?}, {:?}", t, xs))
-                  .leave()
+                  .leave(scope)
         });
 
     });
@@ -1675,7 +1680,7 @@ fn main() {
         let result = scope.iterative::&lt;u32,_,_&gt;(|subscope| {
             stream.enter(subscope)
                   .inspect_batch(|t, xs| println!("{:?}, {:?}", t, xs))
-                  .leave()
+                  .leave(scope)
         });
 
     });
