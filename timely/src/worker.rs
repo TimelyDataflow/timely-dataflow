@@ -15,7 +15,7 @@ use crate::scheduling::{Schedule, Scheduler, Activations};
 use crate::progress::timestamp::{Refines};
 use crate::progress::SubgraphBuilder;
 use crate::progress::operate::Operate;
-use crate::dataflow::scopes::Scope;
+use crate::dataflow::scope::Scope;
 use crate::logging::TimelyLogger;
 
 /// Different ways in which timely's progress tracking can work.

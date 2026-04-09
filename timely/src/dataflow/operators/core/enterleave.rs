@@ -6,7 +6,7 @@
 //!
 //! # Examples
 //! ```
-//! use timely::dataflow::scopes::Scope;
+//! use timely::dataflow::scope::Scope;
 //! use timely::dataflow::operators::{Enter, Leave, ToStream, Inspect};
 //!
 //! timely::example(|outer| {

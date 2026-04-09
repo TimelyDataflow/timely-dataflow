@@ -1,7 +1,7 @@
 //! Starts a timely dataflow execution from configuration information and per-worker logic.
 
 use crate::communication::{initialize_from, Allocator, AllocatorBuilder, WorkerGuards};
-use crate::dataflow::scopes::Scope;
+use crate::dataflow::scope::Scope;
 use crate::worker::Worker;
 use crate::{CommunicationConfig, WorkerConfig};
 

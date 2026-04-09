@@ -3,7 +3,7 @@
 use crate::Container;
 use crate::dataflow::channels::pact::Pipeline;
 use crate::dataflow::operators::generic::builder_rc::OperatorBuilder;
-use crate::dataflow::scopes::child::Iterative;
+use crate::dataflow::scope::Iterative;
 use crate::dataflow::{Stream, Scope};
 use crate::order::Product;
 use crate::progress::frontier::Antichain;

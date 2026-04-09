@@ -13,8 +13,6 @@ use crate::dataflow::channels::Message;
 use crate::worker::AsWorker;
 use std::fmt::{self, Debug};
 
-// use dataflow::scopes::root::loggers::CHANNELS_Q;
-
 /// Abstraction of a stream of `C: Container` records timestamped with `T`.
 ///
 /// Internally `Stream` maintains a list of data recipients who should be presented with data
