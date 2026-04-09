@@ -18,13 +18,19 @@ use crate::worker::{AsWorker, Config, Worker};
 use super::Scope;
 
 /// Type alias for iterative child scope.
-pub type Iterative<'a, TOuter, TInner> = Child<'a, Product<TOuter, TInner>>;
+pub type Iterative<TOuter, TInner> = Child<Product<TOuter, TInner>>;
 
 /// A `Child` wraps a `Subgraph` and manages the addition
 /// of `Operate`s and the connection of edges between them.
-pub struct Child<'a, T: Timestamp> {
+pub struct Child<T: Timestamp> {
     /// The subgraph under assembly.
-    pub(crate) subgraph: &'a RefCell<SubgraphBuilder<T>>,
+    ///
+    /// Stored as `Rc<RefCell<...>>` so that multiple `Child` clones can share the
+    /// same subgraph state during construction. The owning `scoped` / `region` /
+    /// `dataflow` call recovers the inner `SubgraphBuilder` via `Rc::try_unwrap`
+    /// when the closure returns; if a clone has escaped the closure, this fails
+    /// loudly with an actionable panic message.
+    pub(crate) subgraph: Rc<RefCell<SubgraphBuilder<T>>>,
     /// A copy of the worker hosting this scope.
     pub(crate) worker:   Worker,
     /// The log writer for this scope.
@@ -33,14 +39,14 @@ pub struct Child<'a, T: Timestamp> {
     pub(crate) progress_logging:  Option<ProgressLogger<T>>,
 }
 
-impl<T: Timestamp> Child<'_, T> {
+impl<T: Timestamp> Child<T> {
     /// This worker's index out of `0 .. self.peers()`.
     pub fn index(&self) -> usize { self.worker.index() }
     /// The total number of workers in the computation.
     pub fn peers(&self) -> usize { self.worker.peers() }
 }
 
-impl<T: Timestamp> AsWorker for Child<'_, T> {
+impl<T: Timestamp> AsWorker for Child<T> {
     fn config(&self) -> &Config { self.worker.config() }
     fn index(&self) -> usize { self.worker.index() }
     fn peers(&self) -> usize { self.worker.peers() }
@@ -52,11 +58,11 @@ impl<T: Timestamp> AsWorker for Child<'_, T> {
     fn log_register(&self) -> Option<::std::cell::RefMut<'_, crate::logging_core::Registry>> { self.worker.log_register() }
 }
 
-impl<T: Timestamp> Scheduler for Child<'_, T> {
+impl<T: Timestamp> Scheduler for Child<T> {
     fn activations(&self) -> Rc<RefCell<Activations>> { self.worker.activations() }
 }
 
-impl<T: Timestamp> Scope for Child<'_, T> {
+impl<T: Timestamp> Scope for Child<T> {
     type Timestamp = T;
 
     fn name(&self) -> String { self.subgraph.borrow().name.clone() }
@@ -97,17 +103,25 @@ impl<T: Timestamp> Scope for Child<'_, T> {
         let progress_logging = scope.logger_for(&format!("timely/progress/{type_name}"));
         let summary_logging  = scope.logger_for(&format!("timely/summary/{type_name}"));
 
-        let subscope = RefCell::new(SubgraphBuilder::new_from(path, identifier, self.logging(), summary_logging, name));
+        let subscope = Rc::new(RefCell::new(SubgraphBuilder::new_from(path, identifier, self.logging(), summary_logging, name)));
         let result = {
             let mut builder = Child {
-                subgraph: &subscope,
+                subgraph: Rc::clone(&subscope),
                 worker: scope.worker.clone(),
                 logging: scope.logging.clone(),
                 progress_logging,
             };
             func(&mut builder)
         };
-        let subscope = subscope.into_inner().build(&mut scope);
+        let subscope = Rc::try_unwrap(subscope)
+            .map_err(|_| ())
+            .expect(
+                "Cannot consume scope: an outstanding `Child` clone is still alive. \
+                 This usually means a `Child` was cloned and held past the scoped() / \
+                 region() / iterative() / dataflow() call that constructed it."
+            )
+            .into_inner()
+            .build(&mut scope);
 
         scope.add_operator_with_indices(Box::new(subscope), index, identifier);
 
@@ -115,10 +129,10 @@ impl<T: Timestamp> Scope for Child<'_, T> {
     }
 }
 
-impl<T: Timestamp> Clone for Child<'_, T> {
+impl<T: Timestamp> Clone for Child<T> {
     fn clone(&self) -> Self {
         Child {
-            subgraph: self.subgraph,
+            subgraph: Rc::clone(&self.subgraph),
             worker: self.worker.clone(),
             logging: self.logging.clone(),
             progress_logging: self.progress_logging.clone(),
