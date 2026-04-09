@@ -363,6 +363,13 @@ where
     /// subgraph builder. If a clone of the child has escaped past this call, the
     /// underlying `Rc::try_unwrap` will fail with an actionable panic message.
     pub fn build(self, child: Scope<T2>) -> (Subgraph<T, T2>, OperatorSlot<T>) {
+        assert!(
+            Rc::ptr_eq(&self.builder, &child.subgraph),
+            "SubscopeHandle::build called with a `Scope` that does not match the handle. \
+             The `Scope` passed to `build` must be the one returned alongside this handle \
+             from `new_subscope`."
+        );
+
         // Drop the child scope's clone of the shared subgraph builder so the
         // try_unwrap below succeeds.
         drop(child);
