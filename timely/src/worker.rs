@@ -656,11 +656,11 @@ impl Worker {
         let progress_logging = self.logger_for(&format!("timely/progress/{}", type_name));
         let summary_logging  = self.logger_for(&format!("timely/summary/{}", type_name));
         let subscope = SubgraphBuilder::new_from(addr, identifier, logging.clone(), summary_logging, name);
-        let subscope = RefCell::new(subscope);
+        let subscope = Rc::new(RefCell::new(subscope));
 
         let result = {
             let mut builder = Child {
-                subgraph: &subscope,
+                subgraph: Rc::clone(&subscope),
                 worker: self.clone(),
                 logging: logging.clone(),
                 progress_logging,
@@ -668,7 +668,15 @@ impl Worker {
             func(&mut resources, &mut builder)
         };
 
-        let operator = subscope.into_inner().build(self);
+        let operator = Rc::try_unwrap(subscope)
+            .map_err(|_| ())
+            .expect(
+                "Cannot consume dataflow scope: an outstanding `Child` clone is still alive. \
+                 This usually means a `Child` was cloned and held past the dataflow() call \
+                 that constructed it."
+            )
+            .into_inner()
+            .build(self);
 
         if let Some(l) = logging.as_mut() {
             l.log(crate::logging::OperatesEvent {

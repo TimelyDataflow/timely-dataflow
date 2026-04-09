@@ -39,7 +39,7 @@ pub trait Feedback<G: Scope> {
 }
 
 /// Creates a `Stream` and a `Handle` to later bind the source of that `Stream`.
-pub trait LoopVariable<'a, TOuter: Timestamp, TInner: Timestamp> {
+pub trait LoopVariable<TOuter: Timestamp, TInner: Timestamp> {
     /// Creates a `Stream` and a `Handle` to later bind the source of that `Stream`.
     ///
     /// The resulting `Stream` will have its data defined by a future call to `connect_loop` with
@@ -65,7 +65,7 @@ pub trait LoopVariable<'a, TOuter: Timestamp, TInner: Timestamp> {
     ///     });
     /// });
     /// ```
-    fn loop_variable<C: Container>(&mut self, summary: TInner::Summary) -> (Handle<Iterative<'a, TOuter, TInner>, C>, Stream<Iterative<'a, TOuter, TInner>, C>);
+    fn loop_variable<C: Container>(&mut self, summary: TInner::Summary) -> (Handle<Iterative<TOuter, TInner>, C>, Stream<Iterative<TOuter, TInner>, C>);
 }
 
 impl<G: Scope> Feedback<G> for G {
@@ -79,8 +79,8 @@ impl<G: Scope> Feedback<G> for G {
     }
 }
 
-impl<'a, TOuter: Timestamp, TInner: Timestamp> LoopVariable<'a, TOuter, TInner> for Iterative<'a, TOuter, TInner> {
-    fn loop_variable<C: Container>(&mut self, summary: TInner::Summary) -> (Handle<Iterative<'a, TOuter, TInner>, C>, Stream<Iterative<'a, TOuter, TInner>, C>) {
+impl<TOuter: Timestamp, TInner: Timestamp> LoopVariable<TOuter, TInner> for Iterative<TOuter, TInner> {
+    fn loop_variable<C: Container>(&mut self, summary: TInner::Summary) -> (Handle<Iterative<TOuter, TInner>, C>, Stream<Iterative<TOuter, TInner>, C>) {
         self.feedback(Product::new(Default::default(), summary))
     }
 }
