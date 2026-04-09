@@ -7,7 +7,7 @@ use crate::communication::{Exchangeable, Push, Pull};
 use crate::communication::allocator::thread::{ThreadPusher, ThreadPuller};
 use crate::scheduling::Scheduler;
 use crate::scheduling::activate::Activations;
-use crate::progress::{Timestamp, Operate, SubgraphBuilder};
+use crate::progress::{Timestamp, Operate, Subgraph, SubgraphBuilder};
 use crate::progress::{Source, Target};
 use crate::progress::timestamp::Refines;
 use crate::order::Product;
@@ -102,6 +102,72 @@ impl<T: Timestamp> Scope<T> {
         self.subgraph.borrow_mut().add_child(operator, local, global);
     }
 
+    /// Reserves a slot for an operator in this scope.
+    ///
+    /// The returned [`OperatorSlot`] carries the scope-local index and worker-unique
+    /// identifier of the future operator. It must be consumed by [`OperatorSlot::install`]
+    /// before being dropped; otherwise it will panic, since the scope expects every
+    /// reserved slot to eventually be filled.
+    ///
+    /// This is the type-checked replacement for `allocate_operator_index` followed
+    /// by `add_operator_with_indices`.
+    pub fn reserve_operator(&mut self) -> OperatorSlot<T> {
+        let index = self.allocate_operator_index();
+        let identifier = self.new_identifier();
+        OperatorSlot {
+            parent: self.clone(),
+            index,
+            identifier,
+            installed: false,
+        }
+    }
+
+    /// Begins a nested subscope with a refining timestamp `T2`.
+    ///
+    /// Returns a freshly-allocated child [`Scope<T2>`] for building the inner
+    /// dataflow, paired with a [`SubscopeHandle`] that owns the right to finalize
+    /// the subscope. After populating the child scope, pass it to
+    /// [`SubscopeHandle::build`] to obtain the built [`Subgraph`] and an
+    /// [`OperatorSlot`] at which to install it (or any wrapper around it).
+    ///
+    /// The standard `scoped` / `region` / `iterative` methods are thin wrappers
+    /// around `new_subscope` that install the built subgraph directly. Direct
+    /// callers of `new_subscope` may interpose, e.g. by wrapping the built
+    /// subgraph in a decorator that intercepts scheduling.
+    pub fn new_subscope<T2>(&self, name: &str) -> (Scope<T2>, SubscopeHandle<T, T2>)
+    where
+        T2: Timestamp + Refines<T>,
+    {
+        let mut parent = self.clone();
+        let index = parent.subgraph.borrow_mut().allocate_child_id();
+        let identifier = parent.new_identifier();
+        let path = parent.addr_for_child(index);
+
+        let type_name = std::any::type_name::<T2>();
+        let progress_logging = parent.logger_for(&format!("timely/progress/{type_name}"));
+        let summary_logging  = parent.logger_for(&format!("timely/summary/{type_name}"));
+
+        let builder = Rc::new(RefCell::new(SubgraphBuilder::new_from(
+            path, identifier, self.logging(), summary_logging, name,
+        )));
+
+        let child = Scope {
+            subgraph: Rc::clone(&builder),
+            worker: parent.worker.clone(),
+            logging: parent.logging.clone(),
+            progress_logging,
+        };
+
+        let handle = SubscopeHandle {
+            parent,
+            builder: Some(builder),
+            index,
+            identifier,
+        };
+
+        (child, handle)
+    }
+
     /// Creates a dataflow subgraph.
     ///
     /// This method allows the user to create a nested scope with any timestamp that
@@ -132,37 +198,10 @@ impl<T: Timestamp> Scope<T> {
         T2: Timestamp + Refines<T>,
         F: FnOnce(&mut Scope<T2>) -> R,
     {
-        let mut scope = self.clone();
-        let index = scope.subgraph.borrow_mut().allocate_child_id();
-        let identifier = scope.new_identifier();
-        let path = scope.addr_for_child(index);
-
-        let type_name = std::any::type_name::<T2>();
-        let progress_logging = scope.logger_for(&format!("timely/progress/{type_name}"));
-        let summary_logging  = scope.logger_for(&format!("timely/summary/{type_name}"));
-
-        let subscope = Rc::new(RefCell::new(SubgraphBuilder::new_from(path, identifier, self.logging(), summary_logging, name)));
-        let result = {
-            let mut builder = Scope {
-                subgraph: Rc::clone(&subscope),
-                worker: scope.worker.clone(),
-                logging: scope.logging.clone(),
-                progress_logging,
-            };
-            func(&mut builder)
-        };
-        let subscope = Rc::try_unwrap(subscope)
-            .map_err(|_| ())
-            .expect(
-                "Cannot consume scope: an outstanding `Scope` clone is still alive. \
-                 This usually means a `Scope` was cloned and held past the scoped() / \
-                 region() / iterative() / dataflow() call that constructed it."
-            )
-            .into_inner()
-            .build(&mut scope);
-
-        scope.add_operator_with_indices(Box::new(subscope), index, identifier);
-
+        let (mut child, handle) = self.new_subscope::<T2>(name);
+        let result = func(&mut child);
+        let (subgraph, slot) = handle.build(child);
+        slot.install(Box::new(subgraph));
         result
     }
 
@@ -288,5 +327,121 @@ impl<T: Timestamp> std::fmt::Debug for Scope<T> {
             .field("name", &self.subgraph.borrow().name)
             .field("path", &self.subgraph.borrow().path)
             .finish_non_exhaustive()
+    }
+}
+
+/// A reservation for an operator at a specific position in a parent [`Scope`].
+///
+/// Returned by [`Scope::reserve_operator`] and [`SubscopeHandle::build`]. The
+/// slot carries the scope-local index and the worker-unique identifier of the
+/// operator-to-be. It must be consumed by [`OperatorSlot::install`] before
+/// being dropped; dropping an unfilled slot panics, since the parent scope
+/// expects the reserved index to eventually be filled.
+pub struct OperatorSlot<T: Timestamp> {
+    parent: Scope<T>,
+    index: usize,
+    identifier: usize,
+    installed: bool,
+}
+
+impl<T: Timestamp> OperatorSlot<T> {
+    /// The scope-local index reserved for the operator.
+    pub fn index(&self) -> usize { self.index }
+
+    /// The worker-unique identifier reserved for the operator (used for logging).
+    pub fn identifier(&self) -> usize { self.identifier }
+
+    /// Installs `operator` at this slot, consuming the slot.
+    pub fn install(mut self, operator: Box<dyn Operate<T>>) {
+        self.parent.add_operator_with_indices(operator, self.index, self.identifier);
+        self.installed = true;
+    }
+}
+
+impl<T: Timestamp> Drop for OperatorSlot<T> {
+    fn drop(&mut self) {
+        if !self.installed && !std::thread::panicking() {
+            panic!(
+                "OperatorSlot for index {} dropped without `install` being called. \
+                 Every reserved operator slot must be filled.",
+                self.index,
+            );
+        }
+    }
+}
+
+/// An in-progress nested subscope, returned by [`Scope::new_subscope`].
+///
+/// The handle owns the right to finalize the subscope: call [`SubscopeHandle::build`]
+/// with the (now-finished) child [`Scope<T2>`] to obtain the built [`Subgraph`] and an
+/// [`OperatorSlot`] at which to install it. Dropping a `SubscopeHandle` without calling
+/// `build` panics.
+pub struct SubscopeHandle<T: Timestamp, T2: Timestamp + Refines<T>> {
+    parent: Scope<T>,
+    builder: Option<Rc<RefCell<SubgraphBuilder<T2>>>>,
+    index: usize,
+    identifier: usize,
+}
+
+impl<T, T2> SubscopeHandle<T, T2>
+where
+    T: Timestamp,
+    T2: Timestamp + Refines<T>,
+{
+    /// The scope-local index reserved for this subscope.
+    pub fn index(&self) -> usize { self.index }
+
+    /// The worker-unique identifier reserved for this subscope (used for logging).
+    pub fn identifier(&self) -> usize { self.identifier }
+
+    /// Finalizes the subscope, returning the built [`Subgraph`] and an
+    /// [`OperatorSlot`] at which to install it (or any wrapper around it) in the
+    /// parent scope.
+    ///
+    /// Pass the (now-finished) child scope back to release its hold on the shared
+    /// subgraph builder. If a clone of the child has escaped past this call, the
+    /// underlying `Rc::try_unwrap` will fail with an actionable panic message.
+    pub fn build(mut self, child: Scope<T2>) -> (Subgraph<T, T2>, OperatorSlot<T>) {
+        // Drop the child scope's clone of the shared subgraph builder so the
+        // try_unwrap below succeeds.
+        drop(child);
+
+        let builder_rc = self.builder.take()
+            .expect("SubscopeHandle::build called more than once (internal invariant)");
+
+        let subgraph = Rc::try_unwrap(builder_rc)
+            .map_err(|_| ())
+            .expect(
+                "Cannot consume subscope: an outstanding `Scope` clone is still alive. \
+                 This usually means the child `Scope` was cloned and a clone was held \
+                 past the SubscopeHandle::build() call."
+            )
+            .into_inner()
+            .build(&mut self.parent);
+
+        let slot = OperatorSlot {
+            parent: self.parent.clone(),
+            index: self.index,
+            identifier: self.identifier,
+            installed: false,
+        };
+
+        (subgraph, slot)
+    }
+}
+
+impl<T, T2> Drop for SubscopeHandle<T, T2>
+where
+    T: Timestamp,
+    T2: Timestamp + Refines<T>,
+{
+    fn drop(&mut self) {
+        if self.builder.is_some() && !std::thread::panicking() {
+            panic!(
+                "SubscopeHandle for index {} dropped without `build` being called. \
+                 Every subscope must be built and installed.",
+                self.index,
+            );
+        }
     }
 }
