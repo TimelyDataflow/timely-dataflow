@@ -79,16 +79,16 @@ impl<T: Timestamp> Scope<T> {
     /// Begins a nested subscope with a refining timestamp `T2`.
     ///
     /// Returns a freshly-allocated child [`Scope<T2>`] for building the inner
-    /// dataflow, paired with a [`SubscopeHandle`] that owns the right to finalize
-    /// the subscope. After populating the child scope, pass it to
-    /// [`SubscopeHandle::build`] to obtain the built [`Subgraph`] and an
-    /// [`OperatorSlot`] at which to install it (or any wrapper around it).
+    /// dataflow, paired with an [`OperatorSlot`] reserved for the subgraph in
+    /// this (parent) scope. After populating the child scope, finalize it with
+    /// [`Scope::into_subgraph`] (passing the slot) and install the resulting
+    /// [`Subgraph`] (or any wrapper around it) into the slot.
     ///
     /// The standard `scoped` / `region` / `iterative` methods are thin wrappers
     /// around `new_subscope` that install the built subgraph directly. Direct
     /// callers of `new_subscope` may interpose, e.g. by wrapping the built
     /// subgraph in a decorator that intercepts scheduling.
-    pub fn new_subscope<T2>(&self, name: &str) -> (Scope<T2>, SubscopeHandle<T, T2>)
+    pub fn new_subscope<T2>(&self, name: &str) -> (Scope<T2>, OperatorSlot<T>)
     where
         T2: Timestamp + Refines<T>,
     {
@@ -101,20 +101,43 @@ impl<T: Timestamp> Scope<T> {
         let progress_logging = parent.logger_for(&format!("timely/progress/{type_name}"));
         let summary_logging  = parent.logger_for(&format!("timely/summary/{type_name}"));
 
-        let builder = Rc::new(RefCell::new(SubgraphBuilder::new_from(
-            path, identifier, self.logging(), summary_logging, name,
-        )));
-
         let child = Scope {
-            subgraph: Rc::clone(&builder),
+            subgraph: Rc::new(RefCell::new(SubgraphBuilder::new_from(
+                path, identifier, self.logging(), summary_logging, name,
+            ))),
             worker: parent.worker.clone(),
             logging: parent.logging.clone(),
             progress_logging,
         };
 
-        let handle = SubscopeHandle { slot, builder };
+        (child, slot)
+    }
 
-        (child, handle)
+    /// Finalizes this child subscope into a [`Subgraph`] registered against `parent`.
+    ///
+    /// `self` must be a child [`Scope<T>`] obtained from a `new_subscope` call on
+    /// `parent` (or a clone of it). After this returns, the caller is responsible
+    /// for installing the resulting `Subgraph` (or any wrapper around it) into the
+    /// `OperatorSlot` returned alongside this scope.
+    ///
+    /// This method should not be called other than on the last remaining instance
+    /// of the scope. If a clone of `self` exists, this code will panic as it tries
+    /// to unwrap a shared `Rc` reference.
+    pub fn build<TOuter>(self, parent: &mut Scope<TOuter>) -> Subgraph<TOuter, T>
+    where
+        TOuter: Timestamp,
+        T: Refines<TOuter>,
+    {
+        let Scope { subgraph: builder, .. } = self;
+        Rc::try_unwrap(builder)
+            .map_err(|_| ())
+            .expect(
+                "Cannot consume subscope: an outstanding `Scope` clone is still alive. \
+                 This usually means the child `Scope` was cloned and a clone was held \
+                 past the build() call."
+            )
+            .into_inner()
+            .build(parent)
     }
 
     /// Creates a dataflow subgraph.
@@ -147,9 +170,9 @@ impl<T: Timestamp> Scope<T> {
         T2: Timestamp + Refines<T>,
         F: FnOnce(&mut Scope<T2>) -> R,
     {
-        let (mut child, handle) = self.new_subscope::<T2>(name);
+        let (mut child, mut slot) = self.new_subscope::<T2>(name);
         let result = func(&mut child);
-        let (subgraph, slot) = handle.build(child);
+        let subgraph = child.build(slot.scope_mut());
         slot.install(Box::new(subgraph));
         result
     }
@@ -316,8 +339,9 @@ impl<T: Timestamp> OperatorSlot<T> {
         self.installed = true;
     }
 
-    /// Mutable access to the containing scope, for crate-internal subgraph construction.
-    pub(crate) fn scope_mut(&mut self) -> &mut Scope<T> { &mut self.scope }
+    /// Mutable access to the containing scope. Used to register a built [`Subgraph`]
+    /// before [`OperatorSlot::install`].
+    pub fn scope_mut(&mut self) -> &mut Scope<T> { &mut self.scope }
 }
 
 impl<T: Timestamp> Drop for OperatorSlot<T> {
@@ -332,60 +356,3 @@ impl<T: Timestamp> Drop for OperatorSlot<T> {
     }
 }
 
-/// An in-progress nested subscope, returned by [`Scope::new_subscope`].
-///
-/// The handle owns the right to finalize the subscope: call [`SubscopeHandle::build`]
-/// with the (now-finished) child [`Scope<T2>`] to obtain the built [`Subgraph`] and an
-/// [`OperatorSlot`] at which to install it. Dropping a `SubscopeHandle` without calling
-/// `build` causes the contained [`OperatorSlot`] to panic on drop, since the slot was
-/// reserved but never installed.
-pub struct SubscopeHandle<T: Timestamp, T2: Timestamp + Refines<T>> {
-    slot: OperatorSlot<T>,
-    builder: Rc<RefCell<SubgraphBuilder<T2>>>,
-}
-
-impl<T, T2> SubscopeHandle<T, T2>
-where
-    T: Timestamp,
-    T2: Timestamp + Refines<T>,
-{
-    /// The scope-local index reserved for this subscope.
-    pub fn index(&self) -> usize { self.slot.index() }
-
-    /// The worker-unique identifier reserved for this subscope (used for logging).
-    pub fn identifier(&self) -> usize { self.slot.identifier() }
-
-    /// Finalizes the subscope, returning the built [`Subgraph`] and an
-    /// [`OperatorSlot`] at which to install it (or any wrapper around it) in the
-    /// parent scope.
-    ///
-    /// Pass the (now-finished) child scope back to release its hold on the shared
-    /// subgraph builder. If a clone of the child has escaped past this call, the
-    /// underlying `Rc::try_unwrap` will fail with an actionable panic message.
-    pub fn build(self, child: Scope<T2>) -> (Subgraph<T, T2>, OperatorSlot<T>) {
-        assert!(
-            Rc::ptr_eq(&self.builder, &child.subgraph),
-            "SubscopeHandle::build called with a `Scope` that does not match the handle. \
-             The `Scope` passed to `build` must be the one returned alongside this handle \
-             from `new_subscope`."
-        );
-
-        // Drop the child scope's clone of the shared subgraph builder so the
-        // try_unwrap below succeeds.
-        drop(child);
-
-        let SubscopeHandle { mut slot, builder } = self;
-
-        let subgraph = Rc::try_unwrap(builder)
-            .map_err(|_| ())
-            .expect(
-                "Cannot consume subscope: an outstanding `Scope` clone is still alive. \
-                 This usually means the child `Scope` was cloned and a clone was held \
-                 past the SubscopeHandle::build() call."
-            )
-            .into_inner()
-            .build(slot.scope_mut());
-
-        (subgraph, slot)
-    }
-}
