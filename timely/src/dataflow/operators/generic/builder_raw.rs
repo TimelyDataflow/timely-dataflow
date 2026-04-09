@@ -16,7 +16,7 @@ use crate::progress::{Source, Target};
 use crate::progress::{Timestamp, Operate, operate::SharedProgress, Antichain};
 use crate::progress::operate::{FrontierInterest, Connectivity, PortConnectivity};
 use crate::Container;
-use crate::dataflow::{Stream, Scope};
+use crate::dataflow::{Stream, Scope, OperatorSlot};
 use crate::dataflow::channels::pushers::Tee;
 use crate::dataflow::channels::pact::ParallelizationContract;
 use crate::dataflow::operators::generic::operator_info::OperatorInfo;
@@ -54,8 +54,7 @@ impl OperatorShape {
 #[derive(Debug)]
 pub struct OperatorBuilder<T: Timestamp> {
     scope: Scope<T>,
-    index: usize,
-    global: usize,
+    slot: OperatorSlot<T>,
     address: Rc<[usize]>,    // path to the operator (ending with index).
     shape: OperatorShape,
     summary: Connectivity<<T as Timestamp>::Summary>,
@@ -66,15 +65,13 @@ impl<T: Timestamp> OperatorBuilder<T> {
     /// Allocates a new generic operator builder from its containing scope.
     pub fn new(name: String, mut scope: Scope<T>) -> Self {
 
-        let global = scope.new_identifier();
-        let index = scope.allocate_operator_index();
-        let address = scope.addr_for_child(index);
+        let slot = scope.reserve_operator();
+        let address = slot.addr();
         let peers = scope.peers();
 
         OperatorBuilder {
             scope,
-            index,
-            global,
+            slot,
             address,
             shape: OperatorShape::new(name, peers),
             summary: vec![],
@@ -82,10 +79,10 @@ impl<T: Timestamp> OperatorBuilder<T> {
     }
 
     /// The operator's scope-local index.
-    pub fn index(&self) -> usize { self.index }
+    pub fn index(&self) -> usize { self.slot.index() }
 
     /// The operator's worker-unique identifier.
-    pub fn global(&self) -> usize { self.global }
+    pub fn global(&self) -> usize { self.slot.identifier() }
 
     /// Return a reference to the operator's shape
     pub fn shape(&self) -> &OperatorShape { &self.shape }
@@ -113,7 +110,7 @@ impl<T: Timestamp> OperatorBuilder<T> {
         let channel_id = self.scope.new_identifier();
         let logging = self.scope.logging();
         let (sender, receiver) = pact.connect(&mut self.scope, channel_id, Rc::clone(&self.address), logging);
-        let target = Target::new(self.index, self.shape.inputs);
+        let target = Target::new(self.slot.index(), self.shape.inputs);
         stream.connect_to(target, sender, channel_id);
 
         self.shape.inputs += 1;
@@ -139,7 +136,7 @@ impl<T: Timestamp> OperatorBuilder<T> {
         let new_output = self.shape.outputs;
         self.shape.outputs += 1;
         let (target, registrar) = Tee::new();
-        let source = Source::new(self.index, new_output);
+        let source = Source::new(self.slot.index(), new_output);
         let stream = Stream::new(source, registrar, self.scope.clone());
 
         for (input, entry) in connection {
@@ -150,7 +147,7 @@ impl<T: Timestamp> OperatorBuilder<T> {
     }
 
     /// Creates an operator implementation from supplied logic constructor.
-    pub fn build<L>(mut self, logic: L)
+    pub fn build<L>(self, logic: L)
     where
         L: FnMut(&mut SharedProgress<T>)->bool+'static
     {
@@ -166,12 +163,12 @@ impl<T: Timestamp> OperatorBuilder<T> {
             summary: self.summary,
         };
 
-        self.scope.add_operator_with_indices(Box::new(operator), self.index, self.global);
+        self.slot.install(Box::new(operator));
     }
 
     /// Information describing the operator.
     pub fn operator_info(&self) -> OperatorInfo {
-        OperatorInfo::new(self.index, self.global, Rc::clone(&self.address))
+        OperatorInfo::new(self.index(), self.global(), Rc::clone(&self.address))
     }
 }
 

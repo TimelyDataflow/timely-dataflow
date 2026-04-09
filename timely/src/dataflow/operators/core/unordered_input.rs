@@ -90,21 +90,22 @@ impl<T: Timestamp> UnorderedInput<T> for Scope<T> {
         let counter = Output::new(counter, Rc::clone(&internal), 0);
         let peers = self.peers();
 
-        let index = self.allocate_operator_index();
-        let address = self.addr_for_child(index);
+        let slot = self.reserve_operator();
+        let index = slot.index();
+        let address = slot.addr();
 
         let cap = ActivateCapability::new(cap, Rc::clone(&address), self.activations());
 
         let helper = UnorderedHandle::new(counter, Rc::clone(&address), self.activations());
 
-        self.add_operator_with_index(Box::new(UnorderedOperator {
+        slot.install(Box::new(UnorderedOperator {
             name: "UnorderedInput".to_owned(),
             address,
             shared_progress: Rc::new(RefCell::new(SharedProgress::new(0, 1))),
             internal,
             produced,
             peers,
-        }), index);
+        }));
 
         ((helper, cap), Stream::new(Source::new(index, 0), registrar, self.clone()))
     }
