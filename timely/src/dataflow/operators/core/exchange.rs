@@ -1,10 +1,11 @@
 //! Exchange records between workers.
 
 use crate::Container;
+use crate::progress::Timestamp;
 use crate::container::{DrainContainer, SizableContainer, PushInto};
 use crate::dataflow::channels::pact::ExchangeCore;
 use crate::dataflow::operators::generic::operator::Operator;
-use crate::dataflow::{Scope, Stream};
+use crate::dataflow::Stream;
 
 /// Exchange records between workers.
 pub trait Exchange<C: DrainContainer> {
@@ -29,7 +30,7 @@ pub trait Exchange<C: DrainContainer> {
         for<'a> F: FnMut(&C::Item<'a>) -> u64 + 'static;
 }
 
-impl<G: Scope, C> Exchange<C> for Stream<G, C>
+impl<T: Timestamp, C> Exchange<C> for Stream<T, C>
 where
     C: Container
         + SizableContainer
@@ -38,7 +39,7 @@ where
         + crate::dataflow::channels::ContainerBytes
         + for<'a> PushInto<C::Item<'a>>,
 {
-    fn exchange<F>(self, route: F) -> Stream<G, C>
+    fn exchange<F>(self, route: F) -> Stream<T, C>
     where
         for<'a> F: FnMut(&C::Item<'a>) -> u64 + 'static,
     {

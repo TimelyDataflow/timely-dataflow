@@ -15,7 +15,7 @@
 //! ```
 
 pub use self::stream::{Stream, StreamVec};
-pub use self::scopes::Scope;
+pub use self::scope::Scope;
 
 pub use self::operators::core::input::Handle as InputHandle;
 pub use self::operators::vec::input::Handle as InputHandleVec;
@@ -23,5 +23,5 @@ pub use self::operators::probe::Handle as ProbeHandle;
 
 pub mod operators;
 pub mod channels;
-pub mod scopes;
+pub mod scope;
 pub mod stream;

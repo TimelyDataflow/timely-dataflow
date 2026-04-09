@@ -1,6 +1,7 @@
 //! Create new `Streams` connected to external inputs.
 
 use crate::container::CapacityContainerBuilder;
+use crate::progress::Timestamp;
 use crate::dataflow::{StreamVec, Scope};
 use crate::dataflow::operators::core::{Input as InputCore};
 
@@ -12,7 +13,10 @@ use crate::dataflow::operators::core::{Input as InputCore};
 // NOTE : Might be able to fix with another lifetime parameter, say 'c: 'a.
 
 /// Create a new `StreamVec` and `Handle` through which to supply input.
-pub trait Input : Scope {
+pub trait Input {
+    /// The timestamp at which this input scope operates.
+    type Timestamp: Timestamp;
+
     /// Create a new `StreamVec` and `Handle` through which to supply input.
     ///
     /// The `new_input` method returns a pair `(Handle, StreamVec)` where the `StreamVec` can be used
@@ -46,7 +50,7 @@ pub trait Input : Scope {
     ///     }
     /// });
     /// ```
-    fn new_input<D: Clone+'static>(&mut self) -> (Handle<<Self as Scope>::Timestamp, D>, StreamVec<Self, D>);
+    fn new_input<D: Clone+'static>(&mut self) -> (Handle<Self::Timestamp, D>, StreamVec<Self::Timestamp, D>);
 
     /// Create a new stream from a supplied interactive handle.
     ///
@@ -79,16 +83,17 @@ pub trait Input : Scope {
     ///     }
     /// });
     /// ```
-    fn input_from<D: Clone+'static>(&mut self, handle: &mut Handle<<Self as Scope>::Timestamp, D>) -> StreamVec<Self, D>;
+    fn input_from<D: Clone+'static>(&mut self, handle: &mut Handle<Self::Timestamp, D>) -> StreamVec<Self::Timestamp, D>;
 }
 
 use crate::order::TotalOrder;
-impl<G: Scope> Input for G where <G as Scope>::Timestamp: TotalOrder {
-    fn new_input<D: Clone+'static>(&mut self) -> (Handle<<G as Scope>::Timestamp, D>, StreamVec<G, D>) {
+impl<T: Timestamp + TotalOrder> Input for Scope<T> {
+    type Timestamp = T;
+    fn new_input<D: Clone+'static>(&mut self) -> (Handle<T, D>, StreamVec<T, D>) {
         InputCore::new_input(self)
     }
 
-    fn input_from<D: Clone+'static>(&mut self, handle: &mut Handle<<G as Scope>::Timestamp, D>) -> StreamVec<G, D> {
+    fn input_from<D: Clone+'static>(&mut self, handle: &mut Handle<T, D>) -> StreamVec<T, D> {
         InputCore::input_from(self, handle)
     }
 }

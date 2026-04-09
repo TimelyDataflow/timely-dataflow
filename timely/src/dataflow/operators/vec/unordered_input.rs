@@ -1,12 +1,13 @@
 //! Create new `Streams` connected to external inputs.
 
 use crate::container::CapacityContainerBuilder;
+use crate::progress::Timestamp;
 use crate::dataflow::operators::{ActivateCapability};
 use crate::dataflow::operators::core::{UnorderedInput as UnorderedInputCore, UnorderedHandle as UnorderedHandleCore};
 use crate::dataflow::{StreamVec, Scope};
 
 /// Create a new `StreamVec` and `Handle` through which to supply input.
-pub trait UnorderedInput<G: Scope> {
+pub trait UnorderedInput<T: Timestamp> {
     /// Create a new capability-based `StreamVec` and `Handle` through which to supply input. This
     /// input supports multiple open epochs (timestamps) at the same time.
     ///
@@ -60,12 +61,12 @@ pub trait UnorderedInput<G: Scope> {
     ///     assert_eq!(extract[i], (i, vec![i]));
     /// }
     /// ```
-    fn new_unordered_input<D: 'static>(&mut self) -> ((UnorderedHandle<G::Timestamp, D>, ActivateCapability<G::Timestamp>), StreamVec<G, D>);
+    fn new_unordered_input<D: 'static>(&mut self) -> ((UnorderedHandle<T, D>, ActivateCapability<T>), StreamVec<T, D>);
 }
 
 
-impl<G: Scope> UnorderedInput<G> for G {
-    fn new_unordered_input<D: 'static>(&mut self) -> ((UnorderedHandle<G::Timestamp, D>, ActivateCapability<G::Timestamp>), StreamVec<G, D>) {
+impl<T: Timestamp> UnorderedInput<T> for Scope<T> {
+    fn new_unordered_input<D: 'static>(&mut self) -> ((UnorderedHandle<T, D>, ActivateCapability<T>), StreamVec<T, D>) {
         UnorderedInputCore::new_unordered_input(self)
     }
 }

@@ -4,30 +4,29 @@
 //! operator output. Extension methods on the `Stream` type provide the appearance of higher-level
 //! declarative programming, while constructing a dataflow graph underneath.
 
-use crate::progress::{Source, Target};
+use crate::progress::{Source, Target, Timestamp};
 
 use crate::communication::Push;
 use crate::dataflow::Scope;
 use crate::dataflow::channels::pushers::tee::TeeHelper;
 use crate::dataflow::channels::Message;
+use crate::worker::AsWorker;
 use std::fmt::{self, Debug};
 
-// use dataflow::scopes::root::loggers::CHANNELS_Q;
-
-/// Abstraction of a stream of `C: Container` records timestamped with `S::Timestamp`.
+/// Abstraction of a stream of `C: Container` records timestamped with `T`.
 ///
 /// Internally `Stream` maintains a list of data recipients who should be presented with data
 /// produced by the source of the stream.
-pub struct Stream<S: Scope, C> {
+pub struct Stream<T: Timestamp, C> {
     /// The progress identifier of the stream's data source.
     name: Source,
     /// The `Scope` containing the stream.
-    scope: S,
+    scope: Scope<T>,
     /// Maintains a list of Push<Message<T, C>> interested in the stream's output.
-    ports: TeeHelper<S::Timestamp, C>,
+    ports: TeeHelper<T, C>,
 }
 
-impl<S: Scope, C: Clone+'static> Clone for Stream<S, C> {
+impl<T: Timestamp, C: Clone+'static> Clone for Stream<T, C> {
     fn clone(&self) -> Self {
         Self {
             name: self.name,
@@ -44,16 +43,16 @@ impl<S: Scope, C: Clone+'static> Clone for Stream<S, C> {
 }
 
 /// A stream batching data in owning vectors.
-pub type StreamVec<S, D> = Stream<S, Vec<D>>;
+pub type StreamVec<T, D> = Stream<T, Vec<D>>;
 
-impl<S: Scope, C> Stream<S, C> {
+impl<T: Timestamp, C> Stream<T, C> {
     /// Connects the stream to a destination.
     ///
     /// The destination is described both by a `Target`, for progress tracking information, and a `P: Push` where the
     /// records should actually be sent. The identifier is unique to the edge and is used only for logging purposes.
-    pub fn connect_to<P: Push<Message<S::Timestamp, C>>+'static>(self, target: Target, pusher: P, identifier: usize) where C: 'static {
+    pub fn connect_to<P: Push<Message<T, C>>+'static>(self, target: Target, pusher: P, identifier: usize) where C: 'static {
 
-        let mut logging = self.scope().logging();
+        let mut logging: Option<crate::logging::TimelyLogger> = AsWorker::logging(&self.scope());
         logging.as_mut().map(|l| l.log(crate::logging::ChannelsEvent {
             id: identifier,
             scope_addr: self.scope.addr().to_vec(),
@@ -66,13 +65,13 @@ impl<S: Scope, C> Stream<S, C> {
         self.ports.add_pusher(pusher);
     }
     /// Allocates a `Stream` from a supplied `Source` name and rendezvous point.
-    pub fn new(source: Source, output: TeeHelper<S::Timestamp, C>, scope: S) -> Self {
+    pub fn new(source: Source, output: TeeHelper<T, C>, scope: Scope<T>) -> Self {
         Self { name: source, ports: output, scope }
     }
     /// The name of the stream's source operator.
     pub fn name(&self) -> &Source { &self.name }
     /// The scope immediately containing the stream.
-    pub fn scope(&self) -> S { self.scope.clone() }
+    pub fn scope(&self) -> Scope<T> { self.scope.clone() }
 
     /// Allows the assertion of a container type, for the benefit of type inference.
     ///
@@ -89,23 +88,20 @@ impl<S: Scope, C> Stream<S, C> {
     ///            .inspect(|x| println!("seen: {:?}", x));
     /// });
     /// ```
-    pub fn container<C2>(self) -> Stream<S, C2> where Self: AsStream<S, C2> { self.as_stream() }
+    pub fn container<C2>(self) -> Stream<T, C2> where Self: AsStream<T, C2> { self.as_stream() }
 }
 
 /// A type that can be translated to a [Stream].
-pub trait AsStream<S: Scope, C> {
+pub trait AsStream<T: Timestamp, C> {
     /// Translate `self` to a [Stream].
-    fn as_stream(self) -> Stream<S, C>;
+    fn as_stream(self) -> Stream<T, C>;
 }
 
-impl<S: Scope, C> AsStream<S, C> for Stream<S, C> {
+impl<T: Timestamp, C> AsStream<T, C> for Stream<T, C> {
     fn as_stream(self) -> Self { self }
 }
 
-impl<S, C> Debug for Stream<S, C>
-where
-    S: Scope,
-{
+impl<T: Timestamp, C> Debug for Stream<T, C> {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         f.debug_struct("Stream")
             .field("source", &self.name)

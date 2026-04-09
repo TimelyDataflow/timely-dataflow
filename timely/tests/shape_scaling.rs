@@ -64,7 +64,6 @@ fn subgraph_scaling(scale: u64) {
                 .input_from(&mut input)
                 .partition(scale, |()| (0, ()));
 
-            use timely::dataflow::Scope;
             let _outputs = scope.region(|inner| {
                 use timely::dataflow::operators::{Enter, Leave};
                 parts.into_iter().map(|part| part.enter(inner).leave(scope)).collect::<Vec<_>>()

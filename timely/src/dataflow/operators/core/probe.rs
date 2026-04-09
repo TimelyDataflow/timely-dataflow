@@ -11,12 +11,12 @@ use crate::dataflow::channels::pullers::Counter as PullCounter;
 use crate::dataflow::operators::generic::builder_raw::OperatorBuilder;
 
 
-use crate::dataflow::{Stream, Scope};
+use crate::dataflow::Stream;
 use crate::Container;
 use crate::dataflow::channels::Message;
 
 /// Monitors progress at a `Stream`.
-pub trait Probe<G: Scope, C: Container> {
+pub trait Probe<T: Timestamp, C: Container> {
     /// Constructs a progress probe which indicates which timestamps have elapsed at the operator.
     ///
     /// Returns a tuple of a probe handle and the input stream.
@@ -46,7 +46,7 @@ pub trait Probe<G: Scope, C: Container> {
     ///     }
     /// }).unwrap();
     /// ```
-    fn probe(self) -> (Handle<G::Timestamp>, Self);
+    fn probe(self) -> (Handle<T>, Self);
 
     /// Inserts a progress probe in a stream.
     ///
@@ -78,18 +78,18 @@ pub trait Probe<G: Scope, C: Container> {
     ///     }
     /// }).unwrap();
     /// ```
-    fn probe_with(self, handle: &Handle<G::Timestamp>) -> Stream<G, C>;
+    fn probe_with(self, handle: &Handle<T>) -> Stream<T, C>;
 }
 
-impl<G: Scope, C: Container> Probe<G, C> for Stream<G, C> {
-    fn probe(self) -> (Handle<G::Timestamp>, Self) {
+impl<T: Timestamp, C: Container> Probe<T, C> for Stream<T, C> {
+    fn probe(self) -> (Handle<T>, Self) {
 
         // the frontier is shared state; scope updates, handle reads.
-        let handle = Handle::<G::Timestamp>::new();
+        let handle = Handle::<T>::new();
         let stream = self.probe_with(&handle);
         (handle, stream)
     }
-    fn probe_with(self, handle: &Handle<G::Timestamp>) -> Stream<G, C> {
+    fn probe_with(self, handle: &Handle<T>) -> Stream<T, C> {
 
         let mut builder = OperatorBuilder::new("Probe".to_owned(), self.scope());
         let mut input = PullCounter::new(builder.new_input(self, Pipeline));
@@ -115,7 +115,7 @@ impl<G: Scope, C: Container> Probe<G, C> for Stream<G, C> {
                 // At initialization, we have a few tasks.
                 if !started {
                     // We must discard the capability held by `OpereratorCore`.
-                    progress.internals[0].update(G::Timestamp::minimum(), -1);
+                    progress.internals[0].update(T::minimum(), -1);
                     // We must retract the conservative hold in the shared handle.
                     if let Some(shared_frontier) = shared_frontier.upgrade() {
                         let mut borrow = shared_frontier.borrow_mut();

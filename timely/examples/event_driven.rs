@@ -1,4 +1,3 @@
-use timely::dataflow::Scope;
 use timely::dataflow::operators::{Input, Probe, Enter, Leave};
 use timely::dataflow::operators::vec::Map;
 

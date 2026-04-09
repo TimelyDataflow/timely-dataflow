@@ -1,6 +1,7 @@
 //! Conversion to the `StreamVec` type from iterators.
 
 use crate::dataflow::{StreamVec, Scope};
+use crate::progress::Timestamp;
 use crate::dataflow::operators::core::{ToStream as ToStreamCore};
 
 /// Converts to a timely `StreamVec`.
@@ -21,11 +22,11 @@ pub trait ToStream<D: 'static> {
     ///
     /// assert_eq!(data1.extract(), data2.extract());
     /// ```
-    fn to_stream<S: Scope>(self, scope: &mut S) -> StreamVec<S, D>;
+    fn to_stream<T: Timestamp>(self, scope: &mut Scope<T>) -> StreamVec<T, D>;
 }
 
 impl<I: IntoIterator+'static> ToStream<I::Item> for I {
-    fn to_stream<S: Scope>(self, scope: &mut S) -> StreamVec<S, I::Item> {
+    fn to_stream<T: Timestamp>(self, scope: &mut Scope<T>) -> StreamVec<T, I::Item> {
         ToStreamCore::to_stream(self, scope)
     }
 }

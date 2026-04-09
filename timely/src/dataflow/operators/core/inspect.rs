@@ -1,12 +1,13 @@
 //! Extension trait and implementation for observing and action on streamed data.
 
 use crate::Container;
+use crate::progress::Timestamp;
 use crate::dataflow::channels::pact::Pipeline;
-use crate::dataflow::{Scope, Stream};
+use crate::dataflow::Stream;
 use crate::dataflow::operators::generic::Operator;
 
 /// Methods to inspect records and batches of records on a stream.
-pub trait Inspect<G: Scope, C>: InspectCore<G, C> + Sized
+pub trait Inspect<T: Timestamp, C>: InspectCore<T, C> + Sized
 where
     for<'a> &'a C: IntoIterator,
 {
@@ -45,7 +46,7 @@ where
     /// ```
     fn inspect_time<F>(self, mut func: F) -> Self
     where
-        F: for<'a> FnMut(&G::Timestamp, <&'a C as IntoIterator>::Item) + 'static,
+        F: for<'a> FnMut(&T, <&'a C as IntoIterator>::Item) + 'static,
     {
         self.inspect_batch(move |time, data| {
             for datum in data.into_iter() {
@@ -66,7 +67,7 @@ where
     ///            .inspect_batch(|t,xs| println!("seen at: {:?}\t{:?} records", t, xs.len()));
     /// });
     /// ```
-    fn inspect_batch(self, mut func: impl FnMut(&G::Timestamp, &C)+'static) -> Self {
+    fn inspect_batch(self, mut func: impl FnMut(&T, &C)+'static) -> Self {
         self.inspect_core(move |event| {
             if let Ok((time, data)) = event {
                 func(time, data);
@@ -94,20 +95,20 @@ where
     ///             });
     /// });
     /// ```
-    fn inspect_core<F>(self, func: F) -> Self where F: FnMut(Result<(&G::Timestamp, &C), &[G::Timestamp]>)+'static;
+    fn inspect_core<F>(self, func: F) -> Self where F: FnMut(Result<(&T, &C), &[T]>)+'static;
 }
 
-impl<G: Scope, C: Container> Inspect<G, C> for Stream<G, C>
+impl<T: Timestamp, C: Container> Inspect<T, C> for Stream<T, C>
 where
     for<'a> &'a C: IntoIterator,
 {
-    fn inspect_core<F>(self, func: F) -> Self where F: FnMut(Result<(&G::Timestamp, &C), &[G::Timestamp]>) + 'static {
+    fn inspect_core<F>(self, func: F) -> Self where F: FnMut(Result<(&T, &C), &[T]>) + 'static {
         self.inspect_container(func)
     }
 }
 
 /// Inspect containers
-pub trait InspectCore<G: Scope, C> {
+pub trait InspectCore<T: Timestamp, C> {
     /// Runs a supplied closure on each observed container, and each frontier advancement.
     ///
     /// Rust's `Result` type is used to distinguish the events, with `Ok` for time and data,
@@ -128,16 +129,15 @@ pub trait InspectCore<G: Scope, C> {
     ///             });
     /// });
     /// ```
-    fn inspect_container<F>(self, func: F) -> Self where F: FnMut(Result<(&G::Timestamp, &C), &[G::Timestamp]>)+'static;
+    fn inspect_container<F>(self, func: F) -> Self where F: FnMut(Result<(&T, &C), &[T]>)+'static;
 }
 
-impl<G: Scope, C: Container> InspectCore<G, C> for Stream<G, C> {
+impl<T: Timestamp, C: Container> InspectCore<T, C> for Stream<T, C> {
 
     fn inspect_container<F>(self, mut func: F) -> Self
-        where F: FnMut(Result<(&G::Timestamp, &C), &[G::Timestamp]>)+'static
+        where F: FnMut(Result<(&T, &C), &[T]>)+'static
     {
-        use crate::progress::timestamp::Timestamp;
-        let mut frontier = crate::progress::Antichain::from_elem(G::Timestamp::minimum());
+        let mut frontier = crate::progress::Antichain::from_elem(T::minimum());
         self.unary_frontier(Pipeline, "InspectBatch", move |_,_| move |(input, chain), output| {
             if chain.frontier() != frontier.borrow() {
                 frontier.clear();

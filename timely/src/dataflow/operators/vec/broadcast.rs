@@ -1,7 +1,8 @@
 //! Broadcast records to all workers.
 
 use crate::ExchangeData;
-use crate::dataflow::{StreamVec, Scope};
+use crate::progress::Timestamp;
+use crate::dataflow::StreamVec;
 use crate::dataflow::operators::{vec::Map, Exchange};
 
 /// Broadcast records to all workers.
@@ -21,8 +22,8 @@ pub trait Broadcast<D: ExchangeData> {
     fn broadcast(self) -> Self;
 }
 
-impl<G: Scope, D: ExchangeData + Clone> Broadcast<D> for StreamVec<G, D> {
-    fn broadcast(self) -> StreamVec<G, D> {
+impl<T: Timestamp, D: ExchangeData + Clone> Broadcast<D> for StreamVec<T, D> {
+    fn broadcast(self) -> StreamVec<T, D> {
 
         // NOTE: Simplified implementation due to underlying motion
         // in timely dataflow internals. Optimize once they have

@@ -4,6 +4,7 @@ use std::rc::Rc;
 use std::cell::RefCell;
 
 use crate::ContainerBuilder;
+use crate::scheduling::Scheduler;
 
 use crate::scheduling::{Schedule, ActivateOnDrop};
 
@@ -19,7 +20,7 @@ use crate::dataflow::{Scope, Stream};
 use crate::scheduling::Activations;
 
 /// Create a new `Stream` and `Handle` through which to supply input.
-pub trait UnorderedInput<G: Scope> {
+pub trait UnorderedInput<T: Timestamp> {
     /// Create a new capability-based [Stream] and [UnorderedHandle] through which to supply input. This
     /// input supports multiple open epochs (timestamps) at the same time.
     ///
@@ -74,16 +75,16 @@ pub trait UnorderedInput<G: Scope> {
     ///     assert_eq!(extract[i], (i, vec![i]));
     /// }
     /// ```
-    fn new_unordered_input<CB: ContainerBuilder>(&mut self) -> ((UnorderedHandle<G::Timestamp, CB>, ActivateCapability<G::Timestamp>), Stream<G, CB::Container>);
+    fn new_unordered_input<CB: ContainerBuilder>(&mut self) -> ((UnorderedHandle<T, CB>, ActivateCapability<T>), Stream<T, CB::Container>);
 }
 
-impl<G: Scope> UnorderedInput<G> for G {
-    fn new_unordered_input<CB: ContainerBuilder>(&mut self) -> ((UnorderedHandle<G::Timestamp, CB>, ActivateCapability<G::Timestamp>), Stream<G, CB::Container>) {
+impl<T: Timestamp> UnorderedInput<T> for Scope<T> {
+    fn new_unordered_input<CB: ContainerBuilder>(&mut self) -> ((UnorderedHandle<T, CB>, ActivateCapability<T>), Stream<T, CB::Container>) {
 
-        let (output, registrar) = Tee::<G::Timestamp, CB::Container>::new();
+        let (output, registrar) = Tee::<T, CB::Container>::new();
         let internal = Rc::new(RefCell::new(ChangeBatch::new()));
         // let produced = Rc::new(RefCell::new(ChangeBatch::new()));
-        let cap = Capability::new(G::Timestamp::minimum(), Rc::clone(&internal));
+        let cap = Capability::new(T::minimum(), Rc::clone(&internal));
         let counter = Counter::new(output);
         let produced = Rc::clone(counter.produced());
         let counter = Output::new(counter, Rc::clone(&internal), 0);

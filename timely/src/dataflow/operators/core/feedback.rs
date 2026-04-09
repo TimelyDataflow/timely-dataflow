@@ -3,14 +3,14 @@
 use crate::Container;
 use crate::dataflow::channels::pact::Pipeline;
 use crate::dataflow::operators::generic::builder_rc::OperatorBuilder;
-use crate::dataflow::scopes::child::Iterative;
+use crate::dataflow::scope::Iterative;
 use crate::dataflow::{Stream, Scope};
 use crate::order::Product;
 use crate::progress::frontier::Antichain;
 use crate::progress::{Timestamp, PathSummary};
 
 /// Creates a `Stream` and a `Handle` to later bind the source of that `Stream`.
-pub trait Feedback<G: Scope> {
+pub trait Feedback<T: Timestamp> {
 
     /// Creates a [Stream] and a [Handle] to later bind the source of that `Stream`.
     ///
@@ -35,7 +35,7 @@ pub trait Feedback<G: Scope> {
     ///            .connect_loop(handle);
     /// });
     /// ```
-    fn feedback<C: Container>(&mut self, summary: <G::Timestamp as Timestamp>::Summary) -> (Handle<G, C>, Stream<G, C>);
+    fn feedback<C: Container>(&mut self, summary: <T as Timestamp>::Summary) -> (Handle<T, C>, Stream<T, C>);
 }
 
 /// Creates a `Stream` and a `Handle` to later bind the source of that `Stream`.
@@ -65,12 +65,12 @@ pub trait LoopVariable<TOuter: Timestamp, TInner: Timestamp> {
     ///     });
     /// });
     /// ```
-    fn loop_variable<C: Container>(&mut self, summary: TInner::Summary) -> (Handle<Iterative<TOuter, TInner>, C>, Stream<Iterative<TOuter, TInner>, C>);
+    fn loop_variable<C: Container>(&mut self, summary: TInner::Summary) -> (Handle<Product<TOuter, TInner>, C>, Stream<Product<TOuter, TInner>, C>);
 }
 
-impl<G: Scope> Feedback<G> for G {
+impl<T: Timestamp> Feedback<T> for Scope<T> {
 
-    fn feedback<C: Container>(&mut self, summary: <G::Timestamp as Timestamp>::Summary) -> (Handle<G, C>, Stream<G, C>) {
+    fn feedback<C: Container>(&mut self, summary: <T as Timestamp>::Summary) -> (Handle<T, C>, Stream<T, C>) {
 
         let mut builder = OperatorBuilder::new("Feedback".to_owned(), self.clone());
         let (output, stream) = builder.new_output();
@@ -80,13 +80,13 @@ impl<G: Scope> Feedback<G> for G {
 }
 
 impl<TOuter: Timestamp, TInner: Timestamp> LoopVariable<TOuter, TInner> for Iterative<TOuter, TInner> {
-    fn loop_variable<C: Container>(&mut self, summary: TInner::Summary) -> (Handle<Iterative<TOuter, TInner>, C>, Stream<Iterative<TOuter, TInner>, C>) {
+    fn loop_variable<C: Container>(&mut self, summary: TInner::Summary) -> (Handle<Product<TOuter, TInner>, C>, Stream<Product<TOuter, TInner>, C>) {
         self.feedback(Product::new(Default::default(), summary))
     }
 }
 
 /// Connect a `Stream` to the input of a loop variable.
-pub trait ConnectLoop<G: Scope, C: Container> {
+pub trait ConnectLoop<T: Timestamp, C: Container> {
     /// Connect a `Stream` to be the input of a loop variable.
     ///
     /// # Examples
@@ -106,11 +106,11 @@ pub trait ConnectLoop<G: Scope, C: Container> {
     ///            .connect_loop(handle);
     /// });
     /// ```
-    fn connect_loop(self, handle: Handle<G, C>);
+    fn connect_loop(self, handle: Handle<T, C>);
 }
 
-impl<G: Scope, C: Container> ConnectLoop<G, C> for Stream<G, C> {
-    fn connect_loop(self, handle: Handle<G, C>) {
+impl<T: Timestamp, C: Container> ConnectLoop<T, C> for Stream<T, C> {
+    fn connect_loop(self, handle: Handle<T, C>) {
 
         let mut builder = handle.builder;
         let summary = handle.summary;
@@ -133,8 +133,8 @@ impl<G: Scope, C: Container> ConnectLoop<G, C> for Stream<G, C> {
 
 /// A handle used to bind the source of a loop variable.
 #[derive(Debug)]
-pub struct Handle<G: Scope, C: Container> {
-    builder: OperatorBuilder<G>,
-    summary: <G::Timestamp as Timestamp>::Summary,
-    output: crate::dataflow::channels::pushers::Output<G::Timestamp, C>,
+pub struct Handle<T: Timestamp, C: Container> {
+    builder: OperatorBuilder<T>,
+    summary: <T as Timestamp>::Summary,
+    output: crate::dataflow::channels::pushers::Output<T, C>,
 }

@@ -1,13 +1,14 @@
 //! Shared containers
 
 use crate::dataflow::channels::pact::Pipeline;
+use crate::progress::Timestamp;
 use crate::dataflow::operators::Operator;
-use crate::dataflow::{Scope, Stream};
+use crate::dataflow::Stream;
 use crate::Container;
 use std::rc::Rc;
 
 /// Convert a stream into a stream of shared containers
-pub trait SharedStream<S: Scope, C> {
+pub trait SharedStream<T: Timestamp, C> {
     /// Convert a stream into a stream of shared data
     ///
     /// # Examples
@@ -22,11 +23,11 @@ pub trait SharedStream<S: Scope, C> {
     ///            .inspect_container(|x| println!("seen: {:?}", x));
     /// });
     /// ```
-    fn shared(self) -> Stream<S, Rc<C>>;
+    fn shared(self) -> Stream<T, Rc<C>>;
 }
 
-impl<S: Scope, C: Container> SharedStream<S, C> for Stream<S, C> {
-    fn shared(self) -> Stream<S, Rc<C>> {
+impl<T: Timestamp, C: Container> SharedStream<T, C> for Stream<T, C> {
+    fn shared(self) -> Stream<T, Rc<C>> {
         self.unary(Pipeline, "Shared", move |_, _| {
             move |input, output| {
                 input.for_each_time(|time, data| {

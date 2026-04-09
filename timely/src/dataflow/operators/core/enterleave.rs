@@ -6,7 +6,7 @@
 //!
 //! # Examples
 //! ```
-//! use timely::dataflow::scopes::Scope;
+//! use timely::dataflow::scope::Scope;
 //! use timely::dataflow::operators::{Enter, Leave, ToStream, Inspect};
 //!
 //! timely::example(|outer| {
@@ -32,10 +32,9 @@ use crate::dataflow::channels::pushers::{Counter, Tee};
 use crate::dataflow::channels::Message;
 use crate::worker::AsWorker;
 use crate::dataflow::{Stream, Scope};
-use crate::dataflow::scopes::Child;
 
 /// Extension trait to move a `Stream` into a child of its current `Scope`.
-pub trait Enter<G: Scope, T: Timestamp+Refines<G::Timestamp>, C> {
+pub trait Enter<TOuter: Timestamp, TInner: Timestamp+Refines<TOuter>, C> {
     /// Moves the `Stream` argument into a child of its current `Scope`.
     ///
     /// The destination scope must be a child of the stream's scope.
@@ -43,7 +42,6 @@ pub trait Enter<G: Scope, T: Timestamp+Refines<G::Timestamp>, C> {
     ///
     /// # Examples
     /// ```
-    /// use timely::dataflow::scopes::Scope;
     /// use timely::dataflow::operators::{Enter, Leave, ToStream};
     ///
     /// timely::example(|outer| {
@@ -53,11 +51,16 @@ pub trait Enter<G: Scope, T: Timestamp+Refines<G::Timestamp>, C> {
     ///     });
     /// });
     /// ```
-    fn enter(self, inner: &Child<T>) -> Stream<Child<T>, C>;
+    fn enter(self, inner: &Scope<TInner>) -> Stream<TInner, C>;
 }
 
-impl<G: Scope, T: Timestamp+Refines<G::Timestamp>, C: Container> Enter<G, T, C> for Stream<G, C> {
-    fn enter(self, inner: &Child<T>) -> Stream<Child<T>, C> {
+impl<TOuter, TInner, C> Enter<TOuter, TInner, C> for Stream<TOuter, C>
+where
+    TOuter: Timestamp,
+    TInner: Timestamp + Refines<TOuter>,
+    C: Container,
+{
+    fn enter(self, inner: &Scope<TInner>) -> Stream<TInner, C> {
 
         use crate::scheduling::Scheduler;
 
@@ -73,7 +76,7 @@ impl<G: Scope, T: Timestamp+Refines<G::Timestamp>, C: Container> Enter<G, T, C> 
             outer_addr,
         );
 
-        let (targets, registrar) = Tee::<T, C>::new();
+        let (targets, registrar) = Tee::<TInner, C>::new();
         let ingress = IngressNub {
             targets: Counter::new(targets),
             phantom: PhantomData,
@@ -100,7 +103,7 @@ impl<G: Scope, T: Timestamp+Refines<G::Timestamp>, C: Container> Enter<G, T, C> 
 }
 
 /// Extension trait to move a `Stream` to the parent of its current `Scope`.
-pub trait Leave<G: Scope, C> {
+pub trait Leave<TOuter: Timestamp, C> {
     /// Moves a `Stream` to the parent of its current `Scope`.
     ///
     /// The parent scope must be supplied as an argument.
@@ -110,7 +113,6 @@ pub trait Leave<G: Scope, C> {
     ///
     /// # Examples
     /// ```
-    /// use timely::dataflow::scopes::Scope;
     /// use timely::dataflow::operators::{Enter, Leave, ToStream};
     ///
     /// timely::example(|outer| {
@@ -120,11 +122,16 @@ pub trait Leave<G: Scope, C> {
     ///     });
     /// });
     /// ```
-    fn leave(self, outer: &G) -> Stream<G, C>;
+    fn leave(self, outer: &Scope<TOuter>) -> Stream<TOuter, C>;
 }
 
-impl<G: Scope, C: Container, T: Timestamp+Refines<G::Timestamp>> Leave<G, C> for Stream<Child<T>, C> {
-    fn leave(self, outer: &G) -> Stream<G, C> {
+impl<TOuter, TInner, C> Leave<TOuter, C> for Stream<TInner, C>
+where
+    TOuter: Timestamp,
+    TInner: Timestamp + Refines<TOuter>,
+    C: Container,
+{
+    fn leave(self, outer: &Scope<TOuter>) -> Stream<TOuter, C> {
 
         let scope = self.scope();
 
@@ -142,7 +149,7 @@ impl<G: Scope, C: Container, T: Timestamp+Refines<G::Timestamp>> Leave<G, C> for
 
         let output = scope.subgraph.borrow_mut().new_output();
         let target = Target::new(0, output.port);
-        let (targets, registrar) = Tee::<G::Timestamp, C>::new();
+        let (targets, registrar) = Tee::<TOuter, C>::new();
         let egress = EgressNub { targets, phantom: PhantomData };
         let channel_id = scope.clone().new_identifier();
 
@@ -277,7 +284,6 @@ mod test {
         use crate::dataflow::{InputHandle, ProbeHandle};
         use crate::dataflow::operators::{vec::Input, Inspect, Probe};
 
-        use crate::dataflow::Scope;
         use crate::dataflow::operators::{Enter, Leave};
 
         // initializes and runs a timely dataflow.

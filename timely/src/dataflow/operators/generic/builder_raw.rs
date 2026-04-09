@@ -9,6 +9,8 @@ use std::rc::Rc;
 use std::cell::RefCell;
 
 use crate::scheduling::{Schedule, Activations};
+use crate::worker::AsWorker;
+use crate::scheduling::Scheduler;
 
 use crate::progress::{Source, Target};
 use crate::progress::{Timestamp, Operate, operate::SharedProgress, Antichain};
@@ -50,19 +52,19 @@ impl OperatorShape {
 
 /// Builds operators with generic shape.
 #[derive(Debug)]
-pub struct OperatorBuilder<G: Scope> {
-    scope: G,
+pub struct OperatorBuilder<T: Timestamp> {
+    scope: Scope<T>,
     index: usize,
     global: usize,
     address: Rc<[usize]>,    // path to the operator (ending with index).
     shape: OperatorShape,
-    summary: Connectivity<<G::Timestamp as Timestamp>::Summary>,
+    summary: Connectivity<<T as Timestamp>::Summary>,
 }
 
-impl<G: Scope> OperatorBuilder<G> {
+impl<T: Timestamp> OperatorBuilder<T> {
 
     /// Allocates a new generic operator builder from its containing scope.
-    pub fn new(name: String, mut scope: G) -> Self {
+    pub fn new(name: String, mut scope: Scope<T>) -> Self {
 
         let global = scope.new_identifier();
         let index = scope.allocate_operator_index();
@@ -94,19 +96,19 @@ impl<G: Scope> OperatorBuilder<G> {
     }
 
     /// Adds a new input to a generic operator builder, returning the `Pull` implementor to use.
-    pub fn new_input<C: Container, P>(&mut self, stream: Stream<G, C>, pact: P) -> P::Puller
+    pub fn new_input<C: Container, P>(&mut self, stream: Stream<T, C>, pact: P) -> P::Puller
     where
-        P: ParallelizationContract<G::Timestamp, C>
+        P: ParallelizationContract<T, C>
     {
         let connection = (0 .. self.shape.outputs).map(|o| (o, Antichain::from_elem(Default::default())));
         self.new_input_connection(stream, pact, connection)
     }
 
     /// Adds a new input to a generic operator builder, returning the `Pull` implementor to use.
-    pub fn new_input_connection<C: Container, P, I>(&mut self, stream: Stream<G, C>, pact: P, connection: I) -> P::Puller
+    pub fn new_input_connection<C: Container, P, I>(&mut self, stream: Stream<T, C>, pact: P, connection: I) -> P::Puller
     where
-        P: ParallelizationContract<G::Timestamp, C>,
-        I: IntoIterator<Item = (usize, Antichain<<G::Timestamp as Timestamp>::Summary>)>,
+        P: ParallelizationContract<T, C>,
+        I: IntoIterator<Item = (usize, Antichain<<T as Timestamp>::Summary>)>,
     {
         let channel_id = self.scope.new_identifier();
         let logging = self.scope.logging();
@@ -124,15 +126,15 @@ impl<G: Scope> OperatorBuilder<G> {
     }
 
     /// Adds a new output to a generic operator builder, returning the `Push` implementor to use.
-    pub fn new_output<C: Container>(&mut self) -> (Tee<G::Timestamp, C>, Stream<G, C>) {
+    pub fn new_output<C: Container>(&mut self) -> (Tee<T, C>, Stream<T, C>) {
         let connection = (0 .. self.shape.inputs).map(|i| (i, Antichain::from_elem(Default::default())));
         self.new_output_connection(connection)
     }
 
     /// Adds a new output to a generic operator builder, returning the `Push` implementor to use.
-    pub fn new_output_connection<C: Container, I>(&mut self, connection: I) -> (Tee<G::Timestamp, C>, Stream<G, C>)
+    pub fn new_output_connection<C: Container, I>(&mut self, connection: I) -> (Tee<T, C>, Stream<T, C>)
     where
-        I: IntoIterator<Item = (usize, Antichain<<G::Timestamp as Timestamp>::Summary>)>,
+        I: IntoIterator<Item = (usize, Antichain<<T as Timestamp>::Summary>)>,
     {
         let new_output = self.shape.outputs;
         self.shape.outputs += 1;
@@ -150,7 +152,7 @@ impl<G: Scope> OperatorBuilder<G> {
     /// Creates an operator implementation from supplied logic constructor.
     pub fn build<L>(mut self, logic: L)
     where
-        L: FnMut(&mut SharedProgress<G::Timestamp>)->bool+'static
+        L: FnMut(&mut SharedProgress<T>)->bool+'static
     {
         let inputs = self.shape.inputs;
         let outputs = self.shape.outputs;
