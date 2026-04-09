@@ -156,8 +156,9 @@ impl<T: Timestamp + TotalOrder> Input for Scope<T> {
         let counter = Counter::new(output);
         let produced = Rc::clone(counter.produced());
 
-        let index = self.allocate_operator_index();
-        let address = self.addr_for_child(index);
+        let slot = self.reserve_operator();
+        let index = slot.index();
+        let address = slot.addr();
 
         handle.activate.push(self.activator_for(Rc::clone(&address)));
 
@@ -167,14 +168,14 @@ impl<T: Timestamp + TotalOrder> Input for Scope<T> {
 
         let copies = self.peers();
 
-        self.add_operator_with_index(Box::new(Operator {
+        slot.install(Box::new(Operator {
             name: "Input".to_owned(),
             address,
             shared_progress: Rc::new(RefCell::new(SharedProgress::new(0, 1))),
             progress,
             messages: produced,
             copies,
-        }), index);
+        }));
 
         Stream::new(Source::new(index, 0), registrar, self.clone())
     }
