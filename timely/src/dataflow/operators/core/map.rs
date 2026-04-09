@@ -110,26 +110,26 @@ impl<T: Timestamp, C: Container + DrainContainer> Map<T, C> for Stream<T, C> {
 
 
 /// A stream wrapper that allows the accumulation of flatmap logic.
-pub struct FlatMapBuilder<St, C: DrainContainer, F: 'static, I>
+pub struct FlatMapBuilder<S, C: DrainContainer, F: 'static, I>
 where
     for<'a> F: Fn(C::Item<'a>) -> I,
 {
-    stream: St,
+    stream: S,
     logic: F,
     marker: std::marker::PhantomData<C>,
 }
 
-impl<St, C: DrainContainer, F, I> FlatMapBuilder<St, C, F, I>
+impl<S, C: DrainContainer, F, I> FlatMapBuilder<S, C, F, I>
 where
     for<'a> F: Fn(C::Item<'a>) -> I,
 {
     /// Create a new wrapper with no action on the stream.
-    pub fn new(stream: St, logic: F) -> Self {
+    pub fn new(stream: S, logic: F) -> Self {
         FlatMapBuilder { stream, logic, marker: std::marker::PhantomData }
     }
 
     /// Transform a flatmapped stream through additional logic.
-    pub fn map<G: Fn(I) -> I2 + 'static, I2>(self, g: G) -> FlatMapBuilder<St, C, impl Fn(C::Item<'_>) -> I2 + 'static, I2> {
+    pub fn map<G: Fn(I) -> I2 + 'static, I2>(self, g: G) -> FlatMapBuilder<S, C, impl Fn(C::Item<'_>) -> I2 + 'static, I2> {
         let logic = self.logic;
         FlatMapBuilder {
             stream: self.stream,
@@ -142,7 +142,7 @@ where
     where
         I: IntoIterator,
         T: Timestamp,
-        St: Map<T, C>,
+        S: Map<T, C>,
         C2: Container + SizableContainer + PushInto<I::Item>,
     {
         Map::flat_map(self.stream, self.logic)
