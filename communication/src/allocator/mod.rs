@@ -6,7 +6,7 @@ use std::time::Duration;
 
 pub use self::thread::Thread;
 pub use self::process::Process;
-pub use self::generic::{Generic, GenericBuilder};
+pub use self::generic::{Allocator, AllocatorBuilder};
 
 pub mod thread;
 pub mod process;
