@@ -12,8 +12,7 @@ use getopts;
 use timely_logging::Logger;
 
 use crate::allocator::thread::ThreadBuilder;
-use crate::allocator::{AllocateBuilder, Process, Generic, GenericBuilder, PeerBuilder};
-use crate::allocator::zero_copy::allocator_process::ProcessBuilder;
+use crate::allocator::{AllocateBuilder, Allocator, AllocatorBuilder, ProcessBuilder};
 use crate::allocator::zero_copy::bytes_slab::BytesRefill;
 use crate::allocator::zero_copy::initialize::initialize_networking;
 use crate::logging::{CommunicationEventBuilder, CommunicationSetup};
@@ -152,7 +151,7 @@ impl Config {
     }
 
     /// Attempts to assemble the described communication infrastructure.
-    pub fn try_build(self) -> Result<(Vec<GenericBuilder>, Box<dyn Any+Send>), String> {
+    pub fn try_build(self) -> Result<(Vec<AllocatorBuilder>, Box<dyn Any+Send>), String> {
         let refill = BytesRefill {
             logic: Arc::new(|size| Box::new(vec![0_u8; size]) as Box<dyn DerefMut<Target=[u8]>>),
             limit: None,
@@ -161,29 +160,39 @@ impl Config {
     }
 
     /// Attempts to assemble the described communication infrastructure, using the supplied refill function.
-    pub fn try_build_with(self, refill: BytesRefill) -> Result<(Vec<GenericBuilder>, Box<dyn Any+Send>), String> {
+    pub fn try_build_with(self, refill: BytesRefill) -> Result<(Vec<AllocatorBuilder>, Box<dyn Any+Send>), String> {
         match self {
             Config::Thread => {
-                Ok((vec![GenericBuilder::Thread(ThreadBuilder)], Box::new(())))
+                Ok((vec![AllocatorBuilder::Thread(ThreadBuilder)], Box::new(())))
             },
             Config::Process(threads) => {
-                Ok((Process::new_vector(threads, refill).into_iter().map(GenericBuilder::Process).collect(), Box::new(())))
+                let builders = ProcessBuilder::new_typed_vector(threads, refill)
+                    .into_iter()
+                    .map(AllocatorBuilder::Process)
+                    .collect();
+                Ok((builders, Box::new(())))
             },
             Config::ProcessBinary(threads) => {
-                Ok((ProcessBuilder::new_vector(threads, refill).into_iter().map(GenericBuilder::ProcessBinary).collect(), Box::new(())))
+                let builders = ProcessBuilder::new_bytes_vector(threads, refill)
+                    .into_iter()
+                    .map(AllocatorBuilder::Process)
+                    .collect();
+                Ok((builders, Box::new(())))
             },
             Config::Cluster { threads, process, addresses, report, zerocopy: false, log_fn } => {
-                match initialize_networking::<Process>(addresses, process, threads, report, refill, log_fn) {
+                let process_allocators = ProcessBuilder::new_typed_vector(threads, refill.clone());
+                match initialize_networking(process_allocators, addresses, process, threads, report, refill, log_fn) {
                     Ok((stuff, guard)) => {
-                        Ok((stuff.into_iter().map(GenericBuilder::ZeroCopy).collect(), Box::new(guard)))
+                        Ok((stuff.into_iter().map(AllocatorBuilder::Tcp).collect(), Box::new(guard)))
                     },
                     Err(err) => Err(format!("failed to initialize networking: {}", err))
                 }
             },
             Config::Cluster { threads, process, addresses, report, zerocopy: true, log_fn } => {
-                match initialize_networking::<ProcessBuilder>(addresses, process, threads, report, refill, log_fn) {
+                let process_allocators = ProcessBuilder::new_bytes_vector(threads, refill.clone());
+                match initialize_networking(process_allocators, addresses, process, threads, report, refill, log_fn) {
                     Ok((stuff, guard)) => {
-                        Ok((stuff.into_iter().map(GenericBuilder::ZeroCopyBinary).collect(), Box::new(guard)))
+                        Ok((stuff.into_iter().map(AllocatorBuilder::Tcp).collect(), Box::new(guard)))
                     },
                     Err(err) => Err(format!("failed to initialize networking: {}", err))
                 }
@@ -194,7 +203,7 @@ impl Config {
 
 /// Initializes communication and executes a distributed computation.
 ///
-/// This method allocates an `allocator::Generic` for each thread, spawns local worker threads,
+/// This method allocates an `allocator::Allocator` for each thread, spawns local worker threads,
 /// and invokes the supplied function with the allocator.
 /// The method returns a `WorkerGuards<T>` which can be `join`ed to retrieve the return values
 /// (or errors) of the workers.
@@ -202,7 +211,7 @@ impl Config {
 ///
 /// # Examples
 /// ```
-/// use timely_communication::{Allocate, Bytesable};
+/// use timely_communication::Bytesable;
 ///
 /// /// A wrapper that indicates the serialization/deserialization strategy.
 /// pub struct Message {
@@ -278,7 +287,7 @@ impl Config {
 /// result: Ok(0)
 /// result: Ok(1)
 /// ```
-pub fn initialize<T:Send+'static, F: Fn(Generic)->T+Send+Sync+'static>(
+pub fn initialize<T:Send+'static, F: Fn(Allocator)->T+Send+Sync+'static>(
     config: Config,
     func: F,
 ) -> Result<WorkerGuards<T>,String> {
@@ -295,7 +304,7 @@ pub fn initialize<T:Send+'static, F: Fn(Generic)->T+Send+Sync+'static>(
 ///
 /// # Examples
 /// ```
-/// use timely_communication::{Allocate, Bytesable};
+/// use timely_communication::Bytesable;
 ///
 /// /// A wrapper that indicates `bincode` as the serialization/deserialization strategy.
 /// pub struct Message {
@@ -358,15 +367,14 @@ pub fn initialize<T:Send+'static, F: Fn(Generic)->T+Send+Sync+'static>(
 /// }
 /// else { println!("error in computation"); }
 /// ```
-pub fn initialize_from<A, T, F>(
-    builders: Vec<A>,
+pub fn initialize_from<T, F>(
+    builders: Vec<AllocatorBuilder>,
     others: Box<dyn Any+Send>,
     func: F,
 ) -> Result<WorkerGuards<T>,String>
 where
-    A: AllocateBuilder+'static,
     T: Send+'static,
-    F: Fn(<A as AllocateBuilder>::Allocator)->T+Send+Sync+'static
+    F: Fn(Allocator)->T+Send+Sync+'static
 {
     let logic = Arc::new(func);
     let mut guards = Vec::new();

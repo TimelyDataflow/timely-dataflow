@@ -5,8 +5,7 @@ use std::cell::RefCell;
 use std::time::Duration;
 
 pub use self::thread::Thread;
-pub use self::process::Process;
-pub use self::generic::{Generic, GenericBuilder};
+pub use self::generic::{Allocator, AllocatorBuilder};
 
 pub mod thread;
 pub mod process;
@@ -18,6 +17,8 @@ pub mod counters;
 pub mod zero_copy;
 
 use crate::{Bytesable, Push, Pull};
+use crate::allocator::process::{Process as TypedProcess, ProcessBuilder as TypedProcessBuilder};
+use crate::allocator::zero_copy::allocator_process::{ProcessAllocator as BytesProcess, ProcessBuilder as BytesProcessBuilder};
 
 /// A proto-allocator, which implements `Send` and can be completed with `build`.
 ///
@@ -25,7 +26,7 @@ use crate::{Bytesable, Push, Pull};
 /// the `Send` trait, for example `Rc` wrappers for shared state. As such, what we
 /// actually need to create to initialize a computation are builders, which we can
 /// then move into new threads each of which then construct their actual allocator.
-pub trait AllocateBuilder : Send {
+pub(crate) trait AllocateBuilder : Send {
     /// The type of allocator to be built.
     type Allocator: Allocate;
     /// Builds allocator, consumes self.
@@ -42,7 +43,7 @@ impl<T: Send+Any+Bytesable> Exchangeable for T { }
 ///
 /// There is some feature creep, in that this contains several convenience methods about the nature
 /// of the allocated channels, and maintenance methods to ensure that they move records around.
-pub trait Allocate {
+pub(crate) trait Allocate {
     /// The index of the worker out of `(0..self.peers())`.
     fn index(&self) -> usize;
     /// The number of workers in the communication group.
@@ -86,17 +87,6 @@ pub trait Allocate {
     /// buffers, and can be a performance problem if invoked casually.
     fn release(&mut self) { }
 
-    /// Constructs a pipeline channel from the worker to itself.
-    ///
-    /// By default, this method uses the thread-local channel constructor
-    /// based on a shared `VecDeque` which updates the event queue.
-    fn pipeline<T: 'static>(&mut self, identifier: usize) ->
-        (thread::ThreadPusher<T>,
-         thread::ThreadPuller<T>)
-    {
-        thread::Thread::new_from(identifier, Rc::clone(self.events()))
-    }
-
     /// Allocates a broadcast channel, where each pushed message is received by all.
     fn broadcast<T: Exchangeable + Clone>(&mut self, identifier: usize) -> (Box<dyn Push<T>>, Box<dyn Pull<T>>) {
         let (pushers, pull) = self.allocate(identifier);
@@ -129,9 +119,111 @@ impl<T: Clone> Push<T> for Broadcaster<T> {
 use crate::allocator::zero_copy::bytes_slab::BytesRefill;
 
 /// A builder for vectors of peers.
-pub trait PeerBuilder {
+pub(crate) trait PeerBuilder {
     /// The peer type.
     type Peer: AllocateBuilder + Sized;
     /// Allocate a list of `Self::Peer` of length `peers`.
     fn new_vector(peers: usize, refill: BytesRefill) -> Vec<Self::Peer>;
+}
+
+
+/// Two flavors of intra-process allocator builder.
+#[non_exhaustive]
+pub enum ProcessBuilder {
+    /// Regular intra-process allocator (mpsc-based).
+    Typed(TypedProcessBuilder),
+    /// Binary intra-process allocator (zero-copy serialized).
+    Bytes(BytesProcessBuilder),
+}
+
+impl ProcessBuilder {
+    /// Builds the runtime allocator from this builder.
+    pub(crate) fn build(self) -> Process {
+        match self {
+            ProcessBuilder::Typed(t) => Process::Typed(t.build()),
+            ProcessBuilder::Bytes(b) => Process::Bytes(b.build()),
+        }
+    }
+
+    /// Constructs a vector of regular (mpsc-based, "Typed") intra-process builders.
+    pub(crate) fn new_typed_vector(peers: usize, refill: BytesRefill) -> Vec<Self> {
+        <TypedProcess as PeerBuilder>::new_vector(peers, refill)
+            .into_iter()
+            .map(ProcessBuilder::Typed)
+            .collect()
+    }
+
+    /// Constructs a vector of binary (zero-copy serialized, "Bytes") intra-process builders.
+    pub(crate) fn new_bytes_vector(peers: usize, refill: BytesRefill) -> Vec<Self> {
+        <BytesProcessBuilder as PeerBuilder>::new_vector(peers, refill)
+            .into_iter()
+            .map(ProcessBuilder::Bytes)
+            .collect()
+    }
+}
+
+/// The runtime counterpart of `ProcessBuilder`: the actual constructed inner allocator.
+///
+/// Inherent methods mirror the subset of `Allocate` that `TcpAllocator` needs from its inner.
+#[non_exhaustive]
+pub enum Process {
+    /// Regular intra-process allocator.
+    Typed(TypedProcess),
+    /// Binary intra-process allocator.
+    Bytes(BytesProcess),
+}
+
+impl Process {
+    pub(crate) fn index(&self) -> usize {
+        match self {
+            Process::Typed(p) => p.index(),
+            Process::Bytes(pb) => pb.index(),
+        }
+    }
+    pub(crate) fn peers(&self) -> usize {
+        match self {
+            Process::Typed(p) => p.peers(),
+            Process::Bytes(pb) => pb.peers(),
+        }
+    }
+    pub(crate) fn allocate<T: Exchangeable>(&mut self, identifier: usize)
+        -> (Vec<Box<dyn Push<T>>>, Box<dyn Pull<T>>)
+    {
+        match self {
+            Process::Typed(p) => p.allocate(identifier),
+            Process::Bytes(pb) => pb.allocate(identifier),
+        }
+    }
+    pub(crate) fn broadcast<T: Exchangeable + Clone>(&mut self, identifier: usize)
+        -> (Box<dyn Push<T>>, Box<dyn Pull<T>>)
+    {
+        match self {
+            Process::Typed(p) => p.broadcast(identifier),
+            Process::Bytes(pb) => pb.broadcast(identifier),
+        }
+    }
+    pub(crate) fn receive(&mut self) {
+        match self {
+            Process::Typed(p) => p.receive(),
+            Process::Bytes(pb) => pb.receive(),
+        }
+    }
+    pub(crate) fn release(&mut self) {
+        match self {
+            Process::Typed(p) => p.release(),
+            Process::Bytes(pb) => pb.release(),
+        }
+    }
+    pub(crate) fn events(&self) -> &Rc<RefCell<Vec<usize>>> {
+        match self {
+            Process::Typed(p) => p.events(),
+            Process::Bytes(pb) => pb.events(),
+        }
+    }
+    pub(crate) fn await_events(&self, duration: Option<std::time::Duration>) {
+        match self {
+            Process::Typed(p) => p.await_events(duration),
+            Process::Bytes(pb) => pb.await_events(duration),
+        }
+    }
 }

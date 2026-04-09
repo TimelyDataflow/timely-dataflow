@@ -4,7 +4,6 @@ use std::rc::Rc;
 use crate::progress::{Timestamp, Operate, Source, Target};
 use crate::order::Product;
 use crate::progress::timestamp::Refines;
-use crate::communication::Allocate;
 use crate::worker::AsWorker;
 
 pub mod child;
@@ -18,8 +17,6 @@ pub use self::child::Child;
 /// method. Each method does not hold the `RefCell`'s borrow, and should prevent accidental panics.
 pub trait Scope: AsWorker+Clone {
 
-    /// The allocator type used by the scope.
-    type Allocator: Allocate;
     /// The timestamp associated with data in this scope.
     type Timestamp : Timestamp;
 
@@ -94,7 +91,7 @@ pub trait Scope: AsWorker+Clone {
     fn scoped<T, R, F>(&self, name: &str, func: F) -> R
     where
         T: Timestamp+Refines<<Self as Scope>::Timestamp>,
-        F: FnOnce(&mut Child<Self::Allocator, T>) -> R;
+        F: FnOnce(&mut Child<T>) -> R;
 
     /// Creates a iterative dataflow subgraph.
     ///
@@ -121,7 +118,7 @@ pub trait Scope: AsWorker+Clone {
     fn iterative<T, R, F>(&self, func: F) -> R
     where
         T: Timestamp,
-        F: FnOnce(&mut Child<Self::Allocator, Product<<Self as Scope>::Timestamp, T>>) -> R,
+        F: FnOnce(&mut Child<Product<<Self as Scope>::Timestamp, T>>) -> R,
     {
         self.scoped::<Product<<Self as Scope>::Timestamp, T>,R,F>("Iterative", func)
     }
@@ -150,7 +147,7 @@ pub trait Scope: AsWorker+Clone {
     /// ```
     fn region<R, F>(&self, func: F) -> R
     where
-        F: FnOnce(&mut Child<Self::Allocator, <Self as Scope>::Timestamp>) -> R,
+        F: FnOnce(&mut Child<<Self as Scope>::Timestamp>) -> R,
     {
         self.region_named("Region", func)
     }
@@ -182,7 +179,7 @@ pub trait Scope: AsWorker+Clone {
     /// ```
     fn region_named<R, F>(&self, name: &str, func: F) -> R
     where
-        F: FnOnce(&mut Child<Self::Allocator, <Self as Scope>::Timestamp>) -> R,
+        F: FnOnce(&mut Child<<Self as Scope>::Timestamp>) -> R,
     {
         self.scoped::<<Self as Scope>::Timestamp,R,F>(name, func)
     }

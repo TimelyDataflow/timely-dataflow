@@ -5,7 +5,7 @@ use std::cell::RefCell;
 use std::time::{Instant, Duration};
 use std::collections::VecDeque;
 
-use crate::{communication::Allocate, ExchangeData, PartialOrder};
+use crate::{ExchangeData, PartialOrder};
 use crate::scheduling::Scheduler;
 use crate::worker::Worker;
 use crate::dataflow::channels::pact::Exchange;
@@ -88,13 +88,13 @@ impl<T: ExchangeData+Clone> Sequencer<T> {
     ///     }
     /// }).expect("Timely computation did not complete correctly.");
     /// ```
-    pub fn new<A: Allocate>(worker: &mut Worker<A>, timer: Instant) -> Self {
+    pub fn new(worker: &mut Worker, timer: Instant) -> Self {
         Sequencer::preloaded(worker, timer, VecDeque::new())
     }
 
     /// Creates a new Sequencer preloaded with a queue of
     /// elements.
-    pub fn preloaded<A: Allocate>(worker: &mut Worker<A>, timer: Instant, preload: VecDeque<T>) -> Self {
+    pub fn preloaded(worker: &mut Worker, timer: Instant, preload: VecDeque<T>) -> Self {
 
         let send: Rc<RefCell<VecDeque<T>>> = Rc::new(RefCell::new(VecDeque::new()));
         let recv = Rc::new(RefCell::new(preload));

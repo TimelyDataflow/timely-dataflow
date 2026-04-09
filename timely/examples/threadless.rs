@@ -5,7 +5,9 @@ use timely::WorkerConfig;
 fn main() {
 
     // create a naked single-threaded worker.
-    let allocator = timely::communication::allocator::Thread::default();
+    let allocator = timely::communication::Allocator::Thread(
+        timely::communication::allocator::Thread::default(),
+    );
     let mut worker = timely::worker::Worker::new(WorkerConfig::default(), allocator, None);
 
     // create input and probe handles.

@@ -3,7 +3,7 @@
 use std::rc::Rc;
 use std::cell::RefCell;
 
-use crate::communication::{Allocate, Exchangeable, Push, Pull};
+use crate::communication::{Exchangeable, Push, Pull};
 use crate::communication::allocator::thread::{ThreadPusher, ThreadPuller};
 use crate::scheduling::Scheduler;
 use crate::scheduling::activate::Activations;
@@ -18,29 +18,29 @@ use crate::worker::{AsWorker, Config, Worker};
 use super::Scope;
 
 /// Type alias for iterative child scope.
-pub type Iterative<'a, A, TOuter, TInner> = Child<'a, A, Product<TOuter, TInner>>;
+pub type Iterative<'a, TOuter, TInner> = Child<'a, Product<TOuter, TInner>>;
 
 /// A `Child` wraps a `Subgraph` and manages the addition
 /// of `Operate`s and the connection of edges between them.
-pub struct Child<'a, A: Allocate, T: Timestamp> {
+pub struct Child<'a, T: Timestamp> {
     /// The subgraph under assembly.
     pub(crate) subgraph: &'a RefCell<SubgraphBuilder<T>>,
     /// A copy of the worker hosting this scope.
-    pub(crate) worker:   Worker<A>,
+    pub(crate) worker:   Worker,
     /// The log writer for this scope.
     pub(crate) logging:  Option<Logger>,
     /// The progress log writer for this scope.
     pub(crate) progress_logging:  Option<ProgressLogger<T>>,
 }
 
-impl<A: Allocate, T: Timestamp> Child<'_, A, T> {
+impl<T: Timestamp> Child<'_, T> {
     /// This worker's index out of `0 .. self.peers()`.
     pub fn index(&self) -> usize { self.worker.index() }
     /// The total number of workers in the computation.
     pub fn peers(&self) -> usize { self.worker.peers() }
 }
 
-impl<A: Allocate, T: Timestamp> AsWorker for Child<'_, A, T> {
+impl<T: Timestamp> AsWorker for Child<'_, T> {
     fn config(&self) -> &Config { self.worker.config() }
     fn index(&self) -> usize { self.worker.index() }
     fn peers(&self) -> usize { self.worker.peers() }
@@ -52,12 +52,11 @@ impl<A: Allocate, T: Timestamp> AsWorker for Child<'_, A, T> {
     fn log_register(&self) -> Option<::std::cell::RefMut<'_, crate::logging_core::Registry>> { self.worker.log_register() }
 }
 
-impl<A: Allocate, T: Timestamp> Scheduler for Child<'_, A, T> {
+impl<T: Timestamp> Scheduler for Child<'_, T> {
     fn activations(&self) -> Rc<RefCell<Activations>> { self.worker.activations() }
 }
 
-impl<A: Allocate, T: Timestamp> Scope for Child<'_, A, T> {
-    type Allocator = A;
+impl<T: Timestamp> Scope for Child<'_, T> {
     type Timestamp = T;
 
     fn name(&self) -> String { self.subgraph.borrow().name.clone() }
@@ -87,7 +86,7 @@ impl<A: Allocate, T: Timestamp> Scope for Child<'_, A, T> {
     fn scoped<T2, R, F>(&self, name: &str, func: F) -> R
     where
         T2: Timestamp+Refines<T>,
-        F: FnOnce(&mut Child<A, T2>) -> R,
+        F: FnOnce(&mut Child<T2>) -> R,
     {
         let mut scope = self.clone();
         let index = scope.subgraph.borrow_mut().allocate_child_id();
@@ -116,7 +115,7 @@ impl<A: Allocate, T: Timestamp> Scope for Child<'_, A, T> {
     }
 }
 
-impl<A: Allocate, T: Timestamp> Clone for Child<'_, A, T> {
+impl<T: Timestamp> Clone for Child<'_, T> {
     fn clone(&self) -> Self {
         Child {
             subgraph: self.subgraph,

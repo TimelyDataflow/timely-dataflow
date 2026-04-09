@@ -5,7 +5,7 @@
 mod example {
     use std::ops::{Deref, DerefMut};
     use std::ptr::NonNull;
-    use timely_communication::{Allocate, Bytesable};
+    use timely_communication::Bytesable;
     use timely_communication::allocator::zero_copy::bytes_slab::BytesRefill;
 
     /// A wrapper that indicates the serialization/deserialization strategy.

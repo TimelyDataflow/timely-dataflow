@@ -3,7 +3,7 @@
 //! This crate is part of the timely dataflow system, used primarily for its inter-worker communication.
 //! It may be independently useful, but it is separated out mostly to make clear boundaries in the project.
 //!
-//! Threads are spawned with an [`allocator::Generic`](allocator::generic::Generic), whose
+//! Threads are spawned with an [`allocator::Allocator`](allocator::generic::Allocator), whose
 //! [`allocate`](Allocate::allocate) method returns a pair of several send endpoints and one
 //! receive endpoint. Messages sent into a send endpoint will eventually be received by the corresponding worker,
 //! if it receives often enough. The point-to-point channels are each FIFO, but with no fairness guarantees.
@@ -15,7 +15,7 @@
 //!
 //! # Examples
 //! ```
-//! use timely_communication::{Allocate, Bytesable};
+//! use timely_communication::Bytesable;
 //!
 //! /// A wrapper that indicates `bincode` as the serialization/deserialization strategy.
 //! pub struct Message {
@@ -100,8 +100,8 @@ pub mod initialize;
 pub mod logging;
 pub mod buzzer;
 
-pub use allocator::Generic as Allocator;
-pub use allocator::{Allocate, Exchangeable};
+use allocator::Allocate;
+pub use allocator::{Allocator, AllocatorBuilder, Exchangeable};
 pub use initialize::{initialize, initialize_from, Config, WorkerGuards};
 
 use std::sync::mpsc::{Sender, Receiver};

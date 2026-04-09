@@ -10,7 +10,7 @@ That being said, let's take a look at the example from the `timely_communication
 extern crate timely_bytes;
 extern crate timely_communication;
 
-use timely_communication::{Allocate, Bytesable};
+use timely_communication::Bytesable;
 
 /// A wrapper that indicates the serialization/deserialization strategy.
 pub struct Message {
