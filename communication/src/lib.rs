@@ -15,7 +15,7 @@
 //!
 //! # Examples
 //! ```
-//! use timely_communication::{Allocate, Bytesable};
+//! use timely_communication::Bytesable;
 //!
 //! /// A wrapper that indicates `bincode` as the serialization/deserialization strategy.
 //! pub struct Message {
@@ -100,8 +100,8 @@ pub mod initialize;
 pub mod logging;
 pub mod buzzer;
 
-pub use allocator::Allocator;
-pub use allocator::{Allocate, Exchangeable};
+use allocator::Allocate;
+pub use allocator::{Allocator, AllocatorBuilder, Exchangeable};
 pub use initialize::{initialize, initialize_from, Config, WorkerGuards};
 
 use std::sync::mpsc::{Sender, Receiver};

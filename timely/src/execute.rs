@@ -1,6 +1,6 @@
 //! Starts a timely dataflow execution from configuration information and per-worker logic.
 
-use crate::communication::{initialize_from, Allocator, allocator::AllocateBuilder, WorkerGuards};
+use crate::communication::{initialize_from, Allocator, AllocatorBuilder, WorkerGuards};
 use crate::dataflow::scopes::Child;
 use crate::worker::Worker;
 use crate::{CommunicationConfig, WorkerConfig};
@@ -124,7 +124,7 @@ impl Config {
 pub fn example<T, F>(func: F) -> T
 where
     T: Send+'static,
-    F: FnOnce(&mut Child<crate::communication::allocator::thread::Thread,u64>)->T+Send+Sync+'static
+    F: FnOnce(&mut Child<u64>)->T+Send+Sync+'static
 {
     crate::execute::execute_directly(|worker| worker.dataflow(|scope| func(scope)))
 }
@@ -154,9 +154,9 @@ where
 pub fn execute_directly<T, F>(func: F) -> T
 where
     T: Send+'static,
-    F: FnOnce(&mut Worker<crate::communication::allocator::thread::Thread>)->T+Send+Sync+'static
+    F: FnOnce(&mut Worker)->T+Send+Sync+'static
 {
-    let alloc = crate::communication::allocator::thread::Thread::default();
+    let alloc = Allocator::Thread(crate::communication::allocator::thread::Thread::default());
     let mut worker = crate::worker::Worker::new(WorkerConfig::default(), alloc, Some(std::time::Instant::now()));
     let result = func(&mut worker);
     while worker.has_dataflows() {
@@ -227,7 +227,7 @@ where
 pub fn execute<T, F>(config: Config, func: F) -> Result<WorkerGuards<T>,String>
 where
     T:Send+'static,
-    F: Fn(&mut Worker<Allocator>)->T+Send+Sync+'static,
+    F: Fn(&mut Worker)->T+Send+Sync+'static,
 {
     let (allocators, other) = config.communication.try_build()?;
     execute_from(allocators, other, config.worker, func)
@@ -293,7 +293,7 @@ where
 pub fn execute_from_args<I, T, F>(iter: I, func: F) -> Result<WorkerGuards<T>,String>
     where I: Iterator<Item=String>,
           T:Send+'static,
-          F: Fn(&mut Worker<Allocator>)->T+Send+Sync+'static, {
+          F: Fn(&mut Worker)->T+Send+Sync+'static, {
     let config = Config::from_args(iter)?;
     execute(config, func)
 }
@@ -316,16 +316,15 @@ pub fn execute_from_args<I, T, F>(iter: I, func: F) -> Result<WorkerGuards<T>,St
 ///     })
 /// }).unwrap();
 /// ```
-pub fn execute_from<A, T, F>(
-    builders: Vec<A>,
+pub fn execute_from<T, F>(
+    builders: Vec<AllocatorBuilder>,
     others: Box<dyn ::std::any::Any+Send>,
     worker_config: WorkerConfig,
     func: F,
 ) -> Result<WorkerGuards<T>, String>
 where
-    A: AllocateBuilder+'static,
     T: Send+'static,
-    F: Fn(&mut Worker<<A as AllocateBuilder>::Allocator>)->T+Send+Sync+'static {
+    F: Fn(&mut Worker)->T+Send+Sync+'static {
     initialize_from(builders, others, move |allocator| {
         let mut worker = Worker::new(worker_config.clone(), allocator, Some(std::time::Instant::now()));
         let result = func(&mut worker);

@@ -1,4 +1,4 @@
-use timely_communication::{Allocate, Bytesable};
+use timely_communication::Bytesable;
 
 /// A wrapper that indicates the serialization/deserialization strategy.
 pub struct Message {

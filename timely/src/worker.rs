@@ -9,7 +9,7 @@ use std::collections::HashMap;
 use std::collections::hash_map::Entry;
 use std::sync::Arc;
 
-use crate::communication::{Allocate, Exchangeable, Push, Pull};
+use crate::communication::{Allocator, Exchangeable, Push, Pull};
 use crate::communication::allocator::thread::{ThreadPusher, ThreadPuller};
 use crate::scheduling::{Schedule, Scheduler, Activations};
 use crate::progress::timestamp::{Refines};
@@ -212,9 +212,9 @@ pub trait AsWorker : Scheduler {
     fn logging(&self) -> Option<crate::logging::TimelyLogger> { self.logger_for("timely").map(Into::into) }
 }
 
-/// A `Worker` is the entry point to a timely dataflow computation. It wraps a `Allocate`,
+/// A `Worker` is the entry point to a timely dataflow computation. It wraps an `Allocator`
 /// and has a list of dataflows that it manages.
-pub struct Worker<A: Allocate> {
+pub struct Worker {
     config: Config,
     /// An optional instant from which the start of the computation should be reckoned.
     ///
@@ -222,7 +222,7 @@ pub struct Worker<A: Allocate> {
     /// For example, logging will be unavailable, and activation after a delay will be unavailable.
     timer: Option<Instant>,
     paths: Rc<RefCell<HashMap<usize, Rc<[usize]>>>>,
-    allocator: Rc<RefCell<A>>,
+    allocator: Rc<RefCell<Allocator>>,
     identifiers: Rc<RefCell<usize>>,
     // dataflows: Rc<RefCell<Vec<Wrapper>>>,
     dataflows: Rc<RefCell<HashMap<usize, Wrapper>>>,
@@ -237,7 +237,7 @@ pub struct Worker<A: Allocate> {
     temp_channel_ids: Rc<RefCell<Vec<usize>>>,
 }
 
-impl<A: Allocate> AsWorker for Worker<A> {
+impl AsWorker for Worker {
     fn config(&self) -> &Config { &self.config }
     fn index(&self) -> usize { self.allocator.borrow().index() }
     fn peers(&self) -> usize { self.allocator.borrow().peers() }
@@ -270,15 +270,15 @@ impl<A: Allocate> AsWorker for Worker<A> {
     }
 }
 
-impl<A: Allocate> Scheduler for Worker<A> {
+impl Scheduler for Worker {
     fn activations(&self) -> Rc<RefCell<Activations>> {
         Rc::clone(&self.activations)
     }
 }
 
-impl<A: Allocate> Worker<A> {
+impl Worker {
     /// Allocates a new `Worker` bound to a channel allocator.
-    pub fn new(config: Config, c: A, now: Option<std::time::Instant>) -> Worker<A> {
+    pub fn new(config: Config, c: Allocator, now: Option<std::time::Instant>) -> Worker {
         Worker {
             config,
             timer: now,
@@ -589,7 +589,7 @@ impl<A: Allocate> Worker<A> {
     pub fn dataflow<T, R, F>(&mut self, func: F) -> R
     where
         T: Refines<()>,
-        F: FnOnce(&mut Child<A, T>)->R,
+        F: FnOnce(&mut Child<T>)->R,
     {
         self.dataflow_core("Dataflow", self.logging(), Box::new(()), |_, child| func(child))
     }
@@ -612,7 +612,7 @@ impl<A: Allocate> Worker<A> {
     pub fn dataflow_named<T, R, F>(&mut self, name: &str, func: F) -> R
     where
         T: Refines<()>,
-        F: FnOnce(&mut Child<A, T>)->R,
+        F: FnOnce(&mut Child<T>)->R,
     {
         self.dataflow_core(name, self.logging(), Box::new(()), |_, child| func(child))
     }
@@ -645,7 +645,7 @@ impl<A: Allocate> Worker<A> {
     pub fn dataflow_core<T, R, F, V>(&mut self, name: &str, mut logging: Option<TimelyLogger>, mut resources: V, func: F) -> R
     where
         T: Refines<()>,
-        F: FnOnce(&mut V, &mut Child<A, T>)->R,
+        F: FnOnce(&mut V, &mut Child<T>)->R,
         V: Any+'static,
     {
         let dataflow_index = self.allocate_dataflow_index();
@@ -738,7 +738,7 @@ impl<A: Allocate> Worker<A> {
     }
 }
 
-impl<A: Allocate> Clone for Worker<A> {
+impl Clone for Worker {
     fn clone(&self) -> Self {
         Worker {
             config: self.config.clone(),

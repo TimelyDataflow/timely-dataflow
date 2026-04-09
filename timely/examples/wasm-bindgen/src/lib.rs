@@ -17,7 +17,9 @@ pub fn run() {
     // Construct a naked single-threaded worker. No timer, no thread spawning,
     // no networking — these are the things that don't work on
     // wasm32-unknown-unknown, and the threadless entry point avoids them all.
-    let allocator = timely::communication::allocator::Thread::default();
+    let allocator = timely::communication::Allocator::Thread(
+        timely::communication::allocator::Thread::default(),
+    );
     let mut worker = timely::worker::Worker::new(WorkerConfig::default(), allocator, None);
 
     // Create input and probe handles.

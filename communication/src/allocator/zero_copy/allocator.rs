@@ -9,7 +9,7 @@ use timely_bytes::arc::Bytes;
 use crate::networking::MessageHeader;
 
 use crate::{Allocate, Push, Pull};
-use crate::allocator::{AllocateBuilder, Exchangeable};
+use crate::allocator::{Process, ProcessBuilder, Exchangeable};
 use crate::allocator::canary::Canary;
 use crate::allocator::zero_copy::bytes_slab::BytesRefill;
 use super::bytes_exchange::{BytesPull, SendEndpoint, MergeQueue};
@@ -21,8 +21,8 @@ use super::push_pull::{Pusher, PullerInner};
 /// threads (specifically, the `Rc<RefCell<_>>` local channels). So, we must package up the state
 /// shared between threads here, and then provide a method that will instantiate the non-movable
 /// members once in the destination thread.
-pub struct TcpBuilder<A: AllocateBuilder> {
-    inner:  A,
+pub struct TcpBuilder {
+    inner:  ProcessBuilder,
     index:  usize,                      // number out of peers
     peers:  usize,                      // number of peer allocators.
     futures:   Vec<Receiver<MergeQueue>>,  // to receive queues to each network thread.
@@ -38,17 +38,17 @@ pub struct TcpBuilder<A: AllocateBuilder> {
 /// The returned tuple contains
 /// ```ignore
 /// (
-///   AllocateBuilder for local threads,
+///   builders for local threads,
 ///   info to spawn egress comm threads,
 ///   info to spawn ingress comm thresds,
 /// )
 /// ```
-pub fn new_vector<A: AllocateBuilder>(
-    allocators: Vec<A>,
+pub(crate) fn new_vector(
+    allocators: Vec<ProcessBuilder>,
     my_process: usize,
     processes: usize,
     refill: BytesRefill,
-) -> (Vec<TcpBuilder<A>>,
+) -> (Vec<TcpBuilder>,
     Vec<Vec<Sender<MergeQueue>>>,
     Vec<Vec<Receiver<MergeQueue>>>)
 {
@@ -78,10 +78,10 @@ pub fn new_vector<A: AllocateBuilder>(
     (builders, network_promises, network_futures)
 }
 
-impl<A: AllocateBuilder> TcpBuilder<A> {
+impl TcpBuilder {
 
     /// Builds a `TcpAllocator`, instantiating `Rc<RefCell<_>>` elements.
-    pub fn build(self) -> TcpAllocator<A::Allocator> {
+    pub fn build(self) -> TcpAllocator {
 
         // Fulfill puller obligations.
         let mut recvs = Vec::with_capacity(self.peers);
@@ -118,9 +118,9 @@ impl<A: AllocateBuilder> TcpBuilder<A> {
 }
 
 /// A TCP-based allocator for inter-process communication.
-pub struct TcpAllocator<A: Allocate> {
+pub struct TcpAllocator {
 
-    inner:      A,                                  // A non-serialized inner allocator for process-local peers.
+    inner:      Process,                           // A non-serialized inner allocator for process-local peers.
 
     index:      usize,                              // number out of peers
     peers:      usize,                              // number of peer allocators (for typed channel allocation).
@@ -136,7 +136,7 @@ pub struct TcpAllocator<A: Allocate> {
     to_local:   HashMap<usize, Rc<RefCell<VecDeque<Bytes>>>>,   // to worker-local typed pullers.
 }
 
-impl<A: Allocate> Allocate for TcpAllocator<A> {
+impl Allocate for TcpAllocator {
     fn index(&self) -> usize { self.index }
     fn peers(&self) -> usize { self.peers }
     fn allocate<T: Exchangeable>(&mut self, identifier: usize) -> (Vec<Box<dyn Push<T>>>, Box<dyn Pull<T>>) {
