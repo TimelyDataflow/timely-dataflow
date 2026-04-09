@@ -1,6 +1,7 @@
 //! Methods to construct flow-controlled sources.
 
-use crate::order::{PartialOrder, TotalOrder};
+use crate::order::TotalOrder;
+use crate::scheduling::Scheduler;
 use crate::progress::timestamp::Timestamp;
 use crate::dataflow::operators::generic::operator::source;
 use crate::dataflow::operators::probe::Handle;
@@ -69,18 +70,18 @@ pub struct IteratorSourceInput<T: Clone, D: 'static, DI: IntoIterator<Item=D>, I
 /// }).unwrap();
 /// ```
 pub fn iterator_source<
-    G: Scope,
+    T: Timestamp,
     D: 'static,
     DI: IntoIterator<Item=D>,
-    I: IntoIterator<Item=(G::Timestamp, DI)>,
-    F: FnMut(&G::Timestamp)->Option<IteratorSourceInput<G::Timestamp, D, DI, I>>+'static>(
-        scope: &G,
+    I: IntoIterator<Item=(T, DI)>,
+    F: FnMut(&T)->Option<IteratorSourceInput<T, D, DI, I>>+'static>(
+        scope: &Scope<T>,
         name: &str,
         mut input_f: F,
-        probe: Handle<G::Timestamp>,
-        ) -> StreamVec<G, D> where G::Timestamp: TotalOrder {
+        probe: Handle<T>,
+        ) -> StreamVec<T, D> where T: TotalOrder {
 
-    let mut target = G::Timestamp::minimum();
+    let mut target = T::minimum();
     source(scope, name, |cap, info| {
         let mut cap = Some(cap);
         let activator = scope.activator_for(info.address);

@@ -1,13 +1,14 @@
 //! Operators that separate one stream into two streams based on some condition
 
 use crate::dataflow::channels::pact::Pipeline;
+use crate::progress::Timestamp;
 use crate::dataflow::operators::generic::OutputBuilder;
 use crate::dataflow::operators::generic::builder_rc::OperatorBuilder;
-use crate::dataflow::{Scope, StreamVec, Stream};
+use crate::dataflow::{StreamVec, Stream};
 use crate::Container;
 
 /// Extension trait for `StreamVec`.
-pub trait Branch<S: Scope, D> {
+pub trait Branch<T: Timestamp, D> {
     /// Takes one input stream and splits it into two output streams.
     /// For each record, the supplied closure is called with a reference to
     /// the data and its time. If it returns `true`, the record will be sent
@@ -31,15 +32,15 @@ pub trait Branch<S: Scope, D> {
     /// ```
     fn branch(
         self,
-        condition: impl Fn(&S::Timestamp, &D) -> bool + 'static,
-    ) -> (StreamVec<S, D>, StreamVec<S, D>);
+        condition: impl Fn(&T, &D) -> bool + 'static,
+    ) -> (StreamVec<T, D>, StreamVec<T, D>);
 }
 
-impl<S: Scope, D: 'static> Branch<S, D> for StreamVec<S, D> {
+impl<T: Timestamp, D: 'static> Branch<T, D> for StreamVec<T, D> {
     fn branch(
         self,
-        condition: impl Fn(&S::Timestamp, &D) -> bool + 'static,
-    ) -> (StreamVec<S, D>, StreamVec<S, D>) {
+        condition: impl Fn(&T, &D) -> bool + 'static,
+    ) -> (StreamVec<T, D>, StreamVec<T, D>) {
         let mut builder = OperatorBuilder::new("Branch".to_owned(), self.scope());
 
         let mut input = builder.new_input(self, Pipeline);
@@ -99,8 +100,8 @@ pub trait BranchWhen<T>: Sized {
     fn branch_when(self, condition: impl Fn(&T) -> bool + 'static) -> (Self, Self);
 }
 
-impl<S: Scope, C: Container> BranchWhen<S::Timestamp> for Stream<S, C> {
-    fn branch_when(self, condition: impl Fn(&S::Timestamp) -> bool + 'static) -> (Self, Self) {
+impl<T: Timestamp, C: Container> BranchWhen<T> for Stream<T, C> {
+    fn branch_when(self, condition: impl Fn(&T) -> bool + 'static) -> (Self, Self) {
         let mut builder = OperatorBuilder::new("Branch".to_owned(), self.scope());
 
         let mut input = builder.new_input(self, Pipeline);

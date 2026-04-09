@@ -1,10 +1,11 @@
 //! Extension methods for `StreamVec` containing `Result`s.
 
 use crate::dataflow::operators::vec::Map;
-use crate::dataflow::{Scope, StreamVec};
+use crate::progress::Timestamp;
+use crate::dataflow::StreamVec;
 
 /// Extension trait for `StreamVec`.
-pub trait ResultStream<S: Scope, T: 'static, E: 'static> {
+pub trait ResultStream<T: Timestamp, D: 'static, E: 'static> {
     /// Returns a new instance of `self` containing only `ok` records.
     ///
     /// # Examples
@@ -17,7 +18,7 @@ pub trait ResultStream<S: Scope, T: 'static, E: 'static> {
     ///            .inspect(|x| println!("seen: {:?}", x));
     /// });
     /// ```
-    fn ok(self) -> StreamVec<S, T>;
+    fn ok(self) -> StreamVec<T, D>;
 
     /// Returns a new instance of `self` containing only `err` records.
     ///
@@ -31,7 +32,7 @@ pub trait ResultStream<S: Scope, T: 'static, E: 'static> {
     ///            .inspect(|x| println!("seen: {:?}", x));
     /// });
     /// ```
-    fn err(self) -> StreamVec<S, E>;
+    fn err(self) -> StreamVec<T, E>;
 
     /// Returns a new instance of `self` applying `logic` on all `Ok` records.
     ///
@@ -45,7 +46,7 @@ pub trait ResultStream<S: Scope, T: 'static, E: 'static> {
     ///            .inspect(|x| println!("seen: {:?}", x));
     /// });
     /// ```
-    fn map_ok<T2: 'static, L: FnMut(T) -> T2 + 'static>(self, logic: L) -> StreamVec<S, Result<T2, E>>;
+    fn map_ok<D2: 'static, L: FnMut(D) -> D2 + 'static>(self, logic: L) -> StreamVec<T, Result<D2, E>>;
 
     /// Returns a new instance of `self` applying `logic` on all `Err` records.
     ///
@@ -59,7 +60,7 @@ pub trait ResultStream<S: Scope, T: 'static, E: 'static> {
     ///            .inspect(|x| println!("seen: {:?}", x));
     /// });
     /// ```
-    fn map_err<E2: 'static, L: FnMut(E) -> E2 + 'static>(self, logic: L) -> StreamVec<S, Result<T, E2>>;
+    fn map_err<E2: 'static, L: FnMut(E) -> E2 + 'static>(self, logic: L) -> StreamVec<T, Result<D, E2>>;
 
     /// Returns a new instance of `self` applying `logic` on all `Ok` records, passes through `Err`
     /// records.
@@ -74,10 +75,10 @@ pub trait ResultStream<S: Scope, T: 'static, E: 'static> {
     ///            .inspect(|x| println!("seen: {:?}", x));
     /// });
     /// ```
-    fn and_then<T2: 'static, L: FnMut(T) -> Result<T2, E> + 'static>(
+    fn and_then<D2: 'static, L: FnMut(D) -> Result<D2, E> + 'static>(
         self,
         logic: L,
-    ) -> StreamVec<S, Result<T2, E>>;
+    ) -> StreamVec<T, Result<D2, E>>;
 
     /// Returns a new instance of `self` applying `logic` on all `Ok` records.
     ///
@@ -91,31 +92,31 @@ pub trait ResultStream<S: Scope, T: 'static, E: 'static> {
     ///            .inspect(|x| println!("seen: {:?}", x));
     /// });
     /// ```
-    fn unwrap_or_else<L: FnMut(E) -> T + 'static>(self, logic: L) -> StreamVec<S, T>;
+    fn unwrap_or_else<L: FnMut(E) -> D + 'static>(self, logic: L) -> StreamVec<T, D>;
 }
 
-impl<S: Scope, T: 'static, E: 'static> ResultStream<S, T, E> for StreamVec<S, Result<T, E>> {
-    fn ok(self) -> StreamVec<S, T> {
+impl<T: Timestamp, D: 'static, E: 'static> ResultStream<T, D, E> for StreamVec<T, Result<D, E>> {
+    fn ok(self) -> StreamVec<T, D> {
         self.flat_map(Result::ok)
     }
 
-    fn err(self) -> StreamVec<S, E> {
+    fn err(self) -> StreamVec<T, E> {
         self.flat_map(Result::err)
     }
 
-    fn map_ok<T2: 'static, L: FnMut(T) -> T2 + 'static>(self, mut logic: L) -> StreamVec<S, Result<T2, E>> {
+    fn map_ok<D2: 'static, L: FnMut(D) -> D2 + 'static>(self, mut logic: L) -> StreamVec<T, Result<D2, E>> {
         self.map(move |r| r.map(&mut logic))
     }
 
-    fn map_err<E2: 'static, L: FnMut(E) -> E2 + 'static>(self, mut logic: L) -> StreamVec<S, Result<T, E2>> {
+    fn map_err<E2: 'static, L: FnMut(E) -> E2 + 'static>(self, mut logic: L) -> StreamVec<T, Result<D, E2>> {
         self.map(move |r| r.map_err(&mut logic))
     }
 
-    fn and_then<T2: 'static, L: FnMut(T) -> Result<T2, E> + 'static>(self, mut logic: L) -> StreamVec<S, Result<T2, E>> {
+    fn and_then<D2: 'static, L: FnMut(D) -> Result<D2, E> + 'static>(self, mut logic: L) -> StreamVec<T, Result<D2, E>> {
         self.map(move |r| r.and_then(&mut logic))
     }
 
-    fn unwrap_or_else<L: FnMut(E) -> T + 'static>(self, mut logic: L) -> StreamVec<S, T> {
+    fn unwrap_or_else<L: FnMut(E) -> D + 'static>(self, mut logic: L) -> StreamVec<T, D> {
         self.map(move |r| r.unwrap_or_else(&mut logic))
     }
 }

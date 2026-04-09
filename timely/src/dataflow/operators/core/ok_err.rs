@@ -1,14 +1,15 @@
 //! Operators that separate one stream into two streams based on some condition
 
 use crate::Container;
+use crate::progress::Timestamp;
 use crate::container::{DrainContainer, SizableContainer, PushInto};
 use crate::dataflow::channels::pact::Pipeline;
 use crate::dataflow::operators::generic::builder_rc::OperatorBuilder;
 use crate::dataflow::operators::generic::OutputBuilder;
-use crate::dataflow::{Scope, Stream};
+use crate::dataflow::Stream;
 
 /// Extension trait for `Stream`.
-pub trait OkErr<S: Scope, C: DrainContainer> {
+pub trait OkErr<T: Timestamp, C: DrainContainer> {
     /// Takes one input stream and splits it into two output streams.
     /// For each record, the supplied closure is called with the data.
     /// If it returns `Ok(x)`, then `x` will be sent
@@ -33,7 +34,7 @@ pub trait OkErr<S: Scope, C: DrainContainer> {
     fn ok_err<C1, D1, C2, D2, L>(
         self,
         logic: L,
-    ) -> (Stream<S, C1>, Stream<S, C2>)
+    ) -> (Stream<T, C1>, Stream<T, C2>)
     where
         C1: Container + SizableContainer + PushInto<D1>,
         C2: Container + SizableContainer + PushInto<D2>,
@@ -41,11 +42,11 @@ pub trait OkErr<S: Scope, C: DrainContainer> {
     ;
 }
 
-impl<S: Scope, C: Container + DrainContainer> OkErr<S, C> for Stream<S, C> {
+impl<T: Timestamp, C: Container + DrainContainer> OkErr<T, C> for Stream<T, C> {
     fn ok_err<C1, D1, C2, D2, L>(
         self,
         mut logic: L,
-    ) -> (Stream<S, C1>, Stream<S, C2>)
+    ) -> (Stream<T, C1>, Stream<T, C2>)
     where
         C1: Container + SizableContainer + PushInto<D1>,
         C2: Container + SizableContainer + PushInto<D2>,

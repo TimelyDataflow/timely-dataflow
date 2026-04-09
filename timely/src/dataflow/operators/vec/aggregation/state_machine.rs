@@ -3,7 +3,8 @@ use std::hash::Hash;
 use std::collections::HashMap;
 
 use crate::ExchangeData;
-use crate::dataflow::{StreamVec, Scope};
+use crate::progress::Timestamp;
+use crate::dataflow::StreamVec;
 use crate::dataflow::operators::generic::operator::Operator;
 use crate::dataflow::channels::pact::Exchange;
 
@@ -17,7 +18,7 @@ use crate::dataflow::channels::pact::Exchange;
 /// updates for the current time reflected in the notificator, though. In the case of partially
 /// ordered times, the only guarantee is that updates are not applied out of order, not that there
 /// is some total order on times respecting the total order (updates may be interleaved).
-pub trait StateMachine<S: Scope, K: ExchangeData+Hash+Eq, V: ExchangeData> {
+pub trait StateMachine<T: Timestamp, K: ExchangeData+Hash+Eq, V: ExchangeData> {
     /// Tracks a state for each presented key, using user-supplied state transition logic.
     ///
     /// The transition logic `fold` may mutate the state, and produce both output records and
@@ -51,17 +52,17 @@ pub trait StateMachine<S: Scope, K: ExchangeData+Hash+Eq, V: ExchangeData> {
         I: IntoIterator<Item=R>,                    // type of output iterator
         F: Fn(&K, V, &mut D)->(bool, I)+'static,    // state update logic
         H: Fn(&K)->u64+'static,                     // "hash" function for keys
-    >(self, fold: F, hash: H) -> StreamVec<S, R> where S::Timestamp : Hash+Eq ;
+    >(self, fold: F, hash: H) -> StreamVec<T, R> where T : Hash+Eq ;
 }
 
-impl<S: Scope, K: ExchangeData+Hash+Eq+Clone, V: ExchangeData> StateMachine<S, K, V> for StreamVec<S, (K, V)> {
+impl<T: Timestamp, K: ExchangeData+Hash+Eq+Clone, V: ExchangeData> StateMachine<T, K, V> for StreamVec<T, (K, V)> {
     fn state_machine<
             R: 'static,                                 // output type
             D: Default+'static,                         // per-key state (data)
             I: IntoIterator<Item=R>,                    // type of output iterator
             F: Fn(&K, V, &mut D)->(bool, I)+'static,    // state update logic
             H: Fn(&K)->u64+'static,                     // "hash" function for keys
-        >(self, fold: F, hash: H) -> StreamVec<S, R> where S::Timestamp : Hash+Eq {
+        >(self, fold: F, hash: H) -> StreamVec<T, R> where T : Hash+Eq {
 
         let mut pending: HashMap<_, Vec<(K, V)>> = HashMap::new();   // times -> (keys -> state)
         let mut states = HashMap::new();    // keys -> state

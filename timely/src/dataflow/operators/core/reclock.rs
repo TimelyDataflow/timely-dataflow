@@ -1,13 +1,13 @@
 //! Extension methods for `Stream` based on record-by-record transformation.
 
 use crate::Container;
-use crate::order::PartialOrder;
-use crate::dataflow::{Scope, Stream};
+use crate::progress::Timestamp;
+use crate::dataflow::Stream;
 use crate::dataflow::channels::pact::Pipeline;
 use crate::dataflow::operators::generic::operator::Operator;
 
 /// Extension trait for reclocking a stream.
-pub trait Reclock<S: Scope> {
+pub trait Reclock<T: Timestamp> {
     /// Delays records until an input is observed on the `clock` input.
     ///
     /// The source stream is buffered until a record is seen on the clock input,
@@ -46,11 +46,11 @@ pub trait Reclock<S: Scope> {
     /// assert_eq!(extracted[1], (5, vec![4,5]));
     /// assert_eq!(extracted[2], (8, vec![6,7,8]));
     /// ```
-    fn reclock<TC: Container>(self, clock: Stream<S, TC>) -> Self;
+    fn reclock<TC: Container>(self, clock: Stream<T, TC>) -> Self;
 }
 
-impl<S: Scope, C: Container> Reclock<S> for Stream<S, C> {
-    fn reclock<TC: Container>(self, clock: Stream<S, TC>) -> Stream<S, C> {
+impl<T: Timestamp, C: Container> Reclock<T> for Stream<T, C> {
+    fn reclock<TC: Container>(self, clock: Stream<T, TC>) -> Stream<T, C> {
 
         let mut stash = vec![];
 

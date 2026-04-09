@@ -1,7 +1,7 @@
 //! Starts a timely dataflow execution from configuration information and per-worker logic.
 
 use crate::communication::{initialize_from, Allocator, AllocatorBuilder, WorkerGuards};
-use crate::dataflow::scopes::Child;
+use crate::dataflow::scopes::Scope;
 use crate::worker::Worker;
 use crate::{CommunicationConfig, WorkerConfig};
 
@@ -124,7 +124,7 @@ impl Config {
 pub fn example<T, F>(func: F) -> T
 where
     T: Send+'static,
-    F: FnOnce(&mut Child<u64>)->T+Send+Sync+'static
+    F: FnOnce(&mut Scope<u64>)->T+Send+Sync+'static
 {
     crate::execute::execute_directly(|worker| worker.dataflow(|scope| func(scope)))
 }

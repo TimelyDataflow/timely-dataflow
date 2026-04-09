@@ -1,6 +1,7 @@
 use std::cmp::Ordering;
 
 use timely::dataflow::*;
+use timely::progress::Timestamp;
 use timely::dataflow::operators::{Input, Exchange, Probe};
 use timely::dataflow::operators::generic::operator::Operator;
 use timely::dataflow::channels::pact::Pipeline;
@@ -53,8 +54,8 @@ trait UnionFind {
     fn union_find(self) -> Self;
 }
 
-impl<G: Scope> UnionFind for StreamVec<G, (usize, usize)> {
-    fn union_find(self) -> StreamVec<G, (usize, usize)> {
+impl<T: Timestamp> UnionFind for StreamVec<T, (usize, usize)> {
+    fn union_find(self) -> StreamVec<T, (usize, usize)> {
 
         self.unary(Pipeline, "UnionFind", |_,_| {
 

@@ -3,7 +3,8 @@ use std::hash::Hash;
 use std::collections::HashMap;
 
 use crate::ExchangeData;
-use crate::dataflow::{StreamVec, Scope};
+use crate::progress::Timestamp;
+use crate::dataflow::StreamVec;
 use crate::dataflow::operators::generic::operator::Operator;
 use crate::dataflow::channels::pact::Exchange;
 
@@ -11,7 +12,7 @@ use crate::dataflow::channels::pact::Exchange;
 ///
 /// Extension method supporting aggregation of keyed data within timestamp.
 /// For inter-timestamp aggregation, consider `StateMachine`.
-pub trait Aggregate<S: Scope, K: ExchangeData+Hash, V: ExchangeData> {
+pub trait Aggregate<T: Timestamp, K: ExchangeData+Hash, V: ExchangeData> {
     /// Aggregates data of the form `(key, val)`, using user-supplied logic.
     ///
     /// The `aggregate` method is implemented for streams of `(K, V)` data,
@@ -65,16 +66,16 @@ pub trait Aggregate<S: Scope, K: ExchangeData+Hash, V: ExchangeData> {
         self,
         fold: F,
         emit: E,
-        hash: H) -> StreamVec<S, R> where S::Timestamp: Eq;
+        hash: H) -> StreamVec<T, R> where T: Eq;
 }
 
-impl<S: Scope<Timestamp: Hash>, K: ExchangeData+Clone+Hash+Eq, V: ExchangeData> Aggregate<S, K, V> for StreamVec<S, (K, V)> {
+impl<T: Timestamp + Hash, K: ExchangeData+Clone+Hash+Eq, V: ExchangeData> Aggregate<T, K, V> for StreamVec<T, (K, V)> {
 
     fn aggregate<R: 'static, D: Default+'static, F: Fn(&K, V, &mut D)+'static, E: Fn(K, D)->R+'static, H: Fn(&K)->u64+'static>(
         self,
         fold: F,
         emit: E,
-        hash: H) -> StreamVec<S, R> where S::Timestamp: Eq {
+        hash: H) -> StreamVec<T, R> where T: Eq {
 
         let mut aggregates = HashMap::new();
         self.unary_notify(Exchange::new(move |(k, _)| hash(k)), "Aggregate", vec![], move |input, output, notificator| {

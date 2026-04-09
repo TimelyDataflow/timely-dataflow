@@ -39,6 +39,7 @@
 //! than that in which the stream was captured.
 
 use crate::dataflow::{Scope, Stream};
+use crate::scheduling::Scheduler;
 use crate::dataflow::channels::pushers::Counter as PushCounter;
 use crate::dataflow::operators::generic::builder_raw::OperatorBuilder;
 use crate::progress::Timestamp;
@@ -50,16 +51,16 @@ use crate::dataflow::channels::Message;
 
 /// Replay a capture stream into a scope with the same timestamp.
 pub trait Replay<T: Timestamp, C> : Sized {
-    /// Replays `self` into the provided scope, as a `Stream<S, C>`.
-    fn replay_into<S: Scope<Timestamp=T>>(self, scope: &mut S) -> Stream<S, C> {
+    /// Replays `self` into the provided scope, as a `Stream<T, C>`.
+    fn replay_into(self, scope: &mut Scope<T>) -> Stream<T, C> {
         self.replay_core(scope, Some(std::time::Duration::new(0, 0)))
     }
-    /// Replays `self` into the provided scope, as a `Stream<S, C>`.
+    /// Replays `self` into the provided scope, as a `Stream<T, C>`.
     ///
     /// The `period` argument allows the specification of a re-activation period, where the operator
     /// will re-activate itself every so often. The `None` argument instructs the operator not to
     /// re-activate itself.
-    fn replay_core<S: Scope<Timestamp=T>>(self, scope: &mut S, period: Option<std::time::Duration>) -> Stream<S, C>;
+    fn replay_core(self, scope: &mut Scope<T>, period: Option<std::time::Duration>) -> Stream<T, C>;
 }
 
 impl<T: Timestamp, C: Container+Clone, I> Replay<T, C> for I
@@ -67,7 +68,7 @@ where
     I : IntoIterator,
     <I as IntoIterator>::Item: EventIterator<T, C>+'static,
 {
-    fn replay_core<S: Scope<Timestamp=T>>(self, scope: &mut S, period: Option<std::time::Duration>) -> Stream<S, C>{
+    fn replay_core(self, scope: &mut Scope<T>, period: Option<std::time::Duration>) -> Stream<T, C>{
 
         let mut builder = OperatorBuilder::new("Replay".to_owned(), scope.clone());
 
@@ -88,7 +89,7 @@ where
                     // The first thing we do is modify our capabilities to match the number of streams we manage.
                     // This should be a simple change of `self.event_streams.len() - 1`. We only do this once, as
                     // our very first action.
-                    progress.internals[0].update(S::Timestamp::minimum(), (event_streams.len() as i64) - 1);
+                    progress.internals[0].update(T::minimum(), (event_streams.len() as i64) - 1);
                     started = true;
                 }
 

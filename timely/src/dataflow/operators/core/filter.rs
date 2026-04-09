@@ -1,8 +1,9 @@
 //! Filters a stream by a predicate.
 use crate::container::{DrainContainer, SizableContainer, PushInto};
+use crate::progress::Timestamp;
 use crate::Container;
 use crate::dataflow::channels::pact::Pipeline;
-use crate::dataflow::{Scope, Stream};
+use crate::dataflow::Stream;
 use crate::dataflow::operators::generic::operator::Operator;
 
 /// Extension trait for filtering.
@@ -23,11 +24,11 @@ pub trait Filter<C: DrainContainer> {
     fn filter<P: FnMut(&C::Item<'_>)->bool+'static>(self, predicate: P) -> Self;
 }
 
-impl<G: Scope, C: Container + SizableContainer + DrainContainer> Filter<C> for Stream<G, C>
+impl<T: Timestamp, C: Container + SizableContainer + DrainContainer> Filter<C> for Stream<T, C>
 where
     for<'a> C: PushInto<C::Item<'a>>
 {
-    fn filter<P: FnMut(&C::Item<'_>)->bool+'static>(self, mut predicate: P) -> Stream<G, C> {
+    fn filter<P: FnMut(&C::Item<'_>)->bool+'static>(self, mut predicate: P) -> Stream<T, C> {
         self.unary(Pipeline, "Filter", move |_,_| move |input, output| {
             input.for_each_time(|time, data| {
                 output.session(&time)

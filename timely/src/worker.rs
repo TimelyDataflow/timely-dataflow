@@ -15,7 +15,7 @@ use crate::scheduling::{Schedule, Scheduler, Activations};
 use crate::progress::timestamp::{Refines};
 use crate::progress::SubgraphBuilder;
 use crate::progress::operate::Operate;
-use crate::dataflow::scopes::Child;
+use crate::dataflow::scopes::Scope;
 use crate::logging::TimelyLogger;
 
 /// Different ways in which timely's progress tracking can work.
@@ -589,7 +589,7 @@ impl Worker {
     pub fn dataflow<T, R, F>(&mut self, func: F) -> R
     where
         T: Refines<()>,
-        F: FnOnce(&mut Child<T>)->R,
+        F: FnOnce(&mut Scope<T>)->R,
     {
         self.dataflow_core("Dataflow", self.logging(), Box::new(()), |_, child| func(child))
     }
@@ -612,7 +612,7 @@ impl Worker {
     pub fn dataflow_named<T, R, F>(&mut self, name: &str, func: F) -> R
     where
         T: Refines<()>,
-        F: FnOnce(&mut Child<T>)->R,
+        F: FnOnce(&mut Scope<T>)->R,
     {
         self.dataflow_core(name, self.logging(), Box::new(()), |_, child| func(child))
     }
@@ -645,7 +645,7 @@ impl Worker {
     pub fn dataflow_core<T, R, F, V>(&mut self, name: &str, mut logging: Option<TimelyLogger>, mut resources: V, func: F) -> R
     where
         T: Refines<()>,
-        F: FnOnce(&mut V, &mut Child<T>)->R,
+        F: FnOnce(&mut V, &mut Scope<T>)->R,
         V: Any+'static,
     {
         let dataflow_index = self.allocate_dataflow_index();
@@ -659,7 +659,7 @@ impl Worker {
         let subscope = Rc::new(RefCell::new(subscope));
 
         let result = {
-            let mut builder = Child {
+            let mut builder = Scope {
                 subgraph: Rc::clone(&subscope),
                 worker: self.clone(),
                 logging: logging.clone(),
@@ -671,8 +671,8 @@ impl Worker {
         let operator = Rc::try_unwrap(subscope)
             .map_err(|_| ())
             .expect(
-                "Cannot consume dataflow scope: an outstanding `Child` clone is still alive. \
-                 This usually means a `Child` was cloned and held past the dataflow() call \
+                "Cannot consume dataflow scope: an outstanding `Scope` clone is still alive. \
+                 This usually means a `Scope` was cloned and held past the dataflow() call \
                  that constructed it."
             )
             .into_inner()

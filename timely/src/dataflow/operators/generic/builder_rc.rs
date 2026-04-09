@@ -24,20 +24,20 @@ use super::builder_raw::OperatorBuilder as OperatorBuilderRaw;
 
 /// Builds operators with generic shape.
 #[derive(Debug)]
-pub struct OperatorBuilder<G: Scope> {
-    builder: OperatorBuilderRaw<G>,
-    frontier: Vec<MutableAntichain<G::Timestamp>>,
-    consumed: Vec<Rc<RefCell<ChangeBatch<G::Timestamp>>>>,
-    internal: Rc<RefCell<Vec<Rc<RefCell<ChangeBatch<G::Timestamp>>>>>>,
+pub struct OperatorBuilder<T: Timestamp> {
+    builder: OperatorBuilderRaw<T>,
+    frontier: Vec<MutableAntichain<T>>,
+    consumed: Vec<Rc<RefCell<ChangeBatch<T>>>>,
+    internal: Rc<RefCell<Vec<Rc<RefCell<ChangeBatch<T>>>>>>,
     /// For each input, a shared list of summaries to each output.
-    summaries: Vec<Rc<RefCell<PortConnectivity<<G::Timestamp as Timestamp>::Summary>>>>,
-    produced: Vec<Rc<RefCell<ChangeBatch<G::Timestamp>>>>,
+    summaries: Vec<Rc<RefCell<PortConnectivity<<T as Timestamp>::Summary>>>>,
+    produced: Vec<Rc<RefCell<ChangeBatch<T>>>>,
 }
 
-impl<G: Scope> OperatorBuilder<G> {
+impl<T: Timestamp> OperatorBuilder<T> {
 
     /// Allocates a new generic operator builder from its containing scope.
-    pub fn new(name: String, scope: G) -> Self {
+    pub fn new(name: String, scope: Scope<T>) -> Self {
         OperatorBuilder {
             builder: OperatorBuilderRaw::new(name, scope),
             frontier: Vec::new(),
@@ -54,9 +54,9 @@ impl<G: Scope> OperatorBuilder<G> {
     }
 
     /// Adds a new input to a generic operator builder, returning the `Pull` implementor to use.
-    pub fn new_input<C: Container, P>(&mut self, stream: Stream<G, C>, pact: P) -> InputHandleCore<G::Timestamp, C, P::Puller>
+    pub fn new_input<C: Container, P>(&mut self, stream: Stream<T, C>, pact: P) -> InputHandleCore<T, C, P::Puller>
     where
-        P: ParallelizationContract<G::Timestamp, C> {
+        P: ParallelizationContract<T, C> {
 
         let connection = (0..self.builder.shape().outputs()).map(|o| (o, Antichain::from_elem(Default::default())));
         self.new_input_connection(stream, pact, connection)
@@ -70,10 +70,10 @@ impl<G: Scope> OperatorBuilder<G> {
     ///
     /// Commonly the connections are either the unit summary, indicating the same timestamp might be produced as output, or an empty
     /// antichain indicating that there is no connection from the input to the output.
-    pub fn new_input_connection<C: Container, P, I>(&mut self, stream: Stream<G, C>, pact: P, connection: I) -> InputHandleCore<G::Timestamp, C, P::Puller>
+    pub fn new_input_connection<C: Container, P, I>(&mut self, stream: Stream<T, C>, pact: P, connection: I) -> InputHandleCore<T, C, P::Puller>
     where
-        P: ParallelizationContract<G::Timestamp, C>,
-        I: IntoIterator<Item = (usize, Antichain<<G::Timestamp as Timestamp>::Summary>)> + Clone,
+        P: ParallelizationContract<T, C>,
+        I: IntoIterator<Item = (usize, Antichain<<T as Timestamp>::Summary>)> + Clone,
     {
         let puller = self.builder.new_input_connection(stream, pact, connection.clone());
 
@@ -88,7 +88,7 @@ impl<G: Scope> OperatorBuilder<G> {
     }
 
     /// Adds a new output to a generic operator builder, returning the `Push` implementor to use.
-    pub fn new_output<C: Container>(&mut self) -> (pushers::Output<G::Timestamp, C>, Stream<G, C>) {
+    pub fn new_output<C: Container>(&mut self) -> (pushers::Output<T, C>, Stream<T, C>) {
         let connection = (0..self.builder.shape().inputs()).map(|i| (i, Antichain::from_elem(Default::default())));
         self.new_output_connection(connection)
     }
@@ -102,11 +102,11 @@ impl<G: Scope> OperatorBuilder<G> {
     /// Commonly the connections are either the unit summary, indicating the same timestamp might be produced as output, or an empty
     /// antichain indicating that there is no connection from the input to the output.
     pub fn new_output_connection<C: Container, I>(&mut self, connection: I) -> (
-        pushers::Output<G::Timestamp, C>,
-        Stream<G, C>,
+        pushers::Output<T, C>,
+        Stream<T, C>,
     )
     where
-        I: IntoIterator<Item = (usize, Antichain<<G::Timestamp as Timestamp>::Summary>)> + Clone,
+        I: IntoIterator<Item = (usize, Antichain<<T as Timestamp>::Summary>)> + Clone,
     {
         let new_output = self.shape().outputs();
         let (tee, stream) = self.builder.new_output_connection(connection.clone());
@@ -127,8 +127,8 @@ impl<G: Scope> OperatorBuilder<G> {
     /// Creates an operator implementation from supplied logic constructor.
     pub fn build<B, L>(self, constructor: B)
     where
-        B: FnOnce(Vec<Capability<G::Timestamp>>) -> L,
-        L: FnMut(&[MutableAntichain<G::Timestamp>])+'static
+        B: FnOnce(Vec<Capability<T>>) -> L,
+        L: FnMut(&[MutableAntichain<T>])+'static
     {
         self.build_reschedule(|caps| {
             let mut logic = constructor(caps);
@@ -144,13 +144,13 @@ impl<G: Scope> OperatorBuilder<G> {
     /// discretion.
     pub fn build_reschedule<B, L>(self, constructor: B)
     where
-        B: FnOnce(Vec<Capability<G::Timestamp>>) -> L,
-        L: FnMut(&[MutableAntichain<G::Timestamp>])->bool+'static
+        B: FnOnce(Vec<Capability<T>>) -> L,
+        L: FnMut(&[MutableAntichain<T>])->bool+'static
     {
         // create capabilities, discard references to their creation.
         let mut capabilities = Vec::with_capacity(self.internal.borrow().len());
         for batch in self.internal.borrow().iter() {
-            capabilities.push(Capability::new(G::Timestamp::minimum(), Rc::clone(batch)));
+            capabilities.push(Capability::new(T::minimum(), Rc::clone(batch)));
             // Discard evidence of creation, as we are assumed to start with one.
             batch.borrow_mut().clear();
         }
@@ -163,7 +163,7 @@ impl<G: Scope> OperatorBuilder<G> {
         let self_produced = self.produced;
 
         let raw_logic =
-        move |progress: &mut SharedProgress<G::Timestamp>| {
+        move |progress: &mut SharedProgress<T>| {
 
             // drain frontier changes
             for (progress, frontier) in progress.frontiers.iter_mut().zip(self_frontier.iter_mut()) {
