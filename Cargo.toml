@@ -7,6 +7,14 @@ members = [
     "mdbook",
     "timely",
 ]
+exclude = [
+    # The wasm-bindgen example is its own crate with wasm-only dependencies
+    # (wasm-bindgen, web-sys). It is intentionally excluded from the workspace
+    # so a native `cargo build --workspace` does not try to build it. CI checks
+    # it explicitly via `cargo check --target wasm32-unknown-unknown
+    # --manifest-path timely/examples/wasm-bindgen/Cargo.toml` (see test.yml).
+    "timely/examples/wasm-bindgen",
+]
 
 resolver = "2"
 

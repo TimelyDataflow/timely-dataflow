@@ -1,0 +1,18 @@
+# Standalone crate, not part of the parent workspace.
+# See README.md and the parent Cargo.toml's `[workspace.exclude]` for context.
+[workspace]
+
+[package]
+name = "timely-wasm-bindgen-example"
+version = "0.0.0"
+edition = "2021"
+publish = false
+description = "Minimal example of running a timely dataflow program in a browser via wasm-bindgen."
+
+[lib]
+crate-type = ["cdylib"]
+
+[dependencies]
+timely = { path = "../../", default-features = false }
+wasm-bindgen = "0.2"
+web-sys = { version = "0.3", features = ["console"] }

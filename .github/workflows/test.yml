@@ -52,3 +52,27 @@ jobs:
         run: cargo clippy --workspace --all-targets
         env:
           RUSTFLAGS: "" # Don't make test fail on clippy
+
+  # Verify that timely_communication, timely, and the threadless example
+  # continue to compile for wasm32-unknown-unknown. The threadless example
+  # documents the WASM-compatible entry point: a single-threaded worker
+  # constructed manually with no timer. This job catches regressions that
+  # would break that path (e.g. introducing a hard dependency on
+  # std::net APIs that don't compile, or removing Option<Instant> from
+  # Worker::new).
+  wasm:
+    name: Cargo check (wasm32-unknown-unknown)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+      - uses: actions-rust-lang/setup-rust-toolchain@v1
+        with:
+          target: wasm32-unknown-unknown
+      - name: Check timely_communication
+        run: cargo check --target wasm32-unknown-unknown -p timely_communication
+      - name: Check timely
+        run: cargo check --target wasm32-unknown-unknown -p timely
+      - name: Check threadless example
+        run: cargo check --target wasm32-unknown-unknown -p timely --example threadless
+      - name: Check wasm-bindgen example
+        run: cargo check --target wasm32-unknown-unknown --manifest-path timely/examples/wasm-bindgen/Cargo.toml
