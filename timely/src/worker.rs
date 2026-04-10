@@ -589,7 +589,7 @@ impl Worker {
     pub fn dataflow<T, R, F>(&mut self, func: F) -> R
     where
         T: Refines<()>,
-        F: FnOnce(&mut Scope<T>)->R,
+        F: for<'scope> FnOnce(&mut Scope<'scope, T>)->R,
     {
         self.dataflow_core("Dataflow", self.logging(), Box::new(()), |_, child| func(child))
     }
@@ -612,7 +612,7 @@ impl Worker {
     pub fn dataflow_named<T, R, F>(&mut self, name: &str, func: F) -> R
     where
         T: Refines<()>,
-        F: FnOnce(&mut Scope<T>)->R,
+        F: for<'scope> FnOnce(&mut Scope<'scope, T>)->R,
     {
         self.dataflow_core(name, self.logging(), Box::new(()), |_, child| func(child))
     }
@@ -645,7 +645,7 @@ impl Worker {
     pub fn dataflow_core<T, R, F, V>(&mut self, name: &str, mut logging: Option<TimelyLogger>, mut resources: V, func: F) -> R
     where
         T: Refines<()>,
-        F: FnOnce(&mut V, &mut Scope<T>)->R,
+        F: for<'scope> FnOnce(&mut V, &mut Scope<'scope, T>)->R,
         V: Any+'static,
     {
         let dataflow_index = self.allocate_dataflow_index();
@@ -656,11 +656,11 @@ impl Worker {
         let progress_logging = self.logger_for(&format!("timely/progress/{}", type_name));
         let summary_logging  = self.logger_for(&format!("timely/summary/{}", type_name));
         let subscope = SubgraphBuilder::new_from(addr, identifier, logging.clone(), summary_logging, name);
-        let subscope = Rc::new(RefCell::new(subscope));
+        let subscope = RefCell::new(subscope);
 
         let result = {
             let mut builder = Scope {
-                subgraph: Rc::clone(&subscope),
+                subgraph: &subscope,
                 worker: self.clone(),
                 logging: logging.clone(),
                 progress_logging,
@@ -668,15 +668,7 @@ impl Worker {
             func(&mut resources, &mut builder)
         };
 
-        let operator = Rc::try_unwrap(subscope)
-            .map_err(|_| ())
-            .expect(
-                "Cannot consume dataflow scope: an outstanding `Scope` clone is still alive. \
-                 This usually means a `Scope` was cloned and held past the dataflow() call \
-                 that constructed it."
-            )
-            .into_inner()
-            .build(self);
+        let operator = subscope.into_inner().build(self);
 
         if let Some(l) = logging.as_mut() {
             l.log(crate::logging::OperatesEvent {

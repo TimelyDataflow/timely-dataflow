@@ -17,16 +17,16 @@ use std::fmt::{self, Debug};
 ///
 /// Internally `Stream` maintains a list of data recipients who should be presented with data
 /// produced by the source of the stream.
-pub struct Stream<T: Timestamp, C> {
+pub struct Stream<'scope, T: Timestamp, C> {
     /// The progress identifier of the stream's data source.
     name: Source,
     /// The `Scope` containing the stream.
-    scope: Scope<T>,
+    scope: Scope<'scope, T>,
     /// Maintains a list of Push<Message<T, C>> interested in the stream's output.
     ports: TeeHelper<T, C>,
 }
 
-impl<T: Timestamp, C: Clone+'static> Clone for Stream<T, C> {
+impl<'scope, T: Timestamp, C: Clone+'static> Clone for Stream<'scope, T, C> {
     fn clone(&self) -> Self {
         Self {
             name: self.name,
@@ -43,9 +43,9 @@ impl<T: Timestamp, C: Clone+'static> Clone for Stream<T, C> {
 }
 
 /// A stream batching data in owning vectors.
-pub type StreamVec<T, D> = Stream<T, Vec<D>>;
+pub type StreamVec<'scope, T, D> = Stream<'scope, T, Vec<D>>;
 
-impl<T: Timestamp, C> Stream<T, C> {
+impl<'scope, T: Timestamp, C> Stream<'scope, T, C> {
     /// Connects the stream to a destination.
     ///
     /// The destination is described both by a `Target`, for progress tracking information, and a `P: Push` where the
@@ -65,13 +65,13 @@ impl<T: Timestamp, C> Stream<T, C> {
         self.ports.add_pusher(pusher);
     }
     /// Allocates a `Stream` from a supplied `Source` name and rendezvous point.
-    pub fn new(source: Source, output: TeeHelper<T, C>, scope: Scope<T>) -> Self {
+    pub fn new(source: Source, output: TeeHelper<T, C>, scope: Scope<'scope, T>) -> Self {
         Self { name: source, ports: output, scope }
     }
     /// The name of the stream's source operator.
     pub fn name(&self) -> &Source { &self.name }
     /// The scope immediately containing the stream.
-    pub fn scope(&self) -> Scope<T> { self.scope.clone() }
+    pub fn scope(&self) -> Scope<'scope, T> { self.scope.clone() }
 
     /// Allows the assertion of a container type, for the benefit of type inference.
     ///
@@ -88,20 +88,20 @@ impl<T: Timestamp, C> Stream<T, C> {
     ///            .inspect(|x| println!("seen: {:?}", x));
     /// });
     /// ```
-    pub fn container<C2>(self) -> Stream<T, C2> where Self: AsStream<T, C2> { self.as_stream() }
+    pub fn container<C2>(self) -> Stream<'scope, T, C2> where Self: AsStream<'scope, T, C2> { self.as_stream() }
 }
 
 /// A type that can be translated to a [Stream].
-pub trait AsStream<T: Timestamp, C> {
+pub trait AsStream<'scope, T: Timestamp, C> {
     /// Translate `self` to a [Stream].
-    fn as_stream(self) -> Stream<T, C>;
+    fn as_stream(self) -> Stream<'scope, T, C>;
 }
 
-impl<T: Timestamp, C> AsStream<T, C> for Stream<T, C> {
+impl<'scope, T: Timestamp, C> AsStream<'scope, T, C> for Stream<'scope, T, C> {
     fn as_stream(self) -> Self { self }
 }
 
-impl<T: Timestamp, C> Debug for Stream<T, C> {
+impl<'scope, T: Timestamp, C> Debug for Stream<'scope, T, C> {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         f.debug_struct("Stream")
             .field("source", &self.name)

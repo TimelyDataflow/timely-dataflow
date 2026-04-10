@@ -17,7 +17,7 @@ use crate::{Container, ContainerBuilder};
 use crate::container::CapacityContainerBuilder;
 
 /// Methods to construct generic streaming and blocking operators.
-pub trait Operator<T: Timestamp, C1> {
+pub trait Operator<'scope, T: Timestamp, C1> {
     /// Creates a new dataflow operator that partitions its input stream by a parallelization
     /// strategy `pact`, and repeatedly invokes `logic`, the function returned by the function passed as `constructor`.
     /// `logic` can read from the input stream, write to the output stream, and inspect the frontier at the input.
@@ -56,7 +56,7 @@ pub trait Operator<T: Timestamp, C1> {
     ///         .container::<Vec<_>>();
     /// });
     /// ```
-    fn unary_frontier<CB, B, L, P>(self, pact: P, name: &str, constructor: B) -> Stream<T, CB::Container>
+    fn unary_frontier<CB, B, L, P>(self, pact: P, name: &str, constructor: B) -> Stream<'scope, T, CB::Container>
     where
         CB: ContainerBuilder,
         B: FnOnce(Capability<T>, OperatorInfo) -> L,
@@ -95,7 +95,7 @@ pub trait Operator<T: Timestamp, C1> {
                      &mut OutputBuilderSession<'_, T, CB>,
                      &mut Notificator<T>)+'static,
              P: ParallelizationContract<T, C1>>
-             (self, pact: P, name: &str, init: impl IntoIterator<Item=T>, logic: L) -> Stream<T, CB::Container>;
+             (self, pact: P, name: &str, init: impl IntoIterator<Item=T>, logic: L) -> Stream<'scope, T, CB::Container>;
 
     /// Creates a new dataflow operator that partitions its input stream by a parallelization
     /// strategy `pact`, and repeatedly invokes `logic`, the function returned by the function passed as `constructor`.
@@ -125,7 +125,7 @@ pub trait Operator<T: Timestamp, C1> {
     ///         });
     /// });
     /// ```
-    fn unary<CB, B, L, P>(self, pact: P, name: &str, constructor: B) -> Stream<T, CB::Container>
+    fn unary<CB, B, L, P>(self, pact: P, name: &str, constructor: B) -> Stream<'scope, T, CB::Container>
     where
         CB: ContainerBuilder,
         B: FnOnce(Capability<T>, OperatorInfo) -> L,
@@ -181,7 +181,7 @@ pub trait Operator<T: Timestamp, C1> {
     ///    }
     /// }).unwrap();
     /// ```
-    fn binary_frontier<C2, CB, B, L, P1, P2>(self, other: Stream<T, C2>, pact1: P1, pact2: P2, name: &str, constructor: B) -> Stream<T, CB::Container>
+    fn binary_frontier<C2, CB, B, L, P1, P2>(self, other: Stream<'scope, T, C2>, pact1: P1, pact2: P2, name: &str, constructor: B) -> Stream<'scope, T, CB::Container>
     where
         C2: Container,
         CB: ContainerBuilder,
@@ -241,7 +241,7 @@ pub trait Operator<T: Timestamp, C1> {
                        &mut Notificator<T>)+'static,
               P1: ParallelizationContract<T, C1>,
               P2: ParallelizationContract<T, C2>>
-            (self, other: Stream<T, C2>, pact1: P1, pact2: P2, name: &str, init: impl IntoIterator<Item=T>, logic: L) -> Stream<T, CB::Container>;
+            (self, other: Stream<'scope, T, C2>, pact1: P1, pact2: P2, name: &str, init: impl IntoIterator<Item=T>, logic: L) -> Stream<'scope, T, CB::Container>;
 
     /// Creates a new dataflow operator that partitions its input streams by a parallelization
     /// strategy `pact`, and repeatedly invokes `logic`, the function returned by the function passed as `constructor`.
@@ -270,7 +270,7 @@ pub trait Operator<T: Timestamp, C1> {
     ///         }).inspect(|x| println!("{:?}", x));
     /// });
     /// ```
-    fn binary<C2, CB, B, L, P1, P2>(self, other: Stream<T, C2>, pact1: P1, pact2: P2, name: &str, constructor: B) -> Stream<T, CB::Container>
+    fn binary<C2, CB, B, L, P1, P2>(self, other: Stream<'scope, T, C2>, pact1: P1, pact2: P2, name: &str, constructor: B) -> Stream<'scope, T, CB::Container>
     where
         C2: Container,
         CB: ContainerBuilder,
@@ -311,9 +311,9 @@ pub trait Operator<T: Timestamp, C1> {
         P: ParallelizationContract<T, C1>;
 }
 
-impl<T: Timestamp, C1: Container> Operator<T, C1> for Stream<T, C1> {
+impl<'scope, T: Timestamp, C1: Container> Operator<'scope, T, C1> for Stream<'scope, T, C1> {
 
-    fn unary_frontier<CB, B, L, P>(self, pact: P, name: &str, constructor: B) -> Stream<T, CB::Container>
+    fn unary_frontier<CB, B, L, P>(self, pact: P, name: &str, constructor: B) -> Stream<'scope, T, CB::Container>
     where
         CB: ContainerBuilder,
         B: FnOnce(Capability<T>, OperatorInfo) -> L,
@@ -346,7 +346,7 @@ impl<T: Timestamp, C1: Container> Operator<T, C1> for Stream<T, C1> {
                      &mut OutputBuilderSession<'_, T, CB>,
                      &mut Notificator<T>)+'static,
              P: ParallelizationContract<T, C1>>
-             (self, pact: P, name: &str, init: impl IntoIterator<Item=T>, mut logic: L) -> Stream<T, CB::Container> {
+             (self, pact: P, name: &str, init: impl IntoIterator<Item=T>, mut logic: L) -> Stream<'scope, T, CB::Container> {
 
         self.unary_frontier(pact, name, move |capability, _info| {
             let mut notificator = FrontierNotificator::default();
@@ -362,7 +362,7 @@ impl<T: Timestamp, C1: Container> Operator<T, C1> for Stream<T, C1> {
         })
     }
 
-    fn unary<CB, B, L, P>(self, pact: P, name: &str, constructor: B) -> Stream<T, CB::Container>
+    fn unary<CB, B, L, P>(self, pact: P, name: &str, constructor: B) -> Stream<'scope, T, CB::Container>
     where
         CB: ContainerBuilder,
         B: FnOnce(Capability<T>, OperatorInfo) -> L,
@@ -388,7 +388,7 @@ impl<T: Timestamp, C1: Container> Operator<T, C1> for Stream<T, C1> {
         stream
     }
 
-    fn binary_frontier<C2, CB, B, L, P1, P2>(self, other: Stream<T, C2>, pact1: P1, pact2: P2, name: &str, constructor: B) -> Stream<T, CB::Container>
+    fn binary_frontier<C2, CB, B, L, P1, P2>(self, other: Stream<'scope, T, C2>, pact1: P1, pact2: P2, name: &str, constructor: B) -> Stream<'scope, T, CB::Container>
     where
         C2: Container,
         CB: ContainerBuilder,
@@ -428,7 +428,7 @@ impl<T: Timestamp, C1: Container> Operator<T, C1> for Stream<T, C1> {
                        &mut Notificator<T>)+'static,
               P1: ParallelizationContract<T, C1>,
               P2: ParallelizationContract<T, C2>>
-            (self, other: Stream<T, C2>, pact1: P1, pact2: P2, name: &str, init: impl IntoIterator<Item=T>, mut logic: L) -> Stream<T, CB::Container> {
+            (self, other: Stream<'scope, T, C2>, pact1: P1, pact2: P2, name: &str, init: impl IntoIterator<Item=T>, mut logic: L) -> Stream<'scope, T, CB::Container> {
 
         self.binary_frontier(other, pact1, pact2, name, |capability, _info| {
             let mut notificator = FrontierNotificator::default();
@@ -446,7 +446,7 @@ impl<T: Timestamp, C1: Container> Operator<T, C1> for Stream<T, C1> {
     }
 
 
-    fn binary<C2, CB, B, L, P1, P2>(self, other: Stream<T, C2>, pact1: P1, pact2: P2, name: &str, constructor: B) -> Stream<T, CB::Container>
+    fn binary<C2, CB, B, L, P1, P2>(self, other: Stream<'scope, T, C2>, pact1: P1, pact2: P2, name: &str, constructor: B) -> Stream<'scope, T, CB::Container>
     where
         C2: Container,
         CB: ContainerBuilder,
@@ -538,7 +538,7 @@ impl<T: Timestamp, C1: Container> Operator<T, C1> for Stream<T, C1> {
 ///     .inspect(|x| println!("number: {:?}", x));
 /// });
 /// ```
-pub fn source<T: Timestamp, CB, B, L>(scope: &Scope<T>, name: &str, constructor: B) -> Stream<T, CB::Container>
+pub fn source<'scope, T: Timestamp, CB, B, L>(scope: &Scope<'scope, T>, name: &str, constructor: B) -> Stream<'scope, T, CB::Container>
 where
     CB: ContainerBuilder,
     B: FnOnce(Capability<T>, OperatorInfo) -> L,
@@ -582,7 +582,7 @@ where
 ///
 /// });
 /// ```
-pub fn empty<T: Timestamp, C: Container>(scope: &Scope<T>) -> Stream<T, C> {
+pub fn empty<'scope, T: Timestamp, C: Container>(scope: &Scope<'scope, T>) -> Stream<'scope, T, C> {
     source::<_, CapacityContainerBuilder<C>, _, _>(scope, "Empty", |_capability, _info| |_output| {
         // drop capability, do nothing
     })

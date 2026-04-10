@@ -16,7 +16,7 @@ use crate::logging::TimelyProgressLogger as ProgressLogger;
 use crate::worker::{AsWorker, Config, Worker};
 
 /// Type alias for an iterative scope.
-pub type Iterative<TOuter, TInner> = Scope<Product<TOuter, TInner>>;
+pub type Iterative<'scope, TOuter, TInner> = Scope<'scope, Product<TOuter, TInner>>;
 
 /// A `Scope` wraps a `SubgraphBuilder` and manages the addition
 /// of `Operate`s and the connection of edges between them.
@@ -24,7 +24,7 @@ pub type Iterative<TOuter, TInner> = Scope<Product<TOuter, TInner>>;
 /// Importantly, this is a *shared* object, backed by `Rc<RefCell<>>` wrappers. Each method
 /// takes a shared reference, but can be thought of as first calling `.clone()` and then calling the
 /// method. Each method does not hold the `RefCell`'s borrow, and should prevent accidental panics.
-pub struct Scope<T: Timestamp> {
+pub struct Scope<'scope, T: Timestamp> {
     /// The subgraph under assembly.
     ///
     /// Stored as `Rc<RefCell<...>>` so that multiple `Scope` clones can share the
@@ -32,7 +32,7 @@ pub struct Scope<T: Timestamp> {
     /// `dataflow` call recovers the inner `SubgraphBuilder` via `Rc::try_unwrap`
     /// when the closure returns; if a clone has escaped the closure, this fails
     /// loudly with an actionable panic message.
-    pub(crate) subgraph: Rc<RefCell<SubgraphBuilder<T>>>,
+    pub(crate) subgraph: &'scope RefCell<SubgraphBuilder<T>>,
     /// A copy of the worker hosting this scope.
     pub(crate) worker:   Worker,
     /// The log writer for this scope.
@@ -41,7 +41,7 @@ pub struct Scope<T: Timestamp> {
     pub(crate) progress_logging:  Option<ProgressLogger<T>>,
 }
 
-impl<T: Timestamp> Scope<T> {
+impl<'scope, T: Timestamp> Scope<'scope, T> {
     /// This worker's index out of `0 .. self.peers()`.
     pub fn index(&self) -> usize { self.worker.index() }
     /// The total number of workers in the computation.
@@ -65,7 +65,7 @@ impl<T: Timestamp> Scope<T> {
     /// identifier of the future operator. It must be consumed by [`OperatorSlot::install`]
     /// before being dropped; otherwise it will panic, since the scope expects every
     /// reserved slot to eventually be filled.
-    pub fn reserve_operator(&mut self) -> OperatorSlot<T> {
+    pub fn reserve_operator(&mut self) -> OperatorSlot<'scope, T> {
         let index = self.subgraph.borrow_mut().allocate_child_id();
         let identifier = self.new_identifier();
         OperatorSlot {
@@ -74,70 +74,6 @@ impl<T: Timestamp> Scope<T> {
             identifier,
             installed: false,
         }
-    }
-
-    /// Begins a nested subscope with a refining timestamp `T2`.
-    ///
-    /// Returns a freshly-allocated child [`Scope<T2>`] for building the inner
-    /// dataflow, paired with an [`OperatorSlot`] reserved for the subgraph in
-    /// this (parent) scope. After populating the child scope, finalize it with
-    /// [`Scope::into_subgraph`] (passing the slot) and install the resulting
-    /// [`Subgraph`] (or any wrapper around it) into the slot.
-    ///
-    /// The standard `scoped` / `region` / `iterative` methods are thin wrappers
-    /// around `new_subscope` that install the built subgraph directly. Direct
-    /// callers of `new_subscope` may interpose, e.g. by wrapping the built
-    /// subgraph in a decorator that intercepts scheduling.
-    pub fn new_subscope<T2>(&self, name: &str) -> (Scope<T2>, OperatorSlot<T>)
-    where
-        T2: Timestamp + Refines<T>,
-    {
-        let mut parent = self.clone();
-        let slot = parent.reserve_operator();
-        let path = slot.addr();
-        let identifier = slot.identifier();
-
-        let type_name = std::any::type_name::<T2>();
-        let progress_logging = parent.logger_for(&format!("timely/progress/{type_name}"));
-        let summary_logging  = parent.logger_for(&format!("timely/summary/{type_name}"));
-
-        let child = Scope {
-            subgraph: Rc::new(RefCell::new(SubgraphBuilder::new_from(
-                path, identifier, self.logging(), summary_logging, name,
-            ))),
-            worker: parent.worker.clone(),
-            logging: parent.logging.clone(),
-            progress_logging,
-        };
-
-        (child, slot)
-    }
-
-    /// Finalizes this child subscope into a [`Subgraph`] registered against `parent`.
-    ///
-    /// `self` must be a child [`Scope<T>`] obtained from a `new_subscope` call on
-    /// `parent` (or a clone of it). After this returns, the caller is responsible
-    /// for installing the resulting `Subgraph` (or any wrapper around it) into the
-    /// `OperatorSlot` returned alongside this scope.
-    ///
-    /// This method should not be called other than on the last remaining instance
-    /// of the scope. If a clone of `self` exists, this code will panic as it tries
-    /// to unwrap a shared `Rc` reference.
-    pub fn build<TOuter>(self, parent: &mut Scope<TOuter>) -> Subgraph<TOuter, T>
-    where
-        TOuter: Timestamp,
-        T: Refines<TOuter>,
-    {
-        let Scope { subgraph: builder, .. } = self;
-        Rc::try_unwrap(builder)
-            .map_err(|_| ())
-            .expect(
-                "Cannot consume subscope: an outstanding `Scope` clone is still alive. \
-                 This usually means the child `Scope` was cloned and a clone was held \
-                 past the build() call."
-            )
-            .into_inner()
-            .build(parent)
     }
 
     /// Creates a dataflow subgraph.
@@ -168,13 +104,43 @@ impl<T: Timestamp> Scope<T> {
     pub fn scoped<T2, R, F>(&self, name: &str, func: F) -> R
     where
         T2: Timestamp + Refines<T>,
-        F: FnOnce(&mut Scope<T2>) -> R,
+        F: for<'child> FnOnce(&mut Scope<'child, T2>) -> R,
     {
-        let (mut child, mut slot) = self.new_subscope::<T2>(name);
-        let result = func(&mut child);
-        let subgraph = child.build(slot.scope_mut());
+        let (result, subgraph, slot) = self.scoped_raw(name, func);
         slot.install(Box::new(subgraph));
         result
+    }
+
+    /// Creates a dataflow subgraph, and returns a result and the to-be-assembled parts.
+    pub fn scoped_raw<T2, R, F>(&self, name: &str, func: F) -> (R, Subgraph<T, T2>, OperatorSlot<'scope, T>)
+    where
+        T2: Timestamp + Refines<T>,
+        F: for<'child> FnOnce(&mut Scope<'child, T2>) -> R,
+    {
+        let mut parent = self.clone();
+        let slot = parent.reserve_operator();
+        let path = slot.addr();
+        let identifier = slot.identifier();
+
+        let type_name = std::any::type_name::<T2>();
+        let progress_logging = parent.logger_for(&format!("timely/progress/{type_name}"));
+        let summary_logging  = parent.logger_for(&format!("timely/summary/{type_name}"));
+
+        let subgraph = RefCell::new(SubgraphBuilder::new_from(
+            path, identifier, self.logging(), summary_logging, name,
+        ));
+
+        let mut child = Scope {
+            subgraph: &subgraph,
+            worker: parent.worker.clone(),
+            logging: parent.logging.clone(),
+            progress_logging,
+        };
+
+        let result = func(&mut child);
+        drop(child);
+        let subgraph = subgraph.into_inner().build(&mut parent);
+        (result, subgraph, slot)
     }
 
     /// Creates an iterative dataflow subgraph.
@@ -266,7 +232,7 @@ impl<T: Timestamp> Scope<T> {
     }
 }
 
-impl<T: Timestamp> AsWorker for Scope<T> {
+impl<'scope, T: Timestamp> AsWorker for Scope<'scope, T> {
     fn config(&self) -> &Config { self.worker.config() }
     fn index(&self) -> usize { self.worker.index() }
     fn peers(&self) -> usize { self.worker.peers() }
@@ -278,14 +244,14 @@ impl<T: Timestamp> AsWorker for Scope<T> {
     fn log_register(&self) -> Option<::std::cell::RefMut<'_, crate::logging_core::Registry>> { self.worker.log_register() }
 }
 
-impl<T: Timestamp> Scheduler for Scope<T> {
+impl<'scope, T: Timestamp> Scheduler for Scope<'scope, T> {
     fn activations(&self) -> Rc<RefCell<Activations>> { self.worker.activations() }
 }
 
-impl<T: Timestamp> Clone for Scope<T> {
+impl<'scope, T: Timestamp> Clone for Scope<'scope, T> {
     fn clone(&self) -> Self {
         Scope {
-            subgraph: Rc::clone(&self.subgraph),
+            subgraph: self.subgraph,
             worker: self.worker.clone(),
             logging: self.logging.clone(),
             progress_logging: self.progress_logging.clone(),
@@ -293,7 +259,7 @@ impl<T: Timestamp> Clone for Scope<T> {
     }
 }
 
-impl<T: Timestamp> std::fmt::Debug for Scope<T> {
+impl<'scope, T: Timestamp> std::fmt::Debug for Scope<'scope, T> {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         f.debug_struct("Scope")
             .field("name", &self.subgraph.borrow().name)
@@ -310,14 +276,14 @@ impl<T: Timestamp> std::fmt::Debug for Scope<T> {
 /// being dropped; dropping an unfilled slot panics, since the parent scope
 /// expects the reserved index to eventually be filled.
 #[derive(Debug)]
-pub struct OperatorSlot<T: Timestamp> {
-    scope: Scope<T>,
+pub struct OperatorSlot<'scope, T: Timestamp> {
+    scope: Scope<'scope, T>,
     index: usize,
     identifier: usize,
     installed: bool,
 }
 
-impl<T: Timestamp> OperatorSlot<T> {
+impl<'scope, T: Timestamp> OperatorSlot<'scope, T> {
     /// The scope-local index reserved for the operator.
     pub fn index(&self) -> usize { self.index }
 
@@ -341,10 +307,10 @@ impl<T: Timestamp> OperatorSlot<T> {
 
     /// Mutable access to the containing scope. Used to register a built [`Subgraph`]
     /// before [`OperatorSlot::install`].
-    pub fn scope_mut(&mut self) -> &mut Scope<T> { &mut self.scope }
+    pub fn scope_mut(&mut self) -> &mut Scope<'scope, T> { &mut self.scope }
 }
 
-impl<T: Timestamp> Drop for OperatorSlot<T> {
+impl<'scope, T: Timestamp> Drop for OperatorSlot<'scope, T> {
     fn drop(&mut self) {
         if !self.installed && !std::thread::panicking() {
             panic!(

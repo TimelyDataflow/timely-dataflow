@@ -24,8 +24,8 @@ use super::builder_raw::OperatorBuilder as OperatorBuilderRaw;
 
 /// Builds operators with generic shape.
 #[derive(Debug)]
-pub struct OperatorBuilder<T: Timestamp> {
-    builder: OperatorBuilderRaw<T>,
+pub struct OperatorBuilder<'scope, T: Timestamp> {
+    builder: OperatorBuilderRaw<'scope, T>,
     frontier: Vec<MutableAntichain<T>>,
     consumed: Vec<Rc<RefCell<ChangeBatch<T>>>>,
     internal: Rc<RefCell<Vec<Rc<RefCell<ChangeBatch<T>>>>>>,
@@ -34,10 +34,10 @@ pub struct OperatorBuilder<T: Timestamp> {
     produced: Vec<Rc<RefCell<ChangeBatch<T>>>>,
 }
 
-impl<T: Timestamp> OperatorBuilder<T> {
+impl<'scope, T: Timestamp> OperatorBuilder<'scope, T> {
 
     /// Allocates a new generic operator builder from its containing scope.
-    pub fn new(name: String, scope: Scope<T>) -> Self {
+    pub fn new(name: String, scope: Scope<'scope, T>) -> Self {
         OperatorBuilder {
             builder: OperatorBuilderRaw::new(name, scope),
             frontier: Vec::new(),
@@ -54,7 +54,7 @@ impl<T: Timestamp> OperatorBuilder<T> {
     }
 
     /// Adds a new input to a generic operator builder, returning the `Pull` implementor to use.
-    pub fn new_input<C: Container, P>(&mut self, stream: Stream<T, C>, pact: P) -> InputHandleCore<T, C, P::Puller>
+    pub fn new_input<C: Container, P>(&mut self, stream: Stream<'scope, T, C>, pact: P) -> InputHandleCore<T, C, P::Puller>
     where
         P: ParallelizationContract<T, C> {
 
@@ -70,7 +70,7 @@ impl<T: Timestamp> OperatorBuilder<T> {
     ///
     /// Commonly the connections are either the unit summary, indicating the same timestamp might be produced as output, or an empty
     /// antichain indicating that there is no connection from the input to the output.
-    pub fn new_input_connection<C: Container, P, I>(&mut self, stream: Stream<T, C>, pact: P, connection: I) -> InputHandleCore<T, C, P::Puller>
+    pub fn new_input_connection<C: Container, P, I>(&mut self, stream: Stream<'scope, T, C>, pact: P, connection: I) -> InputHandleCore<T, C, P::Puller>
     where
         P: ParallelizationContract<T, C>,
         I: IntoIterator<Item = (usize, Antichain<<T as Timestamp>::Summary>)> + Clone,
@@ -88,7 +88,7 @@ impl<T: Timestamp> OperatorBuilder<T> {
     }
 
     /// Adds a new output to a generic operator builder, returning the `Push` implementor to use.
-    pub fn new_output<C: Container>(&mut self) -> (pushers::Output<T, C>, Stream<T, C>) {
+    pub fn new_output<C: Container>(&mut self) -> (pushers::Output<T, C>, Stream<'scope, T, C>) {
         let connection = (0..self.builder.shape().inputs()).map(|i| (i, Antichain::from_elem(Default::default())));
         self.new_output_connection(connection)
     }
@@ -101,10 +101,7 @@ impl<T: Timestamp> OperatorBuilder<T> {
     ///
     /// Commonly the connections are either the unit summary, indicating the same timestamp might be produced as output, or an empty
     /// antichain indicating that there is no connection from the input to the output.
-    pub fn new_output_connection<C: Container, I>(&mut self, connection: I) -> (
-        pushers::Output<T, C>,
-        Stream<T, C>,
-    )
+    pub fn new_output_connection<C: Container, I>(&mut self, connection: I) -> (pushers::Output<T, C>, Stream<'scope, T, C>)
     where
         I: IntoIterator<Item = (usize, Antichain<<T as Timestamp>::Summary>)> + Clone,
     {
