@@ -8,7 +8,7 @@ use crate::dataflow::{StreamVec, Stream};
 use crate::Container;
 
 /// Extension trait for `StreamVec`.
-pub trait Branch<'scope, T: Timestamp, D> {
+pub trait Branch<T: Timestamp, D> : Sized {
     /// Takes one input stream and splits it into two output streams.
     /// For each record, the supplied closure is called with a reference to
     /// the data and its time. If it returns `true`, the record will be sent
@@ -30,17 +30,11 @@ pub trait Branch<'scope, T: Timestamp, D> {
     ///     odd.inspect(|x| println!("odd numbers: {:?}", x));
     /// });
     /// ```
-    fn branch(
-        self,
-        condition: impl Fn(&T, &D) -> bool + 'static,
-    ) -> (StreamVec<'scope, T, D>, StreamVec<'scope, T, D>);
+    fn branch(self, condition: impl Fn(&T, &D) -> bool + 'static) -> (Self, Self);
 }
 
-impl<'scope, T: Timestamp, D: 'static> Branch<'scope, T, D> for StreamVec<'scope, T, D> {
-    fn branch(
-        self,
-        condition: impl Fn(&T, &D) -> bool + 'static,
-    ) -> (StreamVec<'scope, T, D>, StreamVec<'scope, T, D>) {
+impl<'scope, T: Timestamp, D: 'static> Branch<T, D> for StreamVec<'scope, T, D> {
+    fn branch(self, condition: impl Fn(&T, &D) -> bool + 'static) -> (Self, Self) {
         let mut builder = OperatorBuilder::new("Branch".to_owned(), self.scope());
 
         let mut input = builder.new_input(self, Pipeline);
