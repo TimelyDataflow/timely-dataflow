@@ -138,7 +138,7 @@ pub enum ProcessBuilder {
 
 impl ProcessBuilder {
     /// Builds the runtime allocator from this builder.
-    pub(crate) fn build(self) -> Process {
+    pub fn build(self) -> Process {
         match self {
             ProcessBuilder::Typed(t) => Process::Typed(t.build()),
             ProcessBuilder::Bytes(b) => Process::Bytes(b.build()),
@@ -146,7 +146,7 @@ impl ProcessBuilder {
     }
 
     /// Constructs a vector of regular (mpsc-based, "Typed") intra-process builders.
-    pub(crate) fn new_typed_vector(peers: usize, refill: BytesRefill) -> Vec<Self> {
+    pub fn new_typed_vector(peers: usize, refill: BytesRefill) -> Vec<Self> {
         <TypedProcess as PeerBuilder>::new_vector(peers, refill)
             .into_iter()
             .map(ProcessBuilder::Typed)
@@ -154,7 +154,7 @@ impl ProcessBuilder {
     }
 
     /// Constructs a vector of binary (zero-copy serialized, "Bytes") intra-process builders.
-    pub(crate) fn new_bytes_vector(peers: usize, refill: BytesRefill) -> Vec<Self> {
+    pub fn new_bytes_vector(peers: usize, refill: BytesRefill) -> Vec<Self> {
         <BytesProcessBuilder as PeerBuilder>::new_vector(peers, refill)
             .into_iter()
             .map(ProcessBuilder::Bytes)
