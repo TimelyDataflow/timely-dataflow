@@ -61,8 +61,8 @@
 //! # #[cfg(not(miri))]
 //! # fn main() {
 //! timely::execute(timely::Config::thread(), |worker| {
-//!     let list = TcpListener::bind("127.0.0.1:8000").unwrap();
-//!     let send = TcpStream::connect("127.0.0.1:8000").unwrap();
+//!     let list = TcpListener::bind("127.0.0.1:0").unwrap();
+//!     let send = TcpStream::connect(list.local_addr().unwrap()).unwrap();
 //!     let recv = list.incoming().next().unwrap().unwrap();
 //!
 //!     recv.set_nonblocking(true).unwrap();

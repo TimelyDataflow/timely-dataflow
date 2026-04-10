@@ -97,9 +97,8 @@ impl<T: Timestamp> Scope<T> {
         let path = slot.addr();
         let identifier = slot.identifier();
 
-        let type_name = std::any::type_name::<T2>();
-        let progress_logging = parent.logger_for(&format!("timely/progress/{type_name}"));
-        let summary_logging  = parent.logger_for(&format!("timely/summary/{type_name}"));
+        let progress_logging = parent.logger_for(&crate::logging::progress_log_name::<T2>());
+        let summary_logging  = parent.logger_for(&crate::logging::summary_log_name::<T2>());
 
         let child = Scope {
             subgraph: Rc::new(RefCell::new(SubgraphBuilder::new_from(
