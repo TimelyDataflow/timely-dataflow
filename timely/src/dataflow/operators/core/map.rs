@@ -8,7 +8,7 @@ use crate::dataflow::channels::pact::Pipeline;
 use crate::dataflow::operators::generic::operator::Operator;
 
 /// Extension trait for `Stream`.
-pub trait Map<T: Timestamp, C: DrainContainer> : Sized {
+pub trait Map<'scope, T: Timestamp, C: DrainContainer> : Sized {
     /// Consumes each element of the stream and yields a new element.
     ///
     /// # Examples
@@ -24,7 +24,7 @@ pub trait Map<T: Timestamp, C: DrainContainer> : Sized {
     ///            .inspect(|x| println!("seen: {:?}", x));
     /// });
     /// ```
-    fn map<C2, D2, L>(self, mut logic: L) -> Stream<T, C2>
+    fn map<C2, D2, L>(self, mut logic: L) -> Stream<'scope, T, C2>
     where
         C2: Container + SizableContainer + PushInto<D2>,
         L: FnMut(C::Item<'_>)->D2 + 'static,
@@ -46,7 +46,7 @@ pub trait Map<T: Timestamp, C: DrainContainer> : Sized {
     ///            .inspect(|x| println!("seen: {:?}", x));
     /// });
     /// ```
-    fn flat_map<C2, I, L>(self, logic: L) -> Stream<T, C2>
+    fn flat_map<C2, I, L>(self, logic: L) -> Stream<'scope, T, C2>
     where
         I: IntoIterator,
         C2: Container + SizableContainer + PushInto<I::Item>,
@@ -89,11 +89,11 @@ pub trait Map<T: Timestamp, C: DrainContainer> : Sized {
     }
 }
 
-impl<T: Timestamp, C: Container + DrainContainer> Map<T, C> for Stream<T, C> {
+impl<'scope, T: Timestamp, C: Container + DrainContainer> Map<'scope, T, C> for Stream<'scope, T, C> {
     // TODO : This would be more robust if it captured an iterator and then pulled an appropriate
     // TODO : number of elements from the iterator. This would allow iterators that produce many
     // TODO : records without taking arbitrarily long and arbitrarily much memory.
-    fn flat_map<C2, I, L>(self, mut logic: L) -> Stream<T, C2>
+    fn flat_map<C2, I, L>(self, mut logic: L) -> Stream<'scope, T, C2>
     where
         I: IntoIterator,
         C2: Container + SizableContainer + PushInto<I::Item>,
@@ -138,11 +138,11 @@ where
         }
     }
     /// Convert the wrapper into a stream.
-    pub fn into_stream<T, C2>(self) -> Stream<T, C2>
+    pub fn into_stream<'scope, T, C2>(self) -> Stream<'scope, T, C2>
     where
         I: IntoIterator,
         T: Timestamp,
-        S: Map<T, C>,
+        S: Map<'scope, T, C>,
         C2: Container + SizableContainer + PushInto<I::Item>,
     {
         Map::flat_map(self.stream, self.logic)

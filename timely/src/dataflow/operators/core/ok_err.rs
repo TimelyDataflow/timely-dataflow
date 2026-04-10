@@ -9,7 +9,7 @@ use crate::dataflow::operators::generic::OutputBuilder;
 use crate::dataflow::Stream;
 
 /// Extension trait for `Stream`.
-pub trait OkErr<T: Timestamp, C: DrainContainer> {
+pub trait OkErr<'scope, T: Timestamp, C: DrainContainer> {
     /// Takes one input stream and splits it into two output streams.
     /// For each record, the supplied closure is called with the data.
     /// If it returns `Ok(x)`, then `x` will be sent
@@ -34,7 +34,7 @@ pub trait OkErr<T: Timestamp, C: DrainContainer> {
     fn ok_err<C1, D1, C2, D2, L>(
         self,
         logic: L,
-    ) -> (Stream<T, C1>, Stream<T, C2>)
+    ) -> (Stream<'scope, T, C1>, Stream<'scope, T, C2>)
     where
         C1: Container + SizableContainer + PushInto<D1>,
         C2: Container + SizableContainer + PushInto<D2>,
@@ -42,11 +42,11 @@ pub trait OkErr<T: Timestamp, C: DrainContainer> {
     ;
 }
 
-impl<T: Timestamp, C: Container + DrainContainer> OkErr<T, C> for Stream<T, C> {
+impl<'scope, T: Timestamp, C: Container + DrainContainer> OkErr<'scope, T, C> for Stream<'scope, T, C> {
     fn ok_err<C1, D1, C2, D2, L>(
         self,
         mut logic: L,
-    ) -> (Stream<T, C1>, Stream<T, C2>)
+    ) -> (Stream<'scope, T, C1>, Stream<'scope, T, C2>)
     where
         C1: Container + SizableContainer + PushInto<D1>,
         C2: Container + SizableContainer + PushInto<D2>,
