@@ -115,7 +115,7 @@ pub trait Capture<T: Timestamp, C: Container> : Sized {
     }
 }
 
-impl<T: Timestamp, C: Container> Capture<T, C> for Stream<T, C> {
+impl<T: Timestamp, C: Container> Capture<T, C> for Stream<'_, T, C> {
     fn capture_into<P: EventPusher<T, C>+'static>(self, mut event_pusher: P) {
 
         let mut builder = OperatorBuilder::new("Capture".to_owned(), self.scope());

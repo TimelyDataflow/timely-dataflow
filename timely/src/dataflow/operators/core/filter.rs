@@ -24,11 +24,11 @@ pub trait Filter<C: DrainContainer> {
     fn filter<P: FnMut(&C::Item<'_>)->bool+'static>(self, predicate: P) -> Self;
 }
 
-impl<T: Timestamp, C: Container + SizableContainer + DrainContainer> Filter<C> for Stream<T, C>
+impl<T: Timestamp, C: Container + SizableContainer + DrainContainer> Filter<C> for Stream<'_, T, C>
 where
     for<'a> C: PushInto<C::Item<'a>>
 {
-    fn filter<P: FnMut(&C::Item<'_>)->bool+'static>(self, mut predicate: P) -> Stream<T, C> {
+    fn filter<P: FnMut(&C::Item<'_>)->bool+'static>(self, mut predicate: P) -> Self {
         self.unary(Pipeline, "Filter", move |_,_| move |input, output| {
             input.for_each_time(|time, data| {
                 output.session(&time)

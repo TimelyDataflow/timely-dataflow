@@ -23,8 +23,8 @@ pub trait Filter<D> {
     fn filter<P: FnMut(&D)->bool+'static>(self, predicate: P) -> Self;
 }
 
-impl<T: Timestamp, D: 'static> Filter<D> for StreamVec<T, D> {
-    fn filter<P: FnMut(&D)->bool+'static>(self, mut predicate: P) -> StreamVec<T, D> {
+impl<T: Timestamp, D: 'static> Filter<D> for StreamVec<'_, T, D> {
+    fn filter<P: FnMut(&D)->bool+'static>(self, mut predicate: P) -> Self {
         self.unary(Pipeline, "Filter", move |_,_| move |input, output| {
             input.for_each_time(|time, data| {
                 let mut session = output.session(&time);

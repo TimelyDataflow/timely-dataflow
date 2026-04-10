@@ -30,7 +30,7 @@ pub trait Exchange<C: DrainContainer> {
         for<'a> F: FnMut(&C::Item<'a>) -> u64 + 'static;
 }
 
-impl<T: Timestamp, C> Exchange<C> for Stream<T, C>
+impl<T: Timestamp, C> Exchange<C> for Stream<'_, T, C>
 where
     C: Container
         + SizableContainer
@@ -39,7 +39,7 @@ where
         + crate::dataflow::channels::ContainerBytes
         + for<'a> PushInto<C::Item<'a>>,
 {
-    fn exchange<F>(self, route: F) -> Stream<T, C>
+    fn exchange<F>(self, route: F) -> Self
     where
         for<'a> F: FnMut(&C::Item<'a>) -> u64 + 'static,
     {

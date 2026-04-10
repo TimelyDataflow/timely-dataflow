@@ -78,10 +78,10 @@ pub trait Probe<T: Timestamp, C: Container> {
     ///     }
     /// }).unwrap();
     /// ```
-    fn probe_with(self, handle: &Handle<T>) -> Stream<T, C>;
+    fn probe_with(self, handle: &Handle<T>) -> Self;
 }
 
-impl<T: Timestamp, C: Container> Probe<T, C> for Stream<T, C> {
+impl<T: Timestamp, C: Container> Probe<T, C> for Stream<'_, T, C> {
     fn probe(self) -> (Handle<T>, Self) {
 
         // the frontier is shared state; scope updates, handle reads.
@@ -89,7 +89,7 @@ impl<T: Timestamp, C: Container> Probe<T, C> for Stream<T, C> {
         let stream = self.probe_with(&handle);
         (handle, stream)
     }
-    fn probe_with(self, handle: &Handle<T>) -> Stream<T, C> {
+    fn probe_with(self, handle: &Handle<T>) -> Self {
 
         let mut builder = OperatorBuilder::new("Probe".to_owned(), self.scope());
         let mut input = PullCounter::new(builder.new_input(self, Pipeline));
