@@ -93,7 +93,7 @@ impl<'scope, T: Timestamp> OperatorBuilder<'scope, T> {
     }
 
     /// Adds a new input to a generic operator builder, returning the `Pull` implementor to use.
-    pub fn new_input<C: Container, P>(&mut self, stream: Stream<T, C>, pact: P) -> P::Puller
+    pub fn new_input<C: Container, P>(&mut self, stream: Stream<'scope, T, C>, pact: P) -> P::Puller
     where
         P: ParallelizationContract<T, C>
     {
@@ -102,7 +102,7 @@ impl<'scope, T: Timestamp> OperatorBuilder<'scope, T> {
     }
 
     /// Adds a new input to a generic operator builder, returning the `Pull` implementor to use.
-    pub fn new_input_connection<C: Container, P, I>(&mut self, stream: Stream<T, C>, pact: P, connection: I) -> P::Puller
+    pub fn new_input_connection<C: Container, P, I>(&mut self, stream: Stream<'scope, T, C>, pact: P, connection: I) -> P::Puller
     where
         P: ParallelizationContract<T, C>,
         I: IntoIterator<Item = (usize, Antichain<<T as Timestamp>::Summary>)>,

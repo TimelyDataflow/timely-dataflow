@@ -54,8 +54,8 @@ trait UnionFind {
     fn union_find(self) -> Self;
 }
 
-impl<T: Timestamp> UnionFind for StreamVec<T, (usize, usize)> {
-    fn union_find(self) -> StreamVec<T, (usize, usize)> {
+impl<'scope, T: Timestamp> UnionFind for StreamVec<'scope, T, (usize, usize)> {
+    fn union_find(self) -> Self {
 
         self.unary(Pipeline, "UnionFind", |_,_| {
 

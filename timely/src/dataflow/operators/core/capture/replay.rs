@@ -51,11 +51,11 @@ use crate::dataflow::channels::Message;
 
 /// Replay a capture stream into a scope with the same timestamp.
 pub trait Replay<T: Timestamp, C> : Sized {
-    /// Replays `self` into the provided scope, as a `Stream<T, C>`.
+    /// Replays `self` into the provided scope, as a `Stream<'scope, T, C>`.
     fn replay_into<'scope>(self, scope: &mut Scope<'scope, T>) -> Stream<'scope, T, C> {
         self.replay_core(scope, Some(std::time::Duration::new(0, 0)))
     }
-    /// Replays `self` into the provided scope, as a `Stream<T, C>`.
+    /// Replays `self` into the provided scope, as a `Stream<'scope, T, C>`.
     ///
     /// The `period` argument allows the specification of a re-activation period, where the operator
     /// will re-activate itself every so often. The `None` argument instructs the operator not to

@@ -104,18 +104,20 @@ impl<'scope, T: Timestamp> Scope<'scope, T> {
     pub fn scoped<T2, R, F>(&self, name: &str, func: F) -> R
     where
         T2: Timestamp + Refines<T>,
-        F: for<'child> FnOnce(&mut Scope<'child, T2>) -> R,
+        F: FnOnce(&mut Scope<T2>) -> R,
     {
         let (result, subgraph, slot) = self.scoped_raw(name, func);
         slot.install(Box::new(subgraph));
         result
     }
 
-    /// Creates a dataflow subgraph, and returns a result and the to-be-assembled parts.
+    /// Creates a dataflow subgraph, runs a user closure, and returns a result and the to-be-assembled parts.
+    ///
+    /// The returned subgraph must be registered in the operator slot.
     pub fn scoped_raw<T2, R, F>(&self, name: &str, func: F) -> (R, Subgraph<T, T2>, OperatorSlot<'scope, T>)
     where
         T2: Timestamp + Refines<T>,
-        F: for<'child> FnOnce(&mut Scope<'child, T2>) -> R,
+        F: FnOnce(&mut Scope<T2>) -> R,
     {
         let mut parent = self.clone();
         let slot = parent.reserve_operator();
@@ -301,6 +303,7 @@ impl<'scope, T: Timestamp> OperatorSlot<'scope, T> {
 
     /// Installs `operator` at this slot, consuming the slot.
     pub fn install(mut self, operator: Box<dyn Operate<T>>) {
+        // TODO: Check paths of self and operator; Operate has no such method at the moment.
         self.scope.subgraph.borrow_mut().add_child(operator, self.index, self.identifier);
         self.installed = true;
     }
