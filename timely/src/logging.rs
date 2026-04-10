@@ -15,6 +15,27 @@ pub type TimelySummaryEventBuilder<TS> = CapacityContainerBuilder<Vec<(Duration,
 /// Logger for timely dataflow operator summary events (the "timely/summary/*" log streams).
 pub type TimelySummaryLogger<TS> = crate::logging_core::Logger<TimelySummaryEventBuilder<TS>>;
 
+/// Returns the log stream name for progress events of timestamp type `T`.
+///
+/// For example, `progress_log_name::<usize>()` returns `"timely/progress/usize"`.
+pub fn progress_log_name<T: 'static>() -> String {
+    format!("timely/progress/{}", std::any::type_name::<T>())
+}
+
+/// Returns the log stream name for operator summary events of timestamp type `T`.
+///
+/// For example, `summary_log_name::<usize>()` returns `"timely/summary/usize"`.
+pub fn summary_log_name<T: 'static>() -> String {
+    format!("timely/summary/{}", std::any::type_name::<T>())
+}
+
+/// Returns the log stream name for reachability events of timestamp type `T`.
+///
+/// For example, `reachability_log_name::<usize>()` returns `"timely/reachability/usize"`.
+pub fn reachability_log_name<T: 'static>() -> String {
+    format!("timely/reachability/{}", std::any::type_name::<T>())
+}
+
 use std::time::Duration;
 use columnar::Columnar;
 use serde::{Deserialize, Serialize};
