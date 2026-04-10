@@ -107,7 +107,7 @@ impl<T: Timestamp> UnorderedInput<T> for Scope<T> {
             peers,
         }));
 
-        ((helper, cap), Stream::new(Source::new(index, 0), registrar, self.clone()))
+        ((helper, cap), Stream::new(Source::new(index, 0), registrar, Rc::clone(&self.subgraph), self.worker.clone()))
     }
 }
 

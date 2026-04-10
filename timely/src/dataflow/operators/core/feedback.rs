@@ -54,7 +54,7 @@ pub trait LoopVariable<TOuter: Timestamp, TInner: Timestamp> {
     ///
     /// timely::example(|scope| {
     ///     // circulate 0..10 for 100 iterations.
-    ///     scope.iterative::<usize,_,_>(|inner| {
+    ///     scope.iterative::<usize,_,_>(|_scope, inner| {
     ///         let (handle, cycle) = inner.loop_variable(1);
     ///         (0..10).to_stream(inner)
     ///                .container::<Vec<_>>()
@@ -72,7 +72,7 @@ impl<T: Timestamp> Feedback<T> for Scope<T> {
 
     fn feedback<C: Container>(&mut self, summary: <T as Timestamp>::Summary) -> (Handle<T, C>, Stream<T, C>) {
 
-        let mut builder = OperatorBuilder::new("Feedback".to_owned(), self.clone());
+        let mut builder = OperatorBuilder::new("Feedback".to_owned(), self);
         let (output, stream) = builder.new_output();
 
         (Handle { builder, summary, output }, stream)
@@ -132,7 +132,6 @@ impl<T: Timestamp, C: Container> ConnectLoop<T, C> for Stream<T, C> {
 }
 
 /// A handle used to bind the source of a loop variable.
-#[derive(Debug)]
 pub struct Handle<T: Timestamp, C: Container> {
     builder: OperatorBuilder<T>,
     summary: <T as Timestamp>::Summary,

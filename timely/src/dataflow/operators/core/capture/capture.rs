@@ -5,6 +5,8 @@
 //! and there are several default implementations, including a linked-list, Rust's MPSC
 //! queue, and a binary serializer wrapping any `W: Write`.
 
+use std::rc::Rc;
+
 use crate::dataflow::Stream;
 use crate::dataflow::channels::pact::Pipeline;
 use crate::dataflow::channels::pullers::Counter as PullCounter;
@@ -118,7 +120,7 @@ pub trait Capture<T: Timestamp, C: Container> : Sized {
 impl<T: Timestamp, C: Container> Capture<T, C> for Stream<T, C> {
     fn capture_into<P: EventPusher<T, C>+'static>(self, mut event_pusher: P) {
 
-        let mut builder = OperatorBuilder::new("Capture".to_owned(), self.scope());
+        let mut builder = OperatorBuilder::new_from("Capture".to_owned(), Rc::clone(&self.subgraph), self.worker.clone());
         let mut input = PullCounter::new(builder.new_input(self, Pipeline));
         let mut started = false;
 

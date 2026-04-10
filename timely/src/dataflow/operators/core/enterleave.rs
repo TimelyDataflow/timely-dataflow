@@ -11,7 +11,7 @@
 //!
 //! timely::example(|outer| {
 //!     let stream = (0..9).to_stream(outer).container::<Vec<_>>();
-//!     let output = outer.region(|inner| {
+//!     let output = outer.region(|outer, inner| {
 //!         stream.enter(inner)
 //!               .inspect(|x| println!("in nested scope: {:?}", x))
 //!               .leave(outer)
@@ -46,12 +46,12 @@ pub trait Enter<TOuter: Timestamp, TInner: Timestamp+Refines<TOuter>, C> {
     ///
     /// timely::example(|outer| {
     ///     let stream = (0..9).to_stream(outer).container::<Vec<_>>();
-    ///     let output = outer.region(|inner| {
+    ///     let output = outer.region(|outer, inner| {
     ///         stream.enter(inner).leave(outer)
     ///     });
     /// });
     /// ```
-    fn enter(self, inner: &Scope<TInner>) -> Stream<TInner, C>;
+    fn enter(self, inner: &mut Scope<TInner>) -> Stream<TInner, C>;
 }
 
 impl<TOuter, TInner, C> Enter<TOuter, TInner, C> for Stream<TOuter, C>
@@ -60,13 +60,13 @@ where
     TInner: Timestamp + Refines<TOuter>,
     C: Container,
 {
-    fn enter(self, inner: &Scope<TInner>) -> Stream<TInner, C> {
+    fn enter(self, inner: &mut Scope<TInner>) -> Stream<TInner, C> {
 
         use crate::scheduling::Scheduler;
 
         // Validate that `inner` is a child of `self`'s scope.
         let inner_addr = inner.addr();
-        let outer_addr = self.scope().addr();
+        let outer_addr: Rc<[usize]> = Rc::clone(&self.subgraph.borrow().path);
         assert!(
             inner_addr.len() == outer_addr.len() + 1
                 && inner_addr[..outer_addr.len()] == outer_addr[..],
@@ -85,7 +85,7 @@ where
         };
         let produced = Rc::clone(ingress.targets.produced());
         let input = inner.subgraph.borrow_mut().new_input(produced);
-        let channel_id = inner.clone().new_identifier();
+        let channel_id = inner.new_identifier();
 
         if let Some(logger) = inner.logging() {
             let pusher = LogPusher::new(ingress, channel_id, inner.index(), logger);
@@ -97,7 +97,8 @@ where
         Stream::new(
             Source::new(0, input.port),
             registrar,
-            inner.clone(),
+            Rc::clone(&inner.subgraph),
+            inner.worker.clone(),
         )
     }
 }
@@ -117,7 +118,7 @@ pub trait Leave<TOuter: Timestamp, C> {
     ///
     /// timely::example(|outer| {
     ///     let stream = (0..9).to_stream(outer).container::<Vec<_>>();
-    ///     let output = outer.region(|inner| {
+    ///     let output = outer.region(|outer, inner| {
     ///         stream.enter(inner).leave(outer)
     ///     });
     /// });
@@ -131,12 +132,10 @@ where
     TInner: Timestamp + Refines<TOuter>,
     C: Container,
 {
-    fn leave(self, outer: &Scope<TOuter>) -> Stream<TOuter, C> {
-
-        let scope = self.scope();
+    fn leave(mut self, outer: &Scope<TOuter>) -> Stream<TOuter, C> {
 
         // Validate that `self`'s scope is a child of `outer`.
-        let inner_addr = scope.addr();
+        let inner_addr: Rc<[usize]> = Rc::clone(&self.subgraph.borrow().path);
         let outer_addr = outer.addr();
         assert!(
             inner_addr.len() == outer_addr.len() + 1
@@ -147,14 +146,14 @@ where
             outer_addr,
         );
 
-        let output = scope.subgraph.borrow_mut().new_output();
+        let output = self.subgraph.borrow_mut().new_output();
         let target = Target::new(0, output.port);
         let (targets, registrar) = Tee::<TOuter, C>::new();
         let egress = EgressNub { targets, phantom: PhantomData };
-        let channel_id = scope.clone().new_identifier();
+        let channel_id = self.worker.new_identifier();
 
-        if let Some(logger) = scope.logging() {
-            let pusher = LogPusher::new(egress, channel_id, scope.index(), logger);
+        if let Some(logger) = AsWorker::logging(&self.worker) {
+            let pusher = LogPusher::new(egress, channel_id, self.worker.index(), logger);
             self.connect_to(target, pusher, channel_id);
         } else {
             self.connect_to(target, egress, channel_id);
@@ -163,7 +162,8 @@ where
         Stream::new(
             output,
             registrar,
-            outer.clone(),
+            Rc::clone(&outer.subgraph),
+            outer.worker.clone(),
         )
     }
 }
@@ -297,10 +297,10 @@ mod test {
             worker.dataflow(|scope| {
                 let data = scope.input_from(&mut input);
 
-                scope.region(|inner| {
+                scope.region(|scope, inner| {
 
                     let data = data.enter(inner);
-                    inner.region(|inner2| data.enter(inner2).leave(inner)).leave(scope)
+                    inner.region(|inner, inner2| data.enter(inner2).leave(inner)).leave(scope)
                 })
                     .inspect(move |x| println!("worker {}:\thello {}", index, x))
                     .probe_with(&probe);

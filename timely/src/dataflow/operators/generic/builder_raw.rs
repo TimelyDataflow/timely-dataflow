@@ -9,10 +9,10 @@ use std::rc::Rc;
 use std::cell::RefCell;
 
 use crate::scheduling::{Schedule, Activations};
-use crate::worker::AsWorker;
+use crate::worker::{AsWorker, Worker};
 use crate::scheduling::Scheduler;
 
-use crate::progress::{Source, Target};
+use crate::progress::{Source, Target, SubgraphBuilder};
 use crate::progress::{Timestamp, Operate, operate::SharedProgress, Antichain};
 use crate::progress::operate::{FrontierInterest, Connectivity, PortConnectivity};
 use crate::Container;
@@ -51,9 +51,9 @@ impl OperatorShape {
 }
 
 /// Builds operators with generic shape.
-#[derive(Debug)]
 pub struct OperatorBuilder<T: Timestamp> {
-    scope: Scope<T>,
+    subgraph: Rc<RefCell<SubgraphBuilder<T>>>,
+    worker: Worker,
     slot: OperatorSlot<T>,
     address: Rc<[usize]>,    // path to the operator (ending with index).
     shape: OperatorShape,
@@ -63,14 +63,21 @@ pub struct OperatorBuilder<T: Timestamp> {
 impl<T: Timestamp> OperatorBuilder<T> {
 
     /// Allocates a new generic operator builder from its containing scope.
-    pub fn new(name: String, mut scope: Scope<T>) -> Self {
+    pub fn new(name: String, scope: &mut Scope<T>) -> Self {
+        Self::new_from(name, Rc::clone(&scope.subgraph), scope.worker.clone())
+    }
 
-        let slot = scope.reserve_operator();
+    /// Allocates a new generic operator builder from the constituent parts of a scope.
+    pub(crate) fn new_from(name: String, subgraph: Rc<RefCell<SubgraphBuilder<T>>>, mut worker: Worker) -> Self {
+        let index = subgraph.borrow_mut().allocate_child_id();
+        let identifier = worker.new_identifier();
+        let slot = OperatorSlot::new(Rc::clone(&subgraph), index, identifier);
         let address = slot.addr();
-        let peers = scope.peers();
+        let peers = worker.peers();
 
         OperatorBuilder {
-            scope,
+            subgraph,
+            worker,
             slot,
             address,
             shape: OperatorShape::new(name, peers),
@@ -107,9 +114,9 @@ impl<T: Timestamp> OperatorBuilder<T> {
         P: ParallelizationContract<T, C>,
         I: IntoIterator<Item = (usize, Antichain<<T as Timestamp>::Summary>)>,
     {
-        let channel_id = self.scope.new_identifier();
-        let logging = self.scope.logging();
-        let (sender, receiver) = pact.connect(&mut self.scope, channel_id, Rc::clone(&self.address), logging);
+        let channel_id = self.worker.new_identifier();
+        let logging = self.worker.logging();
+        let (sender, receiver) = pact.connect(&mut self.worker, channel_id, Rc::clone(&self.address), logging);
         let target = Target::new(self.slot.index(), self.shape.inputs);
         stream.connect_to(target, sender, channel_id);
 
@@ -137,7 +144,7 @@ impl<T: Timestamp> OperatorBuilder<T> {
         self.shape.outputs += 1;
         let (target, registrar) = Tee::new();
         let source = Source::new(self.slot.index(), new_output);
-        let stream = Stream::new(source, registrar, self.scope.clone());
+        let stream = Stream::new(source, registrar, Rc::clone(&self.subgraph), self.worker.clone());
 
         for (input, entry) in connection {
             self.summary[input].add_port(new_output, entry);
@@ -157,7 +164,7 @@ impl<T: Timestamp> OperatorBuilder<T> {
         let operator = OperatorCore {
             shape: self.shape,
             address: self.address,
-            activations: self.scope.activations(),
+            activations: self.worker.activations(),
             logic,
             shared_progress: Rc::new(RefCell::new(SharedProgress::new(inputs, outputs))),
             summary: self.summary,

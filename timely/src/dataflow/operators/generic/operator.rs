@@ -1,6 +1,8 @@
 
 //! Methods to construct generic streaming and blocking unary operators.
 
+use std::rc::Rc;
+
 use crate::progress::frontier::MutableAntichain;
 use crate::progress::Timestamp;
 use crate::dataflow::channels::pact::ParallelizationContract;
@@ -321,7 +323,7 @@ impl<T: Timestamp, C1: Container> Operator<T, C1> for Stream<T, C1> {
                  &mut OutputBuilderSession<'_, T, CB>)+'static,
         P: ParallelizationContract<T, C1> {
 
-        let mut builder = OperatorBuilder::new(name.to_owned(), self.scope());
+        let mut builder = OperatorBuilder::new_from(name.to_owned(), Rc::clone(&self.subgraph), self.worker.clone());
         let operator_info = builder.operator_info();
 
         let mut input = builder.new_input(self, pact);
@@ -370,7 +372,7 @@ impl<T: Timestamp, C1: Container> Operator<T, C1> for Stream<T, C1> {
                  &mut OutputBuilderSession<'_, T, CB>)+'static,
         P: ParallelizationContract<T, C1> {
 
-        let mut builder = OperatorBuilder::new(name.to_owned(), self.scope());
+        let mut builder = OperatorBuilder::new_from(name.to_owned(), Rc::clone(&self.subgraph), self.worker.clone());
         let operator_info = builder.operator_info();
 
         let mut input = builder.new_input(self, pact);
@@ -399,7 +401,7 @@ impl<T: Timestamp, C1: Container> Operator<T, C1> for Stream<T, C1> {
         P1: ParallelizationContract<T, C1>,
         P2: ParallelizationContract<T, C2> {
 
-        let mut builder = OperatorBuilder::new(name.to_owned(), self.scope());
+        let mut builder = OperatorBuilder::new_from(name.to_owned(), Rc::clone(&self.subgraph), self.worker.clone());
         let operator_info = builder.operator_info();
 
         let mut input1 = builder.new_input(self, pact1);
@@ -457,7 +459,7 @@ impl<T: Timestamp, C1: Container> Operator<T, C1> for Stream<T, C1> {
         P1: ParallelizationContract<T, C1>,
         P2: ParallelizationContract<T, C2> {
 
-        let mut builder = OperatorBuilder::new(name.to_owned(), self.scope());
+        let mut builder = OperatorBuilder::new_from(name.to_owned(), Rc::clone(&self.subgraph), self.worker.clone());
         let operator_info = builder.operator_info();
 
         let mut input1 = builder.new_input(self, pact1);
@@ -485,7 +487,7 @@ impl<T: Timestamp, C1: Container> Operator<T, C1> for Stream<T, C1> {
         L: FnMut((&mut InputHandleCore<T, C1, P::Puller>, &MutableAntichain<T>))+'static,
         P: ParallelizationContract<T, C1> {
 
-        let mut builder = OperatorBuilder::new(name.to_owned(), self.scope());
+        let mut builder = OperatorBuilder::new_from(name.to_owned(), Rc::clone(&self.subgraph), self.worker.clone());
         let mut input = builder.new_input(self, pact);
 
         builder.build(|_capabilities| {
@@ -505,15 +507,18 @@ impl<T: Timestamp, C1: Container> Operator<T, C1> for Stream<T, C1> {
 /// # Examples
 /// ```
 /// use timely::scheduling::Scheduler;
+/// use timely::scheduling::activate::Activator;
 /// use timely::dataflow::operators::Inspect;
 /// use timely::dataflow::operators::generic::operator::source;
 /// use timely::dataflow::Scope;
 ///
 /// timely::example(|scope| {
 ///
+///     let activations = scope.activations();
+///
 ///     source(scope, "Source", |capability, info| {
 ///
-///         let activator = scope.activator_for(info.address);
+///         let activator = Activator::new(info.address, activations);
 ///
 ///         let mut cap = Some(capability);
 ///         move |output| {
@@ -538,13 +543,13 @@ impl<T: Timestamp, C1: Container> Operator<T, C1> for Stream<T, C1> {
 ///     .inspect(|x| println!("number: {:?}", x));
 /// });
 /// ```
-pub fn source<T: Timestamp, CB, B, L>(scope: &Scope<T>, name: &str, constructor: B) -> Stream<T, CB::Container>
+pub fn source<T: Timestamp, CB, B, L>(scope: &mut Scope<T>, name: &str, constructor: B) -> Stream<T, CB::Container>
 where
     CB: ContainerBuilder,
     B: FnOnce(Capability<T>, OperatorInfo) -> L,
     L: FnMut(&mut OutputBuilderSession<'_, T, CB>)+'static {
 
-    let mut builder = OperatorBuilder::new(name.to_owned(), scope.clone());
+    let mut builder = OperatorBuilder::new(name.to_owned(), scope);
     let operator_info = builder.operator_info();
 
     let (output, stream) = builder.new_output();
@@ -582,7 +587,7 @@ where
 ///
 /// });
 /// ```
-pub fn empty<T: Timestamp, C: Container>(scope: &Scope<T>) -> Stream<T, C> {
+pub fn empty<T: Timestamp, C: Container>(scope: &mut Scope<T>) -> Stream<T, C> {
     source::<_, CapacityContainerBuilder<C>, _, _>(scope, "Empty", |_capability, _info| |_output| {
         // drop capability, do nothing
     })

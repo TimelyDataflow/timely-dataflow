@@ -1,5 +1,7 @@
 //! Merges the contents of multiple streams.
 
+use std::rc::Rc;
+
 use crate::Container;
 use crate::progress::Timestamp;
 use crate::dataflow::channels::pact::Pipeline;
@@ -27,7 +29,30 @@ pub trait Concat<T: Timestamp, C> {
 
 impl<T: Timestamp, C: Container> Concat<T, C> for Stream<T, C> {
     fn concat(self, other: Stream<T, C>) -> Stream<T, C> {
-        self.scope().concatenate([self, other])
+        use crate::dataflow::operators::generic::builder_rc::OperatorBuilder;
+
+        let mut builder = OperatorBuilder::new_from(
+            "Concatenate".to_string(),
+            Rc::clone(&self.subgraph),
+            self.worker.clone(),
+        );
+
+        let mut handles = [self, other].into_iter().map(|s| builder.new_input(s, Pipeline)).collect::<Vec<_>>();
+        for i in 0 .. handles.len() { builder.set_notify_for(i, crate::progress::operate::FrontierInterest::Never); }
+        let (mut output, result) = builder.new_output();
+
+        builder.build(move |_capability| {
+            move |_frontier| {
+                let mut output = output.activate();
+                for handle in handles.iter_mut() {
+                    handle.for_each(|time, data| {
+                        output.give(&time, data);
+                    })
+                }
+            }
+        });
+
+        result
     }
 }
 
@@ -50,20 +75,20 @@ pub trait Concatenate<T: Timestamp, C> {
     ///          .inspect(|x| println!("seen: {:?}", x));
     /// });
     /// ```
-    fn concatenate<I>(&self, sources: I) -> Stream<T, C>
+    fn concatenate<I>(&mut self, sources: I) -> Stream<T, C>
     where
         I: IntoIterator<Item=Stream<T, C>>;
 }
 
 impl<T: Timestamp, C: Container> Concatenate<T, C> for Scope<T> {
-    fn concatenate<I>(&self, sources: I) -> Stream<T, C>
+    fn concatenate<I>(&mut self, sources: I) -> Stream<T, C>
     where
         I: IntoIterator<Item=Stream<T, C>>
     {
 
         // create an operator builder.
         use crate::dataflow::operators::generic::builder_rc::OperatorBuilder;
-        let mut builder = OperatorBuilder::new("Concatenate".to_string(), self.clone());
+        let mut builder = OperatorBuilder::new("Concatenate".to_string(), self);
 
         // create new input handles for each input stream.
         let mut handles = sources.into_iter().map(|s| builder.new_input(s, Pipeline)).collect::<Vec<_>>();

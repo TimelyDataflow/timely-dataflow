@@ -11,6 +11,8 @@ use crate::progress::frontier::{Antichain, MutableAntichain};
 use crate::Container;
 use crate::dataflow::{Scope, Stream};
 use crate::dataflow::channels::pushers::Counter as PushCounter;
+use crate::progress::SubgraphBuilder;
+use crate::worker::Worker;
 use crate::dataflow::channels::pushers;
 use crate::dataflow::channels::pact::ParallelizationContract;
 use crate::dataflow::channels::pullers::Counter as PullCounter;
@@ -23,7 +25,6 @@ use crate::progress::operate::{FrontierInterest, PortConnectivity};
 use super::builder_raw::OperatorBuilder as OperatorBuilderRaw;
 
 /// Builds operators with generic shape.
-#[derive(Debug)]
 pub struct OperatorBuilder<T: Timestamp> {
     builder: OperatorBuilderRaw<T>,
     frontier: Vec<MutableAntichain<T>>,
@@ -37,9 +38,14 @@ pub struct OperatorBuilder<T: Timestamp> {
 impl<T: Timestamp> OperatorBuilder<T> {
 
     /// Allocates a new generic operator builder from its containing scope.
-    pub fn new(name: String, scope: Scope<T>) -> Self {
+    pub fn new(name: String, scope: &mut Scope<T>) -> Self {
+        Self::new_from(name, Rc::clone(&scope.subgraph), scope.worker.clone())
+    }
+
+    /// Allocates a new generic operator builder from the constituent parts of a scope.
+    pub(crate) fn new_from(name: String, subgraph: Rc<RefCell<SubgraphBuilder<T>>>, worker: Worker) -> Self {
         OperatorBuilder {
-            builder: OperatorBuilderRaw::new(name, scope),
+            builder: OperatorBuilderRaw::new_from(name, subgraph, worker),
             frontier: Vec::new(),
             consumed: Vec::new(),
             internal: Rc::new(RefCell::new(Vec::new())),
@@ -225,7 +231,7 @@ mod tests {
 
         crate::example(|scope| {
 
-            let mut builder = OperatorBuilder::new("Failure".to_owned(), scope.clone());
+            let mut builder = OperatorBuilder::new("Failure".to_owned(), scope);
 
             let (output1, _stream1) = builder.new_output::<Vec<()>>();
             let (output2, _stream2) = builder.new_output::<Vec<()>>();
@@ -256,7 +262,7 @@ mod tests {
 
         crate::example(|scope| {
 
-            let mut builder = OperatorBuilder::new("Failure".to_owned(), scope.clone());
+            let mut builder = OperatorBuilder::new("Failure".to_owned(), scope);
 
             let (output1, _stream1) = builder.new_output::<Vec<()>>();
             let (output2, _stream2) = builder.new_output::<Vec<()>>();

@@ -36,10 +36,11 @@ pub trait ToStreamBuilder<CB: ContainerBuilder> {
 impl<CB: ContainerBuilder, I: IntoIterator+'static> ToStreamBuilder<CB> for I where CB: PushInto<I::Item> {
     fn to_stream_with_builder<T: Timestamp>(self, scope: &mut Scope<T>) -> Stream<T, CB::Container> {
 
+        let activations = scope.activations();
         source::<_, CB, _, _>(scope, "ToStreamBuilder", |capability, info| {
 
             // Acquire an activator, so that the operator can rescheduled itself.
-            let activator = scope.activator_for(info.address);
+            let activator = crate::scheduling::activate::Activator::new(info.address, activations);
 
             let mut iterator = self.into_iter().fuse();
             let mut capability = Some(capability);

@@ -79,15 +79,19 @@ extern crate timely;
 
 use timely::dataflow::operators::Inspect;
 use timely::dataflow::operators::generic::operator::source;
+use timely::scheduling::Scheduler;
 
 fn main() {
     timely::example(|scope| {
 
+        // Acquire activations before borrowing scope mutably.
+        let activations = scope.activations();
+
         source(scope, "Source", |capability, info| {
 
             // Acquire a re-activator for this operator.
-            use timely::scheduling::Scheduler;
-            let activator = scope.activator_for(info.address);
+            use timely::scheduling::activate::Activator;
+            let activator = Activator::new(info.address, activations);
 
             let mut cap = Some(capability);
             move |output| {

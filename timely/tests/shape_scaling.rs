@@ -21,7 +21,7 @@ fn operator_scaling(scale: u64) {
                 .partition(scale, |()| (0, ()));
 
             use timely::dataflow::operators::generic::builder_rc::OperatorBuilder;
-            let mut builder = OperatorBuilder::new("OpScaling".to_owned(), scope.clone());
+            let mut builder = OperatorBuilder::new("OpScaling".to_owned(), scope);
             let mut handles = Vec::with_capacity(parts.len());
             let mut outputs = Vec::with_capacity(parts.len());
             for (index, part) in parts.into_iter().enumerate() {
@@ -64,7 +64,7 @@ fn subgraph_scaling(scale: u64) {
                 .input_from(&mut input)
                 .partition(scale, |()| (0, ()));
 
-            let _outputs = scope.region(|inner| {
+            let _outputs = scope.region(|scope, inner| {
                 use timely::dataflow::operators::{Enter, Leave};
                 parts.into_iter().map(|part| part.enter(inner).leave(scope)).collect::<Vec<_>>()
             });

@@ -28,7 +28,7 @@ impl<T: Timestamp, D: ExchangeData + Clone> Broadcast<D> for StreamVec<T, D> {
         // NOTE: Simplified implementation due to underlying motion
         // in timely dataflow internals. Optimize once they have
         // settled down.
-        let peers = self.scope().peers() as u64;
+        let peers = self.peers() as u64;
         self.flat_map(move |x| (0 .. peers).map(move |i| (i,x.clone())))
             .exchange(|ix| ix.0)
             .map(|(_i,x)| x)

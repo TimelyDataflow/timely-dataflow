@@ -100,7 +100,7 @@ fn main() {
 
         // Create a nested iterative scope.
         // Rust needs help understanding the iteration counter type.
-        scope.iterative::<u64,_,_>(|subscope| {
+        scope.iterative::<u64,_,_>(|_outer, subscope| {
 
             let (handle, stream) = subscope.loop_variable(1);
 

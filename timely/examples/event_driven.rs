@@ -21,7 +21,7 @@ fn main() {
         for _dataflow in 0 .. dataflows {
             worker.dataflow(|scope| {
                 let (input, stream) = scope.new_input();
-                let stream = scope.region(|inner| {
+                let stream = scope.region(|scope, inner| {
                     let mut stream = stream.enter(inner);
                     for _step in 0 .. length {
                         stream = stream.map(|x: ()| x);

@@ -179,11 +179,10 @@ where
         }
 
         // The `None` argument is optional logging infrastructure.
-        let type_name = std::any::type_name::<TInner>();
         let reachability_logging =
-        worker.logger_for(&format!("timely/reachability/{type_name}"))
+        worker.logger_for(&crate::logging::reachability_log_name::<TInner>())
               .map(|logger| reachability::logging::TrackerLogger::new(self.identifier, logger));
-        let progress_logging = worker.logger_for(&format!("timely/progress/{type_name}"));
+        let progress_logging = worker.logger_for(&crate::logging::progress_log_name::<TInner>());
         let (tracker, scope_summary) = builder.build(reachability_logging);
 
         let progcaster = Progcaster::new(worker, Rc::clone(&self.path), self.identifier, self.logging.clone(), progress_logging);

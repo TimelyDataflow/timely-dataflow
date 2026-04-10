@@ -75,16 +75,17 @@ pub fn iterator_source<
     DI: IntoIterator<Item=D>,
     I: IntoIterator<Item=(T, DI)>,
     F: FnMut(&T)->Option<IteratorSourceInput<T, D, DI, I>>+'static>(
-        scope: &Scope<T>,
+        scope: &mut Scope<T>,
         name: &str,
         mut input_f: F,
         probe: Handle<T>,
         ) -> StreamVec<T, D> where T: TotalOrder {
 
     let mut target = T::minimum();
-    source(scope, name, |cap, info| {
+    let activations = scope.activations();
+    source(scope, name, |cap: crate::dataflow::operators::capability::Capability<T>, info| {
         let mut cap = Some(cap);
-        let activator = scope.activator_for(info.address);
+        let activator = crate::scheduling::activate::Activator::new(info.address, activations);
         move |output| {
             cap = cap.take().and_then(|mut cap| {
                 loop {

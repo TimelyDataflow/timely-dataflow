@@ -1,5 +1,7 @@
 //! Operators that separate one stream into two streams based on some condition
 
+use std::rc::Rc;
+
 use crate::dataflow::channels::pact::Pipeline;
 use crate::progress::Timestamp;
 use crate::dataflow::operators::generic::OutputBuilder;
@@ -41,7 +43,7 @@ impl<T: Timestamp, D: 'static> Branch<T, D> for StreamVec<T, D> {
         self,
         condition: impl Fn(&T, &D) -> bool + 'static,
     ) -> (StreamVec<T, D>, StreamVec<T, D>) {
-        let mut builder = OperatorBuilder::new("Branch".to_owned(), self.scope());
+        let mut builder = OperatorBuilder::new_from("Branch".to_owned(), Rc::clone(&self.subgraph), self.worker.clone());
 
         let mut input = builder.new_input(self, Pipeline);
         builder.set_notify_for(0, crate::progress::operate::FrontierInterest::Never);
@@ -102,7 +104,7 @@ pub trait BranchWhen<T>: Sized {
 
 impl<T: Timestamp, C: Container> BranchWhen<T> for Stream<T, C> {
     fn branch_when(self, condition: impl Fn(&T) -> bool + 'static) -> (Self, Self) {
-        let mut builder = OperatorBuilder::new("Branch".to_owned(), self.scope());
+        let mut builder = OperatorBuilder::new_from("Branch".to_owned(), Rc::clone(&self.subgraph), self.worker.clone());
 
         let mut input = builder.new_input(self, Pipeline);
         builder.set_notify_for(0, crate::progress::operate::FrontierInterest::Never);

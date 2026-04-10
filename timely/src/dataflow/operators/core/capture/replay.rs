@@ -70,7 +70,7 @@ where
 {
     fn replay_core(self, scope: &mut Scope<T>, period: Option<std::time::Duration>) -> Stream<T, C>{
 
-        let mut builder = OperatorBuilder::new("Replay".to_owned(), scope.clone());
+        let mut builder = OperatorBuilder::new("Replay".to_owned(), scope);
 
         let address = builder.operator_info().address;
         let activator = scope.activator_for(address);

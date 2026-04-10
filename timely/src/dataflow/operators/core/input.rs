@@ -177,7 +177,7 @@ impl<T: Timestamp + TotalOrder> Input for Scope<T> {
             copies,
         }));
 
-        Stream::new(Source::new(index, 0), registrar, self.clone())
+        Stream::new(Source::new(index, 0), registrar, Rc::clone(&self.subgraph), self.worker.clone())
     }
 }
 

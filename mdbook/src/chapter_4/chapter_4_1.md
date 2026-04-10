@@ -23,7 +23,7 @@ fn main() {
     timely::example(|scope| {
 
         // Create a new scope with the same (u64) timestamp.
-        scope.scoped::<u64,_,_>("SubScope", |subscope| {
+        scope.scoped::<u64,_,_>("SubScope", |_outer, subscope| {
             // probably want something here
         })
 
@@ -56,10 +56,10 @@ fn main() {
         let stream = (0 .. 10).to_stream(scope).container::<Vec<_>>();
 
         // Create a new scope with the same (u64) timestamp.
-        let result = scope.scoped::<u64,_,_>("SubScope", |subscope| {
+        let result = scope.scoped::<u64,_,_>("SubScope", |outer, subscope| {
             stream.enter(subscope)
                   .inspect_batch(|t, xs| println!("{:?}, {:?}", t, xs))
-                  .leave(scope)
+                  .leave(outer)
         });
 
     });
@@ -88,10 +88,10 @@ fn main() {
         let stream = (0 .. 10).to_stream(scope).container::<Vec<_>>();
 
         // Create a new scope with the same (u64) timestamp.
-        let result = scope.region(|subscope| {
+        let result = scope.region(|outer, subscope| {
             stream.enter(subscope)
                   .inspect_batch(|t, xs| println!("{:?}, {:?}", t, xs))
-                  .leave(scope)
+                  .leave(outer)
         });
 
     });
@@ -120,10 +120,10 @@ fn main() {
         let stream = (0 .. 10).to_stream(scope).container::<Vec<_>>();
 
         // Create a new scope with a (u64, u32) timestamp.
-        let result = scope.iterative::<u32,_,_>(|subscope| {
+        let result = scope.iterative::<u32,_,_>(|outer, subscope| {
             stream.enter(subscope)
                   .inspect_batch(|t, xs| println!("{:?}, {:?}", t, xs))
-                  .leave(scope)
+                  .leave(outer)
         });
 
     });

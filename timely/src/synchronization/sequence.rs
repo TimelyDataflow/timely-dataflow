@@ -112,7 +112,7 @@ impl<T: ExchangeData+Clone> Sequencer<T> {
         // build a dataflow used to serialize and circulate commands
         worker.dataflow::<Duration,_,_>(move |dataflow| {
 
-            let scope = dataflow.clone();
+            let worker = dataflow.worker.clone();
             let peers = dataflow.peers();
 
             let mut recvd = Vec::new();
@@ -127,7 +127,7 @@ impl<T: ExchangeData+Clone> Sequencer<T> {
                 activator_source
                     .borrow_mut()
                     .replace(CatchupActivator {
-                        activator: scope.activator_for(info.address),
+                        activator: worker.activator_for(info.address),
                         catchup_until: None,
                     });
 

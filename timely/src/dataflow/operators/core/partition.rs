@@ -1,5 +1,6 @@
 //! Partition a stream of records into multiple streams.
 use std::collections::BTreeMap;
+use std::rc::Rc;
 
 use crate::container::{DrainContainer, PushInto};
 use crate::progress::Timestamp;
@@ -41,7 +42,7 @@ impl<T: Timestamp, C: Container + DrainContainer> Partition<T, C> for Stream<T, 
         CB: ContainerBuilder + PushInto<D2>,
         F: FnMut(C::Item<'_>) -> (u64, D2) + 'static,
     {
-        let mut builder = OperatorBuilder::new("Partition".to_owned(), self.scope());
+        let mut builder = OperatorBuilder::new_from("Partition".to_owned(), Rc::clone(&self.subgraph), self.worker.clone());
 
         let mut input = builder.new_input(self, Pipeline);
         builder.set_notify_for(0, crate::progress::operate::FrontierInterest::Never);

@@ -1,5 +1,7 @@
 //! Operators that separate one stream into two streams based on some condition
 
+use std::rc::Rc;
+
 use crate::Container;
 use crate::progress::Timestamp;
 use crate::container::{DrainContainer, SizableContainer, PushInto};
@@ -52,7 +54,7 @@ impl<T: Timestamp, C: Container + DrainContainer> OkErr<T, C> for Stream<T, C> {
         C2: Container + SizableContainer + PushInto<D2>,
         L: FnMut(C::Item<'_>) -> Result<D1,D2>+'static
     {
-        let mut builder = OperatorBuilder::new("OkErr".to_owned(), self.scope());
+        let mut builder = OperatorBuilder::new_from("OkErr".to_owned(), Rc::clone(&self.subgraph), self.worker.clone());
 
         let mut input = builder.new_input(self, Pipeline);
         builder.set_notify_for(0, crate::progress::operate::FrontierInterest::Never);

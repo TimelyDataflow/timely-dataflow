@@ -91,7 +91,7 @@ impl<T: Timestamp, C: Container> Probe<T, C> for Stream<T, C> {
     }
     fn probe_with(self, handle: &Handle<T>) -> Stream<T, C> {
 
-        let mut builder = OperatorBuilder::new("Probe".to_owned(), self.scope());
+        let mut builder = OperatorBuilder::new_from("Probe".to_owned(), Rc::clone(&self.subgraph), self.worker.clone());
         let mut input = PullCounter::new(builder.new_input(self, Pipeline));
         let (tee, stream) = builder.new_output();
         let mut output = PushCounter::new(tee);
