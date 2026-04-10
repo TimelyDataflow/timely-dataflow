@@ -10,7 +10,7 @@ use crate::progress::frontier::Antichain;
 use crate::progress::{Timestamp, PathSummary};
 
 /// Creates a `Stream` and a `Handle` to later bind the source of that `Stream`.
-pub trait Feedback<T: Timestamp> {
+pub trait Feedback<'scope, T: Timestamp> {
 
     /// Creates a [Stream] and a [Handle] to later bind the source of that `Stream`.
     ///
@@ -35,11 +35,11 @@ pub trait Feedback<T: Timestamp> {
     ///            .connect_loop(handle);
     /// });
     /// ```
-    fn feedback<C: Container>(&mut self, summary: <T as Timestamp>::Summary) -> (Handle<T, C>, Stream<T, C>);
+    fn feedback<C: Container>(&mut self, summary: <T as Timestamp>::Summary) -> (Handle<'scope, T, C>, Stream<'scope, T, C>);
 }
 
 /// Creates a `Stream` and a `Handle` to later bind the source of that `Stream`.
-pub trait LoopVariable<TOuter: Timestamp, TInner: Timestamp> {
+pub trait LoopVariable<'scope, TOuter: Timestamp, TInner: Timestamp> {
     /// Creates a `Stream` and a `Handle` to later bind the source of that `Stream`.
     ///
     /// The resulting `Stream` will have its data defined by a future call to `connect_loop` with
@@ -65,12 +65,12 @@ pub trait LoopVariable<TOuter: Timestamp, TInner: Timestamp> {
     ///     });
     /// });
     /// ```
-    fn loop_variable<C: Container>(&mut self, summary: TInner::Summary) -> (Handle<Product<TOuter, TInner>, C>, Stream<Product<TOuter, TInner>, C>);
+    fn loop_variable<C: Container>(&mut self, summary: TInner::Summary) -> (Handle<'scope, Product<TOuter, TInner>, C>, Stream<'scope, Product<TOuter, TInner>, C>);
 }
 
-impl<T: Timestamp> Feedback<T> for Scope<T> {
+impl<'scope, T: Timestamp> Feedback<'scope, T> for Scope<'scope, T> {
 
-    fn feedback<C: Container>(&mut self, summary: <T as Timestamp>::Summary) -> (Handle<T, C>, Stream<T, C>) {
+    fn feedback<C: Container>(&mut self, summary: <T as Timestamp>::Summary) -> (Handle<'scope, T, C>, Stream<'scope, T, C>) {
 
         let mut builder = OperatorBuilder::new("Feedback".to_owned(), self.clone());
         let (output, stream) = builder.new_output();
@@ -79,14 +79,14 @@ impl<T: Timestamp> Feedback<T> for Scope<T> {
     }
 }
 
-impl<TOuter: Timestamp, TInner: Timestamp> LoopVariable<TOuter, TInner> for Iterative<TOuter, TInner> {
-    fn loop_variable<C: Container>(&mut self, summary: TInner::Summary) -> (Handle<Product<TOuter, TInner>, C>, Stream<Product<TOuter, TInner>, C>) {
+impl<'scope, TOuter: Timestamp, TInner: Timestamp> LoopVariable<'scope, TOuter, TInner> for Iterative<'scope, TOuter, TInner> {
+    fn loop_variable<C: Container>(&mut self, summary: TInner::Summary) -> (Handle<'scope, Product<TOuter, TInner>, C>, Stream<'scope, Product<TOuter, TInner>, C>) {
         self.feedback(Product::new(Default::default(), summary))
     }
 }
 
 /// Connect a `Stream` to the input of a loop variable.
-pub trait ConnectLoop<T: Timestamp, C: Container> {
+pub trait ConnectLoop<'scope, T: Timestamp, C: Container> {
     /// Connect a `Stream` to be the input of a loop variable.
     ///
     /// # Examples
@@ -106,11 +106,11 @@ pub trait ConnectLoop<T: Timestamp, C: Container> {
     ///            .connect_loop(handle);
     /// });
     /// ```
-    fn connect_loop(self, handle: Handle<T, C>);
+    fn connect_loop(self, handle: Handle<'scope, T, C>);
 }
 
-impl<T: Timestamp, C: Container> ConnectLoop<T, C> for Stream<T, C> {
-    fn connect_loop(self, handle: Handle<T, C>) {
+impl<'scope, T: Timestamp, C: Container> ConnectLoop<'scope, T, C> for Stream<'scope, T, C> {
+    fn connect_loop(self, handle: Handle<'scope, T, C>) {
 
         let mut builder = handle.builder;
         let summary = handle.summary;
@@ -133,8 +133,8 @@ impl<T: Timestamp, C: Container> ConnectLoop<T, C> for Stream<T, C> {
 
 /// A handle used to bind the source of a loop variable.
 #[derive(Debug)]
-pub struct Handle<T: Timestamp, C: Container> {
-    builder: OperatorBuilder<T>,
+pub struct Handle<'scope, T: Timestamp, C: Container> {
+    builder: OperatorBuilder<'scope, T>,
     summary: <T as Timestamp>::Summary,
     output: crate::dataflow::channels::pushers::Output<T, C>,
 }
