@@ -7,6 +7,18 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.29.0](https://github.com/TimelyDataflow/timely-dataflow/compare/timely-v0.28.1...timely-v0.29.0) - 2026-04-11
+
+### Other
+
+- Return lifetimes to `Scope` and friends ([#785](https://github.com/TimelyDataflow/timely-dataflow/pull/785))
+- Subscope builder ([#781](https://github.com/TimelyDataflow/timely-dataflow/pull/781))
+- Convert `Scope` trait to type ([#780](https://github.com/TimelyDataflow/timely-dataflow/pull/780))
+- Remove lifetime from Child ([#779](https://github.com/TimelyDataflow/timely-dataflow/pull/779))
+- Remove `Allocate` trait; replace with `Allocator`. ([#778](https://github.com/TimelyDataflow/timely-dataflow/pull/778))
+- Checks for WASM compatibility ([#777](https://github.com/TimelyDataflow/timely-dataflow/pull/777))
+- `Child` generics cleanup ([#774](https://github.com/TimelyDataflow/timely-dataflow/pull/774))
+
 ## [0.28.1](https://github.com/TimelyDataflow/timely-dataflow/compare/timely-v0.28.0...timely-v0.28.1) - 2026-04-03
 
 ### Other
