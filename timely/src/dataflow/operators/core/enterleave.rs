@@ -51,7 +51,7 @@ pub trait Enter<'outer, TOuter: Timestamp, TInner: Timestamp+Refines<TOuter>, C>
     ///     });
     /// });
     /// ```
-    fn enter<'inner>(self, inner: &Scope<'inner, TInner>) -> Stream<'inner, TInner, C> where 'outer: 'inner;
+    fn enter<'inner>(self, inner: &Scope<'inner, TInner>) -> Stream<'inner, TInner, C>;
 }
 
 impl<'outer, TOuter, TInner, C> Enter<'outer, TOuter, TInner, C> for Stream<'outer, TOuter, C>
@@ -60,7 +60,7 @@ where
     TInner: Timestamp + Refines<TOuter>,
     C: Container,
 {
-    fn enter<'inner>(self, inner: &Scope<'inner, TInner>) -> Stream<'inner, TInner, C> where 'outer: 'inner {
+    fn enter<'inner>(self, inner: &Scope<'inner, TInner>) -> Stream<'inner, TInner, C> {
 
         use crate::scheduling::Scheduler;
 
@@ -122,7 +122,7 @@ pub trait Leave<'inner, TInner: Timestamp, C> {
     ///     });
     /// });
     /// ```
-    fn leave<'outer: 'inner, TOuter: Timestamp>(self, outer: &Scope<'outer, TOuter>) -> Stream<'outer, TOuter, C> where TInner: Refines<TOuter>;
+    fn leave<'outer, TOuter: Timestamp>(self, outer: &Scope<'outer, TOuter>) -> Stream<'outer, TOuter, C> where TInner: Refines<TOuter>;
 }
 
 impl<'inner, TInner, C> Leave<'inner, TInner, C> for Stream<'inner, TInner, C>
@@ -130,7 +130,7 @@ where
     TInner: Timestamp,
     C: Container,
 {
-    fn leave<'outer: 'inner, TOuter: Timestamp>(self, outer: &Scope<'outer, TOuter>) -> Stream<'outer, TOuter, C> where TInner: Refines<TOuter> {
+    fn leave<'outer, TOuter: Timestamp>(self, outer: &Scope<'outer, TOuter>) -> Stream<'outer, TOuter, C> where TInner: Refines<TOuter> {
 
         let scope = self.scope();
 
