@@ -34,7 +34,7 @@ use crate::worker::AsWorker;
 use crate::dataflow::{Stream, Scope};
 
 /// Extension trait to move a `Stream` into a child of its current `Scope`.
-pub trait Enter<TOuter: Timestamp, TInner: Timestamp+Refines<TOuter>, C> {
+pub trait Enter<'outer, TOuter: Timestamp, TInner: Timestamp+Refines<TOuter>, C> {
     /// Moves the `Stream` argument into a child of its current `Scope`.
     ///
     /// The destination scope must be a child of the stream's scope.
@@ -51,16 +51,16 @@ pub trait Enter<TOuter: Timestamp, TInner: Timestamp+Refines<TOuter>, C> {
     ///     });
     /// });
     /// ```
-    fn enter(self, inner: &Scope<TInner>) -> Stream<TInner, C>;
+    fn enter<'inner>(self, inner: &Scope<'inner, TInner>) -> Stream<'inner, TInner, C>;
 }
 
-impl<TOuter, TInner, C> Enter<TOuter, TInner, C> for Stream<TOuter, C>
+impl<'outer, TOuter, TInner, C> Enter<'outer, TOuter, TInner, C> for Stream<'outer, TOuter, C>
 where
     TOuter: Timestamp,
     TInner: Timestamp + Refines<TOuter>,
     C: Container,
 {
-    fn enter(self, inner: &Scope<TInner>) -> Stream<TInner, C> {
+    fn enter<'inner>(self, inner: &Scope<'inner, TInner>) -> Stream<'inner, TInner, C> {
 
         use crate::scheduling::Scheduler;
 
@@ -103,7 +103,7 @@ where
 }
 
 /// Extension trait to move a `Stream` to the parent of its current `Scope`.
-pub trait Leave<TOuter: Timestamp, C> {
+pub trait Leave<'inner, TInner: Timestamp, C> {
     /// Moves a `Stream` to the parent of its current `Scope`.
     ///
     /// The parent scope must be supplied as an argument.
@@ -122,16 +122,15 @@ pub trait Leave<TOuter: Timestamp, C> {
     ///     });
     /// });
     /// ```
-    fn leave(self, outer: &Scope<TOuter>) -> Stream<TOuter, C>;
+    fn leave<'outer, TOuter: Timestamp>(self, outer: &Scope<'outer, TOuter>) -> Stream<'outer, TOuter, C> where TInner: Refines<TOuter>;
 }
 
-impl<TOuter, TInner, C> Leave<TOuter, C> for Stream<TInner, C>
+impl<'inner, TInner, C> Leave<'inner, TInner, C> for Stream<'inner, TInner, C>
 where
-    TOuter: Timestamp,
-    TInner: Timestamp + Refines<TOuter>,
+    TInner: Timestamp,
     C: Container,
 {
-    fn leave(self, outer: &Scope<TOuter>) -> Stream<TOuter, C> {
+    fn leave<'outer, TOuter: Timestamp>(self, outer: &Scope<'outer, TOuter>) -> Stream<'outer, TOuter, C> where TInner: Refines<TOuter> {
 
         let scope = self.scope();
 

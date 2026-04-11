@@ -8,7 +8,7 @@ use crate::Container;
 use std::rc::Rc;
 
 /// Convert a stream into a stream of shared containers
-pub trait SharedStream<T: Timestamp, C> {
+pub trait SharedStream<'scope, T: Timestamp, C> {
     /// Convert a stream into a stream of shared data
     ///
     /// # Examples
@@ -23,11 +23,11 @@ pub trait SharedStream<T: Timestamp, C> {
     ///            .inspect_container(|x| println!("seen: {:?}", x));
     /// });
     /// ```
-    fn shared(self) -> Stream<T, Rc<C>>;
+    fn shared(self) -> Stream<'scope, T, Rc<C>>;
 }
 
-impl<T: Timestamp, C: Container> SharedStream<T, C> for Stream<T, C> {
-    fn shared(self) -> Stream<T, Rc<C>> {
+impl<'scope, T: Timestamp, C: Container> SharedStream<'scope, T, C> for Stream<'scope, T, C> {
+    fn shared(self) -> Stream<'scope, T, Rc<C>> {
         self.unary(Pipeline, "Shared", move |_, _| {
             move |input, output| {
                 input.for_each_time(|time, data| {

@@ -97,7 +97,7 @@ pub trait Delay<T: Timestamp, D: 'static> {
     fn delay_batch<L: FnMut(&T)->T+'static>(self, func: L) -> Self;
 }
 
-impl<T: Timestamp + ::std::hash::Hash, D: 'static> Delay<T, D> for StreamVec<T, D> {
+impl<T: Timestamp + ::std::hash::Hash, D: 'static> Delay<T, D> for StreamVec<'_, T, D> {
     fn delay<L: FnMut(&D, &T)->T+'static>(self, mut func: L) -> Self {
         let mut elements = HashMap::new();
         self.unary_notify(Pipeline, "Delay", vec![], move |input, output, notificator| {

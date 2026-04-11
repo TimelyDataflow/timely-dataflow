@@ -7,7 +7,7 @@ use crate::dataflow::operators::core::{UnorderedInput as UnorderedInputCore, Uno
 use crate::dataflow::{StreamVec, Scope};
 
 /// Create a new `StreamVec` and `Handle` through which to supply input.
-pub trait UnorderedInput<T: Timestamp> {
+pub trait UnorderedInput<'scope, T: Timestamp> {
     /// Create a new capability-based `StreamVec` and `Handle` through which to supply input. This
     /// input supports multiple open epochs (timestamps) at the same time.
     ///
@@ -61,12 +61,12 @@ pub trait UnorderedInput<T: Timestamp> {
     ///     assert_eq!(extract[i], (i, vec![i]));
     /// }
     /// ```
-    fn new_unordered_input<D: 'static>(&mut self) -> ((UnorderedHandle<T, D>, ActivateCapability<T>), StreamVec<T, D>);
+    fn new_unordered_input<D: 'static>(&mut self) -> ((UnorderedHandle<T, D>, ActivateCapability<T>), StreamVec<'scope, T, D>);
 }
 
 
-impl<T: Timestamp> UnorderedInput<T> for Scope<T> {
-    fn new_unordered_input<D: 'static>(&mut self) -> ((UnorderedHandle<T, D>, ActivateCapability<T>), StreamVec<T, D>) {
+impl<'scope, T: Timestamp> UnorderedInput<'scope, T> for Scope<'scope, T> {
+    fn new_unordered_input<D: 'static>(&mut self) -> ((UnorderedHandle<T, D>, ActivateCapability<T>), StreamVec<'scope, T, D>) {
         UnorderedInputCore::new_unordered_input(self)
     }
 }

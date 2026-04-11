@@ -52,18 +52,18 @@ impl OperatorShape {
 
 /// Builds operators with generic shape.
 #[derive(Debug)]
-pub struct OperatorBuilder<T: Timestamp> {
-    scope: Scope<T>,
-    slot: OperatorSlot<T>,
+pub struct OperatorBuilder<'scope, T: Timestamp> {
+    scope: Scope<'scope, T>,
+    slot: OperatorSlot<'scope, T>,
     address: Rc<[usize]>,    // path to the operator (ending with index).
     shape: OperatorShape,
     summary: Connectivity<<T as Timestamp>::Summary>,
 }
 
-impl<T: Timestamp> OperatorBuilder<T> {
+impl<'scope, T: Timestamp> OperatorBuilder<'scope, T> {
 
     /// Allocates a new generic operator builder from its containing scope.
-    pub fn new(name: String, mut scope: Scope<T>) -> Self {
+    pub fn new(name: String, mut scope: Scope<'scope, T>) -> Self {
 
         let slot = scope.reserve_operator();
         let address = slot.addr();
@@ -93,7 +93,7 @@ impl<T: Timestamp> OperatorBuilder<T> {
     }
 
     /// Adds a new input to a generic operator builder, returning the `Pull` implementor to use.
-    pub fn new_input<C: Container, P>(&mut self, stream: Stream<T, C>, pact: P) -> P::Puller
+    pub fn new_input<C: Container, P>(&mut self, stream: Stream<'scope, T, C>, pact: P) -> P::Puller
     where
         P: ParallelizationContract<T, C>
     {
@@ -102,7 +102,7 @@ impl<T: Timestamp> OperatorBuilder<T> {
     }
 
     /// Adds a new input to a generic operator builder, returning the `Pull` implementor to use.
-    pub fn new_input_connection<C: Container, P, I>(&mut self, stream: Stream<T, C>, pact: P, connection: I) -> P::Puller
+    pub fn new_input_connection<C: Container, P, I>(&mut self, stream: Stream<'scope, T, C>, pact: P, connection: I) -> P::Puller
     where
         P: ParallelizationContract<T, C>,
         I: IntoIterator<Item = (usize, Antichain<<T as Timestamp>::Summary>)>,
@@ -123,13 +123,13 @@ impl<T: Timestamp> OperatorBuilder<T> {
     }
 
     /// Adds a new output to a generic operator builder, returning the `Push` implementor to use.
-    pub fn new_output<C: Container>(&mut self) -> (Tee<T, C>, Stream<T, C>) {
+    pub fn new_output<C: Container>(&mut self) -> (Tee<T, C>, Stream<'scope, T, C>) {
         let connection = (0 .. self.shape.inputs).map(|i| (i, Antichain::from_elem(Default::default())));
         self.new_output_connection(connection)
     }
 
     /// Adds a new output to a generic operator builder, returning the `Push` implementor to use.
-    pub fn new_output_connection<C: Container, I>(&mut self, connection: I) -> (Tee<T, C>, Stream<T, C>)
+    pub fn new_output_connection<C: Container, I>(&mut self, connection: I) -> (Tee<T, C>, Stream<'scope, T, C>)
     where
         I: IntoIterator<Item = (usize, Antichain<<T as Timestamp>::Summary>)>,
     {

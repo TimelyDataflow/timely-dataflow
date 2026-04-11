@@ -20,7 +20,7 @@ use crate::dataflow::{Scope, Stream};
 use crate::scheduling::Activations;
 
 /// Create a new `Stream` and `Handle` through which to supply input.
-pub trait UnorderedInput<T: Timestamp> {
+pub trait UnorderedInput<'scope, T: Timestamp> {
     /// Create a new capability-based [Stream] and [UnorderedHandle] through which to supply input. This
     /// input supports multiple open epochs (timestamps) at the same time.
     ///
@@ -75,11 +75,11 @@ pub trait UnorderedInput<T: Timestamp> {
     ///     assert_eq!(extract[i], (i, vec![i]));
     /// }
     /// ```
-    fn new_unordered_input<CB: ContainerBuilder>(&mut self) -> ((UnorderedHandle<T, CB>, ActivateCapability<T>), Stream<T, CB::Container>);
+    fn new_unordered_input<CB: ContainerBuilder>(&mut self) -> ((UnorderedHandle<T, CB>, ActivateCapability<T>), Stream<'scope, T, CB::Container>);
 }
 
-impl<T: Timestamp> UnorderedInput<T> for Scope<T> {
-    fn new_unordered_input<CB: ContainerBuilder>(&mut self) -> ((UnorderedHandle<T, CB>, ActivateCapability<T>), Stream<T, CB::Container>) {
+impl<'scope, T: Timestamp> UnorderedInput<'scope, T> for Scope<'scope, T> {
+    fn new_unordered_input<CB: ContainerBuilder>(&mut self) -> ((UnorderedHandle<T, CB>, ActivateCapability<T>), Stream<'scope, T, CB::Container>) {
 
         let (output, registrar) = Tee::<T, CB::Container>::new();
         let internal = Rc::new(RefCell::new(ChangeBatch::new()));

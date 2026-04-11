@@ -98,7 +98,7 @@ where
     fn inspect_core<F>(self, func: F) -> Self where F: FnMut(Result<(&T, &C), &[T]>)+'static;
 }
 
-impl<T: Timestamp, C: Container> Inspect<T, C> for Stream<T, C>
+impl<T: Timestamp, C: Container> Inspect<T, C> for Stream<'_, T, C>
 where
     for<'a> &'a C: IntoIterator,
 {
@@ -132,7 +132,7 @@ pub trait InspectCore<T: Timestamp, C> {
     fn inspect_container<F>(self, func: F) -> Self where F: FnMut(Result<(&T, &C), &[T]>)+'static;
 }
 
-impl<T: Timestamp, C: Container> InspectCore<T, C> for Stream<T, C> {
+impl<T: Timestamp, C: Container> InspectCore<T, C> for Stream<'_, T, C> {
 
     fn inspect_container<F>(self, mut func: F) -> Self
         where F: FnMut(Result<(&T, &C), &[T]>)+'static

@@ -70,16 +70,17 @@ pub struct IteratorSourceInput<T: Clone, D: 'static, DI: IntoIterator<Item=D>, I
 /// }).unwrap();
 /// ```
 pub fn iterator_source<
+    'scope,
     T: Timestamp,
     D: 'static,
     DI: IntoIterator<Item=D>,
     I: IntoIterator<Item=(T, DI)>,
     F: FnMut(&T)->Option<IteratorSourceInput<T, D, DI, I>>+'static>(
-        scope: &Scope<T>,
+        scope: &Scope<'scope, T>,
         name: &str,
         mut input_f: F,
         probe: Handle<T>,
-        ) -> StreamVec<T, D> where T: TotalOrder {
+        ) -> StreamVec<'scope, T, D> where T: TotalOrder {
 
     let mut target = T::minimum();
     source(scope, name, |cap, info| {

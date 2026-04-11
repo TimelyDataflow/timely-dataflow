@@ -22,8 +22,8 @@ pub trait Broadcast<D: ExchangeData> {
     fn broadcast(self) -> Self;
 }
 
-impl<T: Timestamp, D: ExchangeData + Clone> Broadcast<D> for StreamVec<T, D> {
-    fn broadcast(self) -> StreamVec<T, D> {
+impl<T: Timestamp, D: ExchangeData + Clone> Broadcast<D> for StreamVec<'_, T, D> {
+    fn broadcast(self) -> Self {
 
         // NOTE: Simplified implementation due to underlying motion
         // in timely dataflow internals. Optimize once they have

@@ -12,7 +12,7 @@ use crate::dataflow::channels::pact::Exchange;
 ///
 /// Extension method supporting aggregation of keyed data within timestamp.
 /// For inter-timestamp aggregation, consider `StateMachine`.
-pub trait Aggregate<T: Timestamp, K: ExchangeData+Hash, V: ExchangeData> {
+pub trait Aggregate<'scope, T: Timestamp, K: ExchangeData+Hash, V: ExchangeData> {
     /// Aggregates data of the form `(key, val)`, using user-supplied logic.
     ///
     /// The `aggregate` method is implemented for streams of `(K, V)` data,
@@ -66,16 +66,16 @@ pub trait Aggregate<T: Timestamp, K: ExchangeData+Hash, V: ExchangeData> {
         self,
         fold: F,
         emit: E,
-        hash: H) -> StreamVec<T, R> where T: Eq;
+        hash: H) -> StreamVec<'scope, T, R> where T: Eq;
 }
 
-impl<T: Timestamp + Hash, K: ExchangeData+Clone+Hash+Eq, V: ExchangeData> Aggregate<T, K, V> for StreamVec<T, (K, V)> {
+impl<'scope, T: Timestamp + Hash, K: ExchangeData+Clone+Hash+Eq, V: ExchangeData> Aggregate<'scope, T, K, V> for StreamVec<'scope, T, (K, V)> {
 
     fn aggregate<R: 'static, D: Default+'static, F: Fn(&K, V, &mut D)+'static, E: Fn(K, D)->R+'static, H: Fn(&K)->u64+'static>(
         self,
         fold: F,
         emit: E,
-        hash: H) -> StreamVec<T, R> where T: Eq {
+        hash: H) -> StreamVec<'scope, T, R> where T: Eq {
 
         let mut aggregates = HashMap::new();
         self.unary_notify(Exchange::new(move |(k, _)| hash(k)), "Aggregate", vec![], move |input, output, notificator| {

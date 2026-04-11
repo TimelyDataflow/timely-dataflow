@@ -6,7 +6,7 @@ use crate::dataflow::channels::pact::Pipeline;
 use crate::dataflow::{Stream, Scope};
 
 /// Merge the contents of two streams.
-pub trait Concat<T: Timestamp, C> {
+pub trait Concat{
     /// Merge the contents of two streams.
     ///
     /// # Examples
@@ -22,17 +22,17 @@ pub trait Concat<T: Timestamp, C> {
     ///           .inspect(|x| println!("seen: {:?}", x));
     /// });
     /// ```
-    fn concat(self, other: Stream<T, C>) -> Stream<T, C>;
+    fn concat(self, other: Self) -> Self;
 }
 
-impl<T: Timestamp, C: Container> Concat<T, C> for Stream<T, C> {
-    fn concat(self, other: Stream<T, C>) -> Stream<T, C> {
+impl<'scope, T: Timestamp, C: Container> Concat for Stream<'scope, T, C> {
+    fn concat(self, other: Self) -> Self {
         self.scope().concatenate([self, other])
     }
 }
 
 /// Merge the contents of multiple streams.
-pub trait Concatenate<T: Timestamp, C> {
+pub trait Concatenate<'scope, T: Timestamp> {
     /// Merge the contents of multiple streams.
     ///
     /// # Examples
@@ -50,15 +50,15 @@ pub trait Concatenate<T: Timestamp, C> {
     ///          .inspect(|x| println!("seen: {:?}", x));
     /// });
     /// ```
-    fn concatenate<I>(&self, sources: I) -> Stream<T, C>
+    fn concatenate<I, C: Container>(&self, sources: I) -> Stream<'scope, T, C>
     where
-        I: IntoIterator<Item=Stream<T, C>>;
+        I: IntoIterator<Item=Stream<'scope, T, C>>;
 }
 
-impl<T: Timestamp, C: Container> Concatenate<T, C> for Scope<T> {
-    fn concatenate<I>(&self, sources: I) -> Stream<T, C>
+impl<'scope, T: Timestamp> Concatenate<'scope, T> for Scope<'scope, T> {
+    fn concatenate<I, C: Container>(&self, sources: I) -> Stream<'scope, T, C>
     where
-        I: IntoIterator<Item=Stream<T, C>>
+        I: IntoIterator<Item=Stream<'scope, T, C>>
     {
 
         // create an operator builder.

@@ -26,7 +26,7 @@ use crate::dataflow::channels::Message;
 // NOTE : Might be able to fix with another lifetime parameter, say 'c: 'a.
 
 /// Create a new `Stream` and `Handle` through which to supply input.
-pub trait Input {
+pub trait Input<'scope> {
     /// The timestamp at which this input scope operates.
     type Timestamp: Timestamp;
 
@@ -63,7 +63,7 @@ pub trait Input {
     ///     }
     /// });
     /// ```
-    fn new_input<C: Container+Clone>(&mut self) -> (Handle<Self::Timestamp, CapacityContainerBuilder<C>>, Stream<Self::Timestamp, C>);
+    fn new_input<C: Container+Clone>(&mut self) -> (Handle<Self::Timestamp, CapacityContainerBuilder<C>>, Stream<'scope, Self::Timestamp, C>);
 
     /// Create a new [Stream] and [Handle] through which to supply input.
     ///
@@ -100,7 +100,7 @@ pub trait Input {
     ///     }
     /// });
     /// ```
-    fn new_input_with_builder<CB: ContainerBuilder<Container: Clone>>(&mut self) -> (Handle<Self::Timestamp, CB>, Stream<Self::Timestamp, CB::Container>);
+    fn new_input_with_builder<CB: ContainerBuilder<Container: Clone>>(&mut self) -> (Handle<Self::Timestamp, CB>, Stream<'scope, Self::Timestamp, CB::Container>);
 
     /// Create a new stream from a supplied interactive handle.
     ///
@@ -133,25 +133,25 @@ pub trait Input {
     ///     }
     /// });
     /// ```
-    fn input_from<CB: ContainerBuilder<Container: Clone>>(&mut self, handle: &mut Handle<Self::Timestamp, CB>) -> Stream<Self::Timestamp, CB::Container>;
+    fn input_from<CB: ContainerBuilder<Container: Clone>>(&mut self, handle: &mut Handle<Self::Timestamp, CB>) -> Stream<'scope, Self::Timestamp, CB::Container>;
 }
 
 use crate::order::TotalOrder;
-impl<T: Timestamp + TotalOrder> Input for Scope<T> {
+impl<'scope, T: Timestamp + TotalOrder> Input<'scope> for Scope<'scope, T> {
     type Timestamp = T;
-    fn new_input<C: Container+Clone>(&mut self) -> (Handle<T, CapacityContainerBuilder<C>>, Stream<T, C>) {
+    fn new_input<C: Container+Clone>(&mut self) -> (Handle<T, CapacityContainerBuilder<C>>, Stream<'scope, T, C>) {
         let mut handle = Handle::new();
         let stream = self.input_from(&mut handle);
         (handle, stream)
     }
 
-    fn new_input_with_builder<CB: ContainerBuilder<Container: Clone>>(&mut self) -> (Handle<T, CB>, Stream<T, CB::Container>) {
+    fn new_input_with_builder<CB: ContainerBuilder<Container: Clone>>(&mut self) -> (Handle<T, CB>, Stream<'scope, T, CB::Container>) {
         let mut handle = Handle::new_with_builder();
         let stream = self.input_from(&mut handle);
         (handle, stream)
     }
 
-    fn input_from<CB: ContainerBuilder<Container: Clone>>(&mut self, handle: &mut Handle<T, CB>) -> Stream<T, CB::Container> {
+    fn input_from<CB: ContainerBuilder<Container: Clone>>(&mut self, handle: &mut Handle<T, CB>) -> Stream<'scope, T, CB::Container> {
         let (output, registrar) = Tee::<T, CB::Container>::new();
         let counter = Counter::new(output);
         let produced = Rc::clone(counter.produced());
@@ -338,7 +338,7 @@ impl<T: Timestamp, CB: ContainerBuilder<Container: Clone>> Handle<T, CB> {
     ///     }
     /// });
     /// ```
-    pub fn to_stream(&mut self, scope: &mut Scope<T>) -> Stream<T, CB::Container>
+    pub fn to_stream<'scope>(&mut self, scope: &mut Scope<'scope, T>) -> Stream<'scope, T, CB::Container>
     where
         T: TotalOrder,
     {
