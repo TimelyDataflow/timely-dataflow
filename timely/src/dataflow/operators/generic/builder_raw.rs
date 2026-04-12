@@ -147,7 +147,31 @@ impl<'scope, T: Timestamp> OperatorBuilder<'scope, T> {
     }
 
     /// Creates an operator implementation from supplied logic constructor.
+    ///
+    /// Boxes the closure to avoid per-closure monomorphization based on `L`.
+    /// For the fully generic (non-boxing) path, see [`build_typed`].
     pub fn build<L>(self, logic: L)
+    where
+        L: FnMut(&mut SharedProgress<T>)->bool+'static
+    {
+        self.build_boxed(Box::new(logic));
+    }
+
+    /// Creates an operator implementation from pre-boxed logic.
+    ///
+    /// This method exists primarily to force the `Box<dyn ...>` coercion, which
+    /// can otherwise easily be `Box<L>` for specialized `L` instead.
+    pub fn build_boxed(self, logic: Box<dyn FnMut(&mut SharedProgress<T>)->bool>) {
+        self.build_typed(logic);
+    }
+
+    /// Like `build_reschedule`, but specialized to the closure type `L`.
+    ///
+    /// This method is instantiated once per distinct `L`, and one should be
+    /// mindful of monomorphization bloat. Callers with many distinct closures
+    /// should consider erasing their variation, for example via `Box<dyn ...>`,
+    /// as demonstrated in [`build`].
+    pub fn build_typed<L>(self, logic: L)
     where
         L: FnMut(&mut SharedProgress<T>)->bool+'static
     {
