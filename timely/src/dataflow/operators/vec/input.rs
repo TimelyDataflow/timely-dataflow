@@ -50,7 +50,7 @@ pub trait Input<'scope> {
     ///     }
     /// });
     /// ```
-    fn new_input<D: Clone+'static>(&mut self) -> (Handle<Self::Timestamp, D>, StreamVec<'scope, Self::Timestamp, D>);
+    fn new_input<D: Clone+'static>(&self) -> (Handle<Self::Timestamp, D>, StreamVec<'scope, Self::Timestamp, D>);
 
     /// Create a new stream from a supplied interactive handle.
     ///
@@ -83,17 +83,17 @@ pub trait Input<'scope> {
     ///     }
     /// });
     /// ```
-    fn input_from<D: Clone+'static>(&mut self, handle: &mut Handle<Self::Timestamp, D>) -> StreamVec<'scope, Self::Timestamp, D>;
+    fn input_from<D: Clone+'static>(&self, handle: &mut Handle<Self::Timestamp, D>) -> StreamVec<'scope, Self::Timestamp, D>;
 }
 
 use crate::order::TotalOrder;
 impl<'scope, T: Timestamp + TotalOrder> Input<'scope> for Scope<'scope, T> {
     type Timestamp = T;
-    fn new_input<D: Clone+'static>(&mut self) -> (Handle<T, D>, StreamVec<'scope, T, D>) {
+    fn new_input<D: Clone+'static>(&self) -> (Handle<T, D>, StreamVec<'scope, T, D>) {
         InputCore::new_input(self)
     }
 
-    fn input_from<D: Clone+'static>(&mut self, handle: &mut Handle<T, D>) -> StreamVec<'scope, T, D> {
+    fn input_from<D: Clone+'static>(&self, handle: &mut Handle<T, D>) -> StreamVec<'scope, T, D> {
         InputCore::input_from(self, handle)
     }
 }

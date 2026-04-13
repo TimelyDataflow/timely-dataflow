@@ -73,11 +73,11 @@ pub trait UnorderedInput<'scope, T: Timestamp> {
     ///     assert_eq!(extract[i], (i, vec![i]));
     /// }
     /// ```
-    fn new_unordered_input<CB: ContainerBuilder>(&mut self) -> ((UnorderedHandle<T, CB>, ActivateCapability<T>), Stream<'scope, T, CB::Container>);
+    fn new_unordered_input<CB: ContainerBuilder>(&self) -> ((UnorderedHandle<T, CB>, ActivateCapability<T>), Stream<'scope, T, CB::Container>);
 }
 
 impl<'scope, T: Timestamp> UnorderedInput<'scope, T> for Scope<'scope, T> {
-    fn new_unordered_input<CB: ContainerBuilder>(&mut self) -> ((UnorderedHandle<T, CB>, ActivateCapability<T>), Stream<'scope, T, CB::Container>) {
+    fn new_unordered_input<CB: ContainerBuilder>(&self) -> ((UnorderedHandle<T, CB>, ActivateCapability<T>), Stream<'scope, T, CB::Container>) {
 
         let (output, registrar) = Tee::<T, CB::Container>::new();
         let internal = Rc::new(RefCell::new(ChangeBatch::new()));

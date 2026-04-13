@@ -558,7 +558,7 @@ impl Worker {
     pub fn dataflow<T, R, F>(&mut self, func: F) -> R
     where
         T: Refines<()>,
-        F: FnOnce(&mut Scope<T>)->R,
+        F: FnOnce(&Scope<T>)->R,
     {
         self.dataflow_core("Dataflow", self.logging(), Box::new(()), |_, child| func(child))
     }
@@ -581,7 +581,7 @@ impl Worker {
     pub fn dataflow_named<T, R, F>(&mut self, name: &str, func: F) -> R
     where
         T: Refines<()>,
-        F: FnOnce(&mut Scope<T>)->R,
+        F: FnOnce(&Scope<T>)->R,
     {
         self.dataflow_core(name, self.logging(), Box::new(()), |_, child| func(child))
     }
@@ -614,7 +614,7 @@ impl Worker {
     pub fn dataflow_core<T, R, F, V>(&mut self, name: &str, mut logging: Option<TimelyLogger>, mut resources: V, func: F) -> R
     where
         T: Refines<()>,
-        F: FnOnce(&mut V, &mut Scope<T>)->R,
+        F: FnOnce(&mut V, &Scope<T>)->R,
         V: Any+'static,
     {
         let dataflow_index = self.allocate_dataflow_index();
@@ -628,13 +628,13 @@ impl Worker {
         let subscope = RefCell::new(subscope);
 
         let result = {
-            let mut builder = Scope {
+            let builder = Scope {
                 subgraph: &subscope,
                 worker: self.clone(),
                 logging: logging.clone(),
                 progress_logging,
             };
-            func(&mut resources, &mut builder)
+            func(&mut resources, &builder)
         };
 
         let operator = subscope.into_inner().build(self);

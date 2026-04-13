@@ -22,11 +22,11 @@ pub trait ToStream<D: 'static> {
     ///
     /// assert_eq!(data1.extract(), data2.extract());
     /// ```
-    fn to_stream<'scope, T: Timestamp>(self, scope: &mut Scope<'scope, T>) -> StreamVec<'scope, T, D>;
+    fn to_stream<'scope, T: Timestamp>(self, scope: &Scope<'scope, T>) -> StreamVec<'scope, T, D>;
 }
 
 impl<I: IntoIterator+'static> ToStream<I::Item> for I {
-    fn to_stream<'scope, T: Timestamp>(self, scope: &mut Scope<'scope, T>) -> StreamVec<'scope, T, I::Item> {
+    fn to_stream<'scope, T: Timestamp>(self, scope: &Scope<'scope, T>) -> StreamVec<'scope, T, I::Item> {
         ToStreamCore::to_stream(self, scope)
     }
 }

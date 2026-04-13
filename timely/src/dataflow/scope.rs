@@ -103,7 +103,7 @@ impl<'scope, T: Timestamp> Scope<'scope, T> {
     pub fn scoped<T2, R, F>(&self, name: &str, func: F) -> R
     where
         T2: Timestamp + Refines<T>,
-        F: FnOnce(&mut Scope<T2>) -> R,
+        F: FnOnce(&Scope<T2>) -> R,
     {
         let (result, subgraph, slot) = self.scoped_raw(name, func);
         slot.install(Box::new(subgraph));
@@ -116,7 +116,7 @@ impl<'scope, T: Timestamp> Scope<'scope, T> {
     pub fn scoped_raw<T2, R, F>(&self, name: &str, func: F) -> (R, Subgraph<T, T2>, OperatorSlot<'scope, T>)
     where
         T2: Timestamp + Refines<T>,
-        F: FnOnce(&mut Scope<T2>) -> R,
+        F: FnOnce(&Scope<T2>) -> R,
     {
         let parent = self.clone();
         let slot = parent.reserve_operator();
@@ -131,14 +131,14 @@ impl<'scope, T: Timestamp> Scope<'scope, T> {
             path, identifier, self.worker().logging(), summary_logging, name,
         ));
 
-        let mut child = Scope {
+        let child = Scope {
             subgraph: &subgraph,
             worker: parent.worker.clone(),
             logging: parent.logging.clone(),
             progress_logging,
         };
 
-        let result = func(&mut child);
+        let result = func(&child);
         drop(child);
         let subgraph = subgraph.into_inner().build(&parent.worker);
         (result, subgraph, slot)
@@ -168,7 +168,7 @@ impl<'scope, T: Timestamp> Scope<'scope, T> {
     pub fn iterative<T2, R, F>(&self, func: F) -> R
     where
         T2: Timestamp,
-        F: FnOnce(&mut Scope<Product<T, T2>>) -> R,
+        F: FnOnce(&Scope<Product<T, T2>>) -> R,
     {
         self.scoped::<Product<T, T2>, R, F>("Iterative", func)
     }
@@ -196,7 +196,7 @@ impl<'scope, T: Timestamp> Scope<'scope, T> {
     /// ```
     pub fn region<R, F>(&self, func: F) -> R
     where
-        F: FnOnce(&mut Scope<T>) -> R,
+        F: FnOnce(&Scope<T>) -> R,
     {
         self.region_named("Region", func)
     }
@@ -227,7 +227,7 @@ impl<'scope, T: Timestamp> Scope<'scope, T> {
     /// ```
     pub fn region_named<R, F>(&self, name: &str, func: F) -> R
     where
-        F: FnOnce(&mut Scope<T>) -> R,
+        F: FnOnce(&Scope<T>) -> R,
     {
         self.scoped::<T, R, F>(name, func)
     }

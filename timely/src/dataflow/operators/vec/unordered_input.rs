@@ -61,12 +61,12 @@ pub trait UnorderedInput<'scope, T: Timestamp> {
     ///     assert_eq!(extract[i], (i, vec![i]));
     /// }
     /// ```
-    fn new_unordered_input<D: 'static>(&mut self) -> ((UnorderedHandle<T, D>, ActivateCapability<T>), StreamVec<'scope, T, D>);
+    fn new_unordered_input<D: 'static>(&self) -> ((UnorderedHandle<T, D>, ActivateCapability<T>), StreamVec<'scope, T, D>);
 }
 
 
 impl<'scope, T: Timestamp> UnorderedInput<'scope, T> for Scope<'scope, T> {
-    fn new_unordered_input<D: 'static>(&mut self) -> ((UnorderedHandle<T, D>, ActivateCapability<T>), StreamVec<'scope, T, D>) {
+    fn new_unordered_input<D: 'static>(&self) -> ((UnorderedHandle<T, D>, ActivateCapability<T>), StreamVec<'scope, T, D>) {
         UnorderedInputCore::new_unordered_input(self)
     }
 }
