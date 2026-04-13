@@ -63,7 +63,7 @@ impl<'scope, T: Timestamp> Concatenate<'scope, T> for Scope<'scope, T> {
 
         // create an operator builder.
         use crate::dataflow::operators::generic::builder_rc::OperatorBuilder;
-        let mut builder = OperatorBuilder::new("Concatenate".to_string(), self.clone());
+        let mut builder = OperatorBuilder::new("Concatenate".to_string(), *self);
 
         // create new input handles for each input stream.
         let mut handles = sources.into_iter().map(|s| builder.new_input(s, Pipeline)).collect::<Vec<_>>();

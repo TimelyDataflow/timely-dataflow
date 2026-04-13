@@ -75,7 +75,7 @@ pub fn iterator_source<
     DI: IntoIterator<Item=D>,
     I: IntoIterator<Item=(T, DI)>,
     F: FnMut(&T)->Option<IteratorSourceInput<T, D, DI, I>>+'static>(
-        scope: &Scope<'scope, T>,
+        scope: Scope<'scope, T>,
         name: &str,
         mut input_f: F,
         probe: Handle<T>,

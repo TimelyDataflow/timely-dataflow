@@ -72,7 +72,7 @@ impl<'scope, T: Timestamp> Feedback<'scope, T> for Scope<'scope, T> {
 
     fn feedback<C: Container>(&self, summary: <T as Timestamp>::Summary) -> (Handle<'scope, T, C>, Stream<'scope, T, C>) {
 
-        let mut builder = OperatorBuilder::new("Feedback".to_owned(), self.clone());
+        let mut builder = OperatorBuilder::new("Feedback".to_owned(), *self);
         let (output, stream) = builder.new_output();
 
         (Handle { builder, summary, output }, stream)

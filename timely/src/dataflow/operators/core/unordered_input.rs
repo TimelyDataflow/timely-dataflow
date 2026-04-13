@@ -105,7 +105,7 @@ impl<'scope, T: Timestamp> UnorderedInput<'scope, T> for Scope<'scope, T> {
             peers,
         }));
 
-        ((helper, cap), Stream::new(Source::new(index, 0), registrar, self.clone()))
+        ((helper, cap), Stream::new(Source::new(index, 0), registrar, *self))
     }
 }
 

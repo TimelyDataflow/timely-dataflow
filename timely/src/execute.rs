@@ -124,7 +124,7 @@ impl Config {
 pub fn example<T, F>(func: F) -> T
 where
     T: Send+'static,
-    F: FnOnce(&Scope<u64>)->T+Send+Sync+'static
+    F: FnOnce(Scope<u64>)->T+Send+Sync+'static
 {
     crate::execute::execute_directly(|worker| worker.dataflow(|scope| func(scope)))
 }

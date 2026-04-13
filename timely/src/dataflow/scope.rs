@@ -15,13 +15,13 @@ pub type Iterative<'scope, TOuter, TInner> = Scope<'scope, Product<TOuter, TInne
 
 /// A `Scope` manages the creation of new dataflow scopes, of operators and edges between them.
 ///
-/// This is a shared object that can be freely cloned. It manages the scope construction through
-/// a `RefCell`-wrapped subgraph builder, and all of this type's methods use but do not hold write
-/// access through the `RefCell`.
+/// This is a shared object that can be freely copied, subject to its lifetime requirements.
+/// It manages scope construction through a `RefCell`-wrapped subgraph builder, and all of
+/// this type's methods use but do not hold write access through the `RefCell`.
 pub struct Scope<'scope, T: Timestamp> {
     /// The subgraph under assembly.
     ///
-    /// Stored as `Rc<RefCell<...>>` so that multiple `Scope` clones can work on the same subgraph.
+    /// Stored as `Rc<RefCell<...>>` so that multiple `Scope` copies can work on the same subgraph.
     /// All methods on this type must release their borrow on this field before returning.
     pub(crate) subgraph: &'scope RefCell<SubgraphBuilder<T>>,
     /// The worker hosting this scope.
@@ -62,7 +62,7 @@ impl<'scope, T: Timestamp> Scope<'scope, T> {
         let index = self.subgraph.borrow_mut().allocate_child_id();
         let identifier = self.worker().new_identifier();
         OperatorSlot {
-            scope: self.clone(),
+            scope: *self,
             index,
             identifier,
             installed: false,
@@ -97,7 +97,7 @@ impl<'scope, T: Timestamp> Scope<'scope, T> {
     pub fn scoped<T2, R, F>(&self, name: &str, func: F) -> R
     where
         T2: Timestamp + Refines<T>,
-        F: FnOnce(&Scope<T2>) -> R,
+        F: FnOnce(Scope<T2>) -> R,
     {
         let (result, subgraph, slot) = self.scoped_raw(name, func);
         slot.install(Box::new(subgraph));
@@ -110,7 +110,7 @@ impl<'scope, T: Timestamp> Scope<'scope, T> {
     pub fn scoped_raw<T2, R, F>(&self, name: &str, func: F) -> (R, Subgraph<T, T2>, OperatorSlot<'scope, T>)
     where
         T2: Timestamp + Refines<T>,
-        F: FnOnce(&Scope<T2>) -> R,
+        F: FnOnce(Scope<T2>) -> R,
     {
         let slot = self.reserve_operator();
         let path = slot.addr();
@@ -125,8 +125,7 @@ impl<'scope, T: Timestamp> Scope<'scope, T> {
 
         let child = Scope { subgraph: &subgraph, worker: self.worker };
 
-        let result = func(&child);
-        drop(child);
+        let result = func(child);
         let subgraph = subgraph.into_inner().build(self.worker);
         (result, subgraph, slot)
     }
@@ -155,7 +154,7 @@ impl<'scope, T: Timestamp> Scope<'scope, T> {
     pub fn iterative<T2, R, F>(&self, func: F) -> R
     where
         T2: Timestamp,
-        F: FnOnce(&Scope<Product<T, T2>>) -> R,
+        F: FnOnce(Scope<Product<T, T2>>) -> R,
     {
         self.scoped::<Product<T, T2>, R, F>("Iterative", func)
     }
@@ -183,7 +182,7 @@ impl<'scope, T: Timestamp> Scope<'scope, T> {
     /// ```
     pub fn region<R, F>(&self, func: F) -> R
     where
-        F: FnOnce(&Scope<T>) -> R,
+        F: FnOnce(Scope<T>) -> R,
     {
         self.region_named("Region", func)
     }
@@ -214,19 +213,15 @@ impl<'scope, T: Timestamp> Scope<'scope, T> {
     /// ```
     pub fn region_named<R, F>(&self, name: &str, func: F) -> R
     where
-        F: FnOnce(&Scope<T>) -> R,
+        F: FnOnce(Scope<T>) -> R,
     {
         self.scoped::<T, R, F>(name, func)
     }
 }
 
+impl<'scope, T: Timestamp> Copy for Scope<'scope, T> {}
 impl<'scope, T: Timestamp> Clone for Scope<'scope, T> {
-    fn clone(&self) -> Self {
-        Scope {
-            subgraph: self.subgraph,
-            worker: self.worker,
-        }
-    }
+    fn clone(&self) -> Self { *self }
 }
 
 impl<'scope, T: Timestamp> std::fmt::Debug for Scope<'scope, T> {

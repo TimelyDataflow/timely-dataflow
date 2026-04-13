@@ -50,7 +50,7 @@ pub trait Enter<'outer, TOuter: Timestamp, TInner: Timestamp+Refines<TOuter>, C>
     ///     });
     /// });
     /// ```
-    fn enter<'inner>(self, inner: &Scope<'inner, TInner>) -> Stream<'inner, TInner, C>;
+    fn enter<'inner>(self, inner: Scope<'inner, TInner>) -> Stream<'inner, TInner, C>;
 }
 
 impl<'outer, TOuter, TInner, C> Enter<'outer, TOuter, TInner, C> for Stream<'outer, TOuter, C>
@@ -59,7 +59,7 @@ where
     TInner: Timestamp + Refines<TOuter>,
     C: Container,
 {
-    fn enter<'inner>(self, inner: &Scope<'inner, TInner>) -> Stream<'inner, TInner, C> {
+    fn enter<'inner>(self, inner: Scope<'inner, TInner>) -> Stream<'inner, TInner, C> {
 
         // Validate that `inner` is a child of `self`'s scope.
         let inner_addr = inner.addr();
@@ -91,11 +91,7 @@ where
             self.connect_to(input, ingress, channel_id);
         }
 
-        Stream::new(
-            Source::new(0, input.port),
-            registrar,
-            inner.clone(),
-        )
+        Stream::new(Source::new(0, input.port), registrar, inner)
     }
 }
 
@@ -119,7 +115,7 @@ pub trait Leave<'inner, TInner: Timestamp, C> {
     ///     });
     /// });
     /// ```
-    fn leave<'outer, TOuter: Timestamp>(self, outer: &Scope<'outer, TOuter>) -> Stream<'outer, TOuter, C> where TInner: Refines<TOuter>;
+    fn leave<'outer, TOuter: Timestamp>(self, outer: Scope<'outer, TOuter>) -> Stream<'outer, TOuter, C> where TInner: Refines<TOuter>;
 }
 
 impl<'inner, TInner, C> Leave<'inner, TInner, C> for Stream<'inner, TInner, C>
@@ -127,7 +123,7 @@ where
     TInner: Timestamp,
     C: Container,
 {
-    fn leave<'outer, TOuter: Timestamp>(self, outer: &Scope<'outer, TOuter>) -> Stream<'outer, TOuter, C> where TInner: Refines<TOuter> {
+    fn leave<'outer, TOuter: Timestamp>(self, outer: Scope<'outer, TOuter>) -> Stream<'outer, TOuter, C> where TInner: Refines<TOuter> {
 
         let scope = self.scope();
 
@@ -156,11 +152,7 @@ where
             self.connect_to(target, egress, channel_id);
         }
 
-        Stream::new(
-            output,
-            registrar,
-            outer.clone(),
-        )
+        Stream::new(output, registrar, outer)
     }
 }
 

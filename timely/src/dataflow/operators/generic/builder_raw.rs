@@ -135,7 +135,7 @@ impl<'scope, T: Timestamp> OperatorBuilder<'scope, T> {
         self.shape.outputs += 1;
         let (target, registrar) = Tee::new();
         let source = Source::new(self.slot.index(), new_output);
-        let stream = Stream::new(source, registrar, self.scope.clone());
+        let stream = Stream::new(source, registrar, self.scope);
 
         for (input, entry) in connection {
             self.summary[input].add_port(new_output, entry);

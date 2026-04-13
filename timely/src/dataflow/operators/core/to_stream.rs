@@ -29,11 +29,11 @@ pub trait ToStreamBuilder<CB: ContainerBuilder> {
     ///
     /// assert_eq!(data1.extract(), data2.extract());
     /// ```
-    fn to_stream_with_builder<'scope, T: Timestamp>(self, scope: &Scope<'scope, T>) -> Stream<'scope, T, CB::Container>;
+    fn to_stream_with_builder<'scope, T: Timestamp>(self, scope: Scope<'scope, T>) -> Stream<'scope, T, CB::Container>;
 }
 
 impl<CB: ContainerBuilder, I: IntoIterator+'static> ToStreamBuilder<CB> for I where CB: PushInto<I::Item> {
-    fn to_stream_with_builder<'scope, T: Timestamp>(self, scope: &Scope<'scope, T>) -> Stream<'scope, T, CB::Container> {
+    fn to_stream_with_builder<'scope, T: Timestamp>(self, scope: Scope<'scope, T>) -> Stream<'scope, T, CB::Container> {
 
         source::<_, CB, _, _>(scope, "ToStreamBuilder", |capability, info| {
 
@@ -79,11 +79,11 @@ pub trait ToStream<C> {
     ///
     /// assert_eq!(data1.extract(), data2.extract());
     /// ```
-    fn to_stream<'scope, T: Timestamp>(self, scope: &Scope<'scope, T>) -> Stream<'scope, T, C>;
+    fn to_stream<'scope, T: Timestamp>(self, scope: Scope<'scope, T>) -> Stream<'scope, T, C>;
 }
 
 impl<C: Container + SizableContainer, I: IntoIterator+'static> ToStream<C> for I where C: PushInto<I::Item> {
-    fn to_stream<'scope, T: Timestamp>(self, scope: &Scope<'scope, T>) -> Stream<'scope, T, C> {
+    fn to_stream<'scope, T: Timestamp>(self, scope: Scope<'scope, T>) -> Stream<'scope, T, C> {
         ToStreamBuilder::<CapacityContainerBuilder<C>>::to_stream_with_builder(self, scope)
     }
 }

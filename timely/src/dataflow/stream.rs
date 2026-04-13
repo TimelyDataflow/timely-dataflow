@@ -29,7 +29,7 @@ impl<'scope, T: Timestamp, C: Clone+'static> Clone for Stream<'scope, T, C> {
     fn clone(&self) -> Self {
         Self {
             name: self.name,
-            scope: self.scope.clone(),
+            scope: self.scope,
             ports: self.ports.clone(),
         }
     }
@@ -70,7 +70,7 @@ impl<'scope, T: Timestamp, C> Stream<'scope, T, C> {
     /// The name of the stream's source operator.
     pub fn name(&self) -> &Source { &self.name }
     /// The scope immediately containing the stream.
-    pub fn scope(&self) -> Scope<'scope, T> { self.scope.clone() }
+    pub fn scope(&self) -> Scope<'scope, T> { self.scope }
 
     /// Allows the assertion of a container type, for the benefit of type inference.
     ///

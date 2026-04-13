@@ -175,7 +175,7 @@ impl<'scope, T: Timestamp + TotalOrder> Input<'scope> for Scope<'scope, T> {
             copies,
         }));
 
-        Stream::new(Source::new(index, 0), registrar, self.clone())
+        Stream::new(Source::new(index, 0), registrar, *self)
     }
 }
 
@@ -336,7 +336,7 @@ impl<T: Timestamp, CB: ContainerBuilder<Container: Clone>> Handle<T, CB> {
     ///     }
     /// });
     /// ```
-    pub fn to_stream<'scope>(&mut self, scope: &Scope<'scope, T>) -> Stream<'scope, T, CB::Container>
+    pub fn to_stream<'scope>(&mut self, scope: Scope<'scope, T>) -> Stream<'scope, T, CB::Container>
     where
         T: TotalOrder,
     {

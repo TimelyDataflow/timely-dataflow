@@ -537,13 +537,13 @@ impl<'scope, T: Timestamp, C1: Container> Operator<'scope, T, C1> for Stream<'sc
 ///     .inspect(|x| println!("number: {:?}", x));
 /// });
 /// ```
-pub fn source<'scope, T: Timestamp, CB, B, L>(scope: &Scope<'scope, T>, name: &str, constructor: B) -> Stream<'scope, T, CB::Container>
+pub fn source<'scope, T: Timestamp, CB, B, L>(scope: Scope<'scope, T>, name: &str, constructor: B) -> Stream<'scope, T, CB::Container>
 where
     CB: ContainerBuilder,
     B: FnOnce(Capability<T>, OperatorInfo) -> L,
     L: FnMut(&mut OutputBuilderSession<'_, T, CB>)+'static {
 
-    let mut builder = OperatorBuilder::new(name.to_owned(), scope.clone());
+    let mut builder = OperatorBuilder::new(name.to_owned(), scope);
     let operator_info = builder.operator_info();
 
     let (output, stream) = builder.new_output();
@@ -581,7 +581,7 @@ where
 ///
 /// });
 /// ```
-pub fn empty<'scope, T: Timestamp, C: Container>(scope: &Scope<'scope, T>) -> Stream<'scope, T, C> {
+pub fn empty<'scope, T: Timestamp, C: Container>(scope: Scope<'scope, T>) -> Stream<'scope, T, C> {
     source::<_, CapacityContainerBuilder<C>, _, _>(scope, "Empty", |_capability, _info| |_output| {
         // drop capability, do nothing
     })
