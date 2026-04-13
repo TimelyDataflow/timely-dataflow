@@ -1,7 +1,6 @@
 //! Conversion to the `Stream` type from iterators.
 
 use crate::container::{CapacityContainerBuilder, SizableContainer, PushInto};
-use crate::scheduling::Scheduler;
 use crate::progress::Timestamp;
 use crate::{Container, ContainerBuilder};
 use crate::dataflow::operators::generic::operator::source;

@@ -86,7 +86,6 @@ fn main() {
         source(scope, "Source", |capability, info| {
 
             // Acquire a re-activator for this operator.
-            use timely::scheduling::Scheduler;
             let activator = scope.activator_for(info.address);
 
             let mut cap = Some(capability);

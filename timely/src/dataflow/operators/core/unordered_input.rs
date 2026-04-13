@@ -4,8 +4,6 @@ use std::rc::Rc;
 use std::cell::RefCell;
 
 use crate::ContainerBuilder;
-use crate::scheduling::Scheduler;
-
 use crate::scheduling::{Schedule, ActivateOnDrop};
 
 use crate::progress::{Operate, operate::SharedProgress, Timestamp};

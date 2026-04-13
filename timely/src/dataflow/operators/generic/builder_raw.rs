@@ -9,7 +9,6 @@ use std::rc::Rc;
 use std::cell::RefCell;
 
 use crate::scheduling::{Schedule, Activations};
-use crate::scheduling::Scheduler;
 
 use crate::progress::{Source, Target};
 use crate::progress::{Timestamp, Operate, operate::SharedProgress, Antichain};

@@ -39,7 +39,6 @@
 //! than that in which the stream was captured.
 
 use crate::dataflow::{Scope, Stream};
-use crate::scheduling::Scheduler;
 use crate::dataflow::channels::pushers::Counter as PushCounter;
 use crate::dataflow::operators::generic::builder_raw::OperatorBuilder;
 use crate::progress::Timestamp;

@@ -504,7 +504,6 @@ impl<'scope, T: Timestamp, C1: Container> Operator<'scope, T, C1> for Stream<'sc
 ///
 /// # Examples
 /// ```
-/// use timely::scheduling::Scheduler;
 /// use timely::dataflow::operators::Inspect;
 /// use timely::dataflow::operators::generic::operator::source;
 /// use timely::dataflow::Scope;

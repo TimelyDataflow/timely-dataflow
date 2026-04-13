@@ -1,7 +1,6 @@
 //! Methods to construct flow-controlled sources.
 
 use crate::order::TotalOrder;
-use crate::scheduling::Scheduler;
 use crate::progress::timestamp::Timestamp;
 use crate::dataflow::operators::generic::operator::source;
 use crate::dataflow::operators::probe::Handle;

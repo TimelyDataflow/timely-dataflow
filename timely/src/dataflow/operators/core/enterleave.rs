@@ -61,8 +61,6 @@ where
 {
     fn enter<'inner>(self, inner: &Scope<'inner, TInner>) -> Stream<'inner, TInner, C> {
 
-        use crate::scheduling::Scheduler;
-
         // Validate that `inner` is a child of `self`'s scope.
         let inner_addr = inner.addr();
         let outer_addr = self.scope().addr();

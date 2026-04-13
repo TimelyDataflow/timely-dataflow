@@ -6,7 +6,6 @@ use std::time::{Instant, Duration};
 use std::collections::VecDeque;
 
 use crate::{ExchangeData, PartialOrder};
-use crate::scheduling::Scheduler;
 use crate::worker::Worker;
 use crate::dataflow::channels::pact::Exchange;
 use crate::dataflow::operators::generic::operator::source;

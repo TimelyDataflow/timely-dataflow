@@ -10,7 +10,6 @@ use std::cell::RefCell;
 use std::collections::BinaryHeap;
 use std::cmp::Reverse;
 
-use crate::scheduling::Scheduler;
 use crate::logging::TimelyLogger as Logger;
 use crate::logging::TimelySummaryLogger as SummaryLogger;
 

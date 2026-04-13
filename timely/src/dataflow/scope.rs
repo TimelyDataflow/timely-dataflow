@@ -3,7 +3,6 @@
 use std::rc::Rc;
 use std::cell::RefCell;
 
-use crate::scheduling::Scheduler;
 use crate::scheduling::activate::Activations;
 use crate::progress::{Timestamp, Operate, Subgraph, SubgraphBuilder};
 use crate::progress::{Source, Target};
@@ -42,6 +41,10 @@ impl<'scope, T: Timestamp> Scope<'scope, T> {
     pub fn index(&self) -> usize { self.worker.index() }
     /// The total number of workers in the computation.
     pub fn peers(&self) -> usize { self.worker.peers() }
+    /// Provides a shared handle to the activation scheduler.
+    pub fn activations(&self) -> Rc<RefCell<Activations>> { self.worker.activations() }
+    /// Constructs an `Activator` tied to the specified operator address.
+    pub fn activator_for(&self, path: Rc<[usize]>) -> crate::scheduling::Activator { self.worker.activator_for(path) }
 
     /// A useful name describing the scope.
     pub fn name(&self) -> String { self.subgraph.borrow().name.clone() }
@@ -228,10 +231,6 @@ impl<'scope, T: Timestamp> Scope<'scope, T> {
     {
         self.scoped::<T, R, F>(name, func)
     }
-}
-
-impl<'scope, T: Timestamp> Scheduler for Scope<'scope, T> {
-    fn activations(&self) -> Rc<RefCell<Activations>> { self.worker.activations() }
 }
 
 impl<'scope, T: Timestamp> Clone for Scope<'scope, T> {

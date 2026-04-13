@@ -11,7 +11,7 @@ use std::sync::Arc;
 
 use crate::communication::{Allocator, Exchangeable, Push, Pull};
 use crate::communication::allocator::thread::{ThreadPusher, ThreadPuller};
-use crate::scheduling::{Schedule, Scheduler, Activations};
+use crate::scheduling::{Schedule, Activations, Activator, SyncActivator};
 use crate::progress::timestamp::{Refines};
 use crate::progress::SubgraphBuilder;
 use crate::progress::operate::Operate;
@@ -191,11 +191,6 @@ pub struct Worker {
 }
 
 
-impl Scheduler for Worker {
-    fn activations(&self) -> Rc<RefCell<Activations>> {
-        Rc::clone(&self.activations)
-    }
-}
 
 impl Worker {
     /// Allocates a new `Worker` bound to a channel allocator.
@@ -494,6 +489,21 @@ impl Worker {
 
     /// Returns the worker configuration parameters.
     pub fn config(&self) -> &Config { &self.config }
+
+    /// Provides a shared handle to the activation scheduler.
+    pub fn activations(&self) -> Rc<RefCell<Activations>> {
+        Rc::clone(&self.activations)
+    }
+
+    /// Constructs an `Activator` tied to the specified operator address.
+    pub fn activator_for(&self, path: Rc<[usize]>) -> Activator {
+        Activator::new(path, self.activations())
+    }
+
+    /// Constructs a `SyncActivator` tied to the specified operator address.
+    pub fn sync_activator_for(&self, path: Vec<usize>) -> SyncActivator {
+        SyncActivator::new(path, self.activations().borrow().sync())
+    }
 
     /// Acquires a logger by name, if the log register exists and the name is registered.
     pub fn logger_for<CB: crate::ContainerBuilder>(&self, name: &str) -> Option<timely_logging::Logger<CB>> {
