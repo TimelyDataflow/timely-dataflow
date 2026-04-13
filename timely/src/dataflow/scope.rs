@@ -116,12 +116,7 @@ impl<'scope, T: Timestamp> Scope<'scope, T> {
         let path = slot.addr();
         let identifier = slot.identifier();
 
-        let type_name = std::any::type_name::<T2>();
-        let summary_logging = self.worker().logger_for(&format!("timely/summary/{type_name}"));
-
-        let subgraph = RefCell::new(SubgraphBuilder::new_from(
-            path, identifier, self.worker().logging(), summary_logging, name,
-        ));
+        let subgraph = RefCell::new(SubgraphBuilder::new_from(path, identifier, name));
 
         let child = Scope { subgraph: &subgraph, worker: self.worker };
 

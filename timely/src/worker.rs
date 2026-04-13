@@ -621,9 +621,7 @@ impl Worker {
         let addr = vec![dataflow_index].into();
         let identifier = self.new_identifier();
 
-        let type_name = std::any::type_name::<T>();
-        let summary_logging  = self.logger_for(&format!("timely/summary/{}", type_name));
-        let subscope = SubgraphBuilder::new_from(addr, identifier, logging.clone(), summary_logging, name);
+        let subscope = SubgraphBuilder::new_from(addr, identifier, name);
         let subscope = RefCell::new(subscope);
 
         let result = {
