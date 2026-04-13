@@ -39,7 +39,6 @@
 //! than that in which the stream was captured.
 
 use crate::dataflow::{Scope, Stream};
-use crate::scheduling::Scheduler;
 use crate::dataflow::channels::pushers::Counter as PushCounter;
 use crate::dataflow::operators::generic::builder_raw::OperatorBuilder;
 use crate::progress::Timestamp;
@@ -52,7 +51,7 @@ use crate::dataflow::channels::Message;
 /// Replay a capture stream into a scope with the same timestamp.
 pub trait Replay<T: Timestamp, C> : Sized {
     /// Replays `self` into the provided scope, as a `Stream<'scope, T, C>`.
-    fn replay_into<'scope>(self, scope: &mut Scope<'scope, T>) -> Stream<'scope, T, C> {
+    fn replay_into<'scope>(self, scope: Scope<'scope, T>) -> Stream<'scope, T, C> {
         self.replay_core(scope, Some(std::time::Duration::new(0, 0)))
     }
     /// Replays `self` into the provided scope, as a `Stream<'scope, T, C>`.
@@ -60,7 +59,7 @@ pub trait Replay<T: Timestamp, C> : Sized {
     /// The `period` argument allows the specification of a re-activation period, where the operator
     /// will re-activate itself every so often. The `None` argument instructs the operator not to
     /// re-activate itself.
-    fn replay_core<'scope>(self, scope: &mut Scope<'scope, T>, period: Option<std::time::Duration>) -> Stream<'scope, T, C>;
+    fn replay_core<'scope>(self, scope: Scope<'scope, T>, period: Option<std::time::Duration>) -> Stream<'scope, T, C>;
 }
 
 impl<T: Timestamp, C: Container+Clone, I> Replay<T, C> for I
@@ -68,9 +67,9 @@ where
     I : IntoIterator,
     <I as IntoIterator>::Item: EventIterator<T, C>+'static,
 {
-    fn replay_core<'scope>(self, scope: &mut Scope<'scope, T>, period: Option<std::time::Duration>) -> Stream<'scope, T, C>{
+    fn replay_core<'scope>(self, scope: Scope<'scope, T>, period: Option<std::time::Duration>) -> Stream<'scope, T, C>{
 
-        let mut builder = OperatorBuilder::new("Replay".to_owned(), scope.clone());
+        let mut builder = OperatorBuilder::new("Replay".to_owned(), scope);
 
         let address = builder.operator_info().address;
         let activator = scope.activator_for(address);

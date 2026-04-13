@@ -6,7 +6,6 @@ use std::time::{Instant, Duration};
 use std::collections::VecDeque;
 
 use crate::{ExchangeData, PartialOrder};
-use crate::scheduling::Scheduler;
 use crate::worker::Worker;
 use crate::dataflow::channels::pact::Exchange;
 use crate::dataflow::operators::generic::operator::source;
@@ -110,10 +109,9 @@ impl<T: ExchangeData+Clone> Sequencer<T> {
         let activator_sink = Rc::clone(&activator);
 
         // build a dataflow used to serialize and circulate commands
-        worker.dataflow::<Duration,_,_>(move |dataflow| {
+        worker.dataflow::<Duration,_,_>(move |scope| {
 
-            let scope = dataflow.clone();
-            let peers = dataflow.peers();
+            let peers = scope.peers();
 
             let mut recvd = Vec::new();
 
@@ -121,7 +119,7 @@ impl<T: ExchangeData+Clone> Sequencer<T> {
             let mut counter = 0;
 
             // a source that attempts to pull from `recv` and produce commands for everyone
-            source(dataflow, "SequenceInput", move |capability, info| {
+            source(scope, "SequenceInput", move |capability, info| {
 
                 // initialize activator, now that we have the address
                 activator_source

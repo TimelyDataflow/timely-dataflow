@@ -15,7 +15,7 @@ use crate::communication::allocator::thread::{ThreadPusher, ThreadPuller};
 use crate::communication::{Push, Pull};
 use crate::dataflow::channels::Message;
 use crate::logging::TimelyLogger as Logger;
-use crate::worker::AsWorker;
+use crate::worker::Worker;
 
 /// A `ParallelizationContract` allocates paired `Push` and `Pull` implementors.
 pub trait ParallelizationContract<T, C> {
@@ -24,7 +24,7 @@ pub trait ParallelizationContract<T, C> {
     /// Type implementing `Pull` produced by this pact.
     type Puller: Pull<Message<T, C>>+'static;
     /// Allocates a matched pair of push and pull endpoints implementing the pact.
-    fn connect<A: AsWorker>(self, allocator: &mut A, identifier: usize, address: Rc<[usize]>, logging: Option<Logger>) -> (Self::Pusher, Self::Puller);
+    fn connect(self, worker: &Worker, identifier: usize, address: Rc<[usize]>, logging: Option<Logger>) -> (Self::Pusher, Self::Puller);
 }
 
 /// A direct connection
@@ -34,10 +34,10 @@ pub struct Pipeline;
 impl<T: 'static, C: Accountable + 'static> ParallelizationContract<T, C> for Pipeline {
     type Pusher = LogPusher<ThreadPusher<Message<T, C>>>;
     type Puller = LogPuller<ThreadPuller<Message<T, C>>>;
-    fn connect<A: AsWorker>(self, allocator: &mut A, identifier: usize, address: Rc<[usize]>, logging: Option<Logger>) -> (Self::Pusher, Self::Puller) {
-        let (pusher, puller) = allocator.pipeline::<Message<T, C>>(identifier, address);
-        (LogPusher::new(pusher, allocator.index(), allocator.index(), identifier, logging.clone()),
-         LogPuller::new(puller, allocator.index(), identifier, logging))
+    fn connect(self, worker: &Worker, identifier: usize, address: Rc<[usize]>, logging: Option<Logger>) -> (Self::Pusher, Self::Puller) {
+        let (pusher, puller) = worker.pipeline::<Message<T, C>>(identifier, address);
+        (LogPusher::new(pusher, worker.index(), worker.index(), identifier, logging.clone()),
+         LogPuller::new(puller, worker.index(), identifier, logging))
     }
 }
 
@@ -92,7 +92,7 @@ mod distributor {
     use crate::dataflow::channels::{ContainerBytes, Message};
     use crate::logging::TimelyLogger;
     use crate::progress::Timestamp;
-    use crate::worker::AsWorker;
+    use crate::worker::Worker;
 
     use super::{ParallelizationContract, LogPusher, LogPuller};
 
@@ -112,11 +112,11 @@ mod distributor {
     {
         type Pusher = Exchange<T, LogPusher<Box<dyn Push<Message<T, C>>>>, D>;
         type Puller = LogPuller<Box<dyn Pull<Message<T, C>>>>;
-        fn connect<A: AsWorker>(self, allocator: &mut A, identifier: usize, address: Rc<[usize]>, logging: Option<TimelyLogger>) -> (Self::Pusher, Self::Puller) {
-            let (senders, receiver) = allocator.allocate::<Message<T, C>>(identifier, address);
-            let senders = senders.into_iter().enumerate().map(|(i,x)| LogPusher::new(x, allocator.index(), i, identifier, logging.clone())).collect::<Vec<_>>();
-            let distributor = (self.0)(allocator.peers());
-            (Exchange::new(senders, distributor), LogPuller::new(receiver, allocator.index(), identifier, logging.clone()))
+        fn connect(self, worker: &Worker, identifier: usize, address: Rc<[usize]>, logging: Option<TimelyLogger>) -> (Self::Pusher, Self::Puller) {
+            let (senders, receiver) = worker.allocate::<Message<T, C>>(identifier, address);
+            let senders = senders.into_iter().enumerate().map(|(i,x)| LogPusher::new(x, worker.index(), i, identifier, logging.clone())).collect::<Vec<_>>();
+            let distributor = (self.0)(worker.peers());
+            (Exchange::new(senders, distributor), LogPuller::new(receiver, worker.index(), identifier, logging.clone()))
         }
     }
 }

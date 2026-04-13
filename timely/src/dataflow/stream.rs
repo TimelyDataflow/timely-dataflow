@@ -10,7 +10,6 @@ use crate::communication::Push;
 use crate::dataflow::Scope;
 use crate::dataflow::channels::pushers::tee::TeeHelper;
 use crate::dataflow::channels::Message;
-use crate::worker::AsWorker;
 use std::fmt::{self, Debug};
 
 /// Abstraction of a stream of `C: Container` records timestamped with `T`.
@@ -30,7 +29,7 @@ impl<'scope, T: Timestamp, C: Clone+'static> Clone for Stream<'scope, T, C> {
     fn clone(&self) -> Self {
         Self {
             name: self.name,
-            scope: self.scope.clone(),
+            scope: self.scope,
             ports: self.ports.clone(),
         }
     }
@@ -52,7 +51,7 @@ impl<'scope, T: Timestamp, C> Stream<'scope, T, C> {
     /// records should actually be sent. The identifier is unique to the edge and is used only for logging purposes.
     pub fn connect_to<P: Push<Message<T, C>>+'static>(self, target: Target, pusher: P, identifier: usize) where C: 'static {
 
-        let mut logging: Option<crate::logging::TimelyLogger> = AsWorker::logging(&self.scope());
+        let mut logging: Option<crate::logging::TimelyLogger> = self.scope().worker().logging();
         logging.as_mut().map(|l| l.log(crate::logging::ChannelsEvent {
             id: identifier,
             scope_addr: self.scope.addr().to_vec(),
@@ -71,7 +70,7 @@ impl<'scope, T: Timestamp, C> Stream<'scope, T, C> {
     /// The name of the stream's source operator.
     pub fn name(&self) -> &Source { &self.name }
     /// The scope immediately containing the stream.
-    pub fn scope(&self) -> Scope<'scope, T> { self.scope.clone() }
+    pub fn scope(&self) -> Scope<'scope, T> { self.scope }
 
     /// Allows the assertion of a container type, for the benefit of type inference.
     ///

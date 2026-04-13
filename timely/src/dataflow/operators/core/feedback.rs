@@ -35,7 +35,7 @@ pub trait Feedback<'scope, T: Timestamp> {
     ///            .connect_loop(handle);
     /// });
     /// ```
-    fn feedback<C: Container>(&mut self, summary: <T as Timestamp>::Summary) -> (Handle<'scope, T, C>, Stream<'scope, T, C>);
+    fn feedback<C: Container>(&self, summary: <T as Timestamp>::Summary) -> (Handle<'scope, T, C>, Stream<'scope, T, C>);
 }
 
 /// Creates a `Stream` and a `Handle` to later bind the source of that `Stream`.
@@ -65,14 +65,14 @@ pub trait LoopVariable<'scope, TOuter: Timestamp, TInner: Timestamp> {
     ///     });
     /// });
     /// ```
-    fn loop_variable<C: Container>(&mut self, summary: TInner::Summary) -> (Handle<'scope, Product<TOuter, TInner>, C>, Stream<'scope, Product<TOuter, TInner>, C>);
+    fn loop_variable<C: Container>(&self, summary: TInner::Summary) -> (Handle<'scope, Product<TOuter, TInner>, C>, Stream<'scope, Product<TOuter, TInner>, C>);
 }
 
 impl<'scope, T: Timestamp> Feedback<'scope, T> for Scope<'scope, T> {
 
-    fn feedback<C: Container>(&mut self, summary: <T as Timestamp>::Summary) -> (Handle<'scope, T, C>, Stream<'scope, T, C>) {
+    fn feedback<C: Container>(&self, summary: <T as Timestamp>::Summary) -> (Handle<'scope, T, C>, Stream<'scope, T, C>) {
 
-        let mut builder = OperatorBuilder::new("Feedback".to_owned(), self.clone());
+        let mut builder = OperatorBuilder::new("Feedback".to_owned(), *self);
         let (output, stream) = builder.new_output();
 
         (Handle { builder, summary, output }, stream)
@@ -80,7 +80,7 @@ impl<'scope, T: Timestamp> Feedback<'scope, T> for Scope<'scope, T> {
 }
 
 impl<'scope, TOuter: Timestamp, TInner: Timestamp> LoopVariable<'scope, TOuter, TInner> for Iterative<'scope, TOuter, TInner> {
-    fn loop_variable<C: Container>(&mut self, summary: TInner::Summary) -> (Handle<'scope, Product<TOuter, TInner>, C>, Stream<'scope, Product<TOuter, TInner>, C>) {
+    fn loop_variable<C: Container>(&self, summary: TInner::Summary) -> (Handle<'scope, Product<TOuter, TInner>, C>, Stream<'scope, Product<TOuter, TInner>, C>) {
         self.feedback(Product::new(Default::default(), summary))
     }
 }
