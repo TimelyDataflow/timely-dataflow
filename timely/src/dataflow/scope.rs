@@ -18,7 +18,7 @@ pub type Iterative<'scope, TOuter, TInner> = Scope<'scope, Product<TOuter, TInne
 /// A `Scope` manages the creation of new dataflow scopes, of operators and edges between them.
 ///
 /// This is a shared object that can be freely cloned. It manages the scope construction through
-/// a `RefCell`-wrapped subgraph builder, and all of this types methods use but do not hold write
+/// a `RefCell`-wrapped subgraph builder, and all of this type's methods use but do not hold write
 /// access through the `RefCell`.
 pub struct Scope<'scope, T: Timestamp> {
     /// The subgraph under assembly.
