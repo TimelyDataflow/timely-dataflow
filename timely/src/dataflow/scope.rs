@@ -21,7 +21,7 @@ pub type Iterative<'scope, TOuter, TInner> = Scope<'scope, Product<TOuter, TInne
 pub struct Scope<'scope, T: Timestamp> {
     /// The subgraph under assembly.
     ///
-    /// Stored as `Rc<RefCell<...>>` so that multiple `Scope` copies can work on the same subgraph.
+    /// Stored as `RefCell<...>` so that multiple `Scope` copies can work on the same subgraph.
     /// All methods on this type must release their borrow on this field before returning.
     pub(crate) subgraph: &'scope RefCell<SubgraphBuilder<T>>,
     /// The worker hosting this scope.
