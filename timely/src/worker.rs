@@ -622,7 +622,6 @@ impl Worker {
         let identifier = self.new_identifier();
 
         let type_name = std::any::type_name::<T>();
-        let progress_logging = self.logger_for(&format!("timely/progress/{}", type_name));
         let summary_logging  = self.logger_for(&format!("timely/summary/{}", type_name));
         let subscope = SubgraphBuilder::new_from(addr, identifier, logging.clone(), summary_logging, name);
         let subscope = RefCell::new(subscope);
@@ -630,9 +629,7 @@ impl Worker {
         let result = {
             let builder = Scope {
                 subgraph: &subscope,
-                worker: self.clone(),
-                logging: logging.clone(),
-                progress_logging,
+                worker: self,
             };
             func(&mut resources, &builder)
         };

@@ -8,8 +8,6 @@ use crate::progress::{Timestamp, Operate, Subgraph, SubgraphBuilder};
 use crate::progress::{Source, Target};
 use crate::progress::timestamp::Refines;
 use crate::order::Product;
-use crate::logging::TimelyLogger as Logger;
-use crate::logging::TimelyProgressLogger as ProgressLogger;
 use crate::worker::Worker;
 
 /// Type alias for an iterative scope.
@@ -26,17 +24,13 @@ pub struct Scope<'scope, T: Timestamp> {
     /// Stored as `Rc<RefCell<...>>` so that multiple `Scope` clones can work on the same subgraph.
     /// All methods on this type must release their borrow on this field before returning.
     pub(crate) subgraph: &'scope RefCell<SubgraphBuilder<T>>,
-    /// A copy of the worker hosting this scope.
-    pub(crate) worker:   Worker,
-    /// The log writer for this scope.
-    pub(crate) logging:  Option<Logger>,
-    /// The progress log writer for this scope.
-    pub(crate) progress_logging:  Option<ProgressLogger<T>>,
+    /// The worker hosting this scope.
+    pub(crate) worker:   &'scope Worker,
 }
 
 impl<'scope, T: Timestamp> Scope<'scope, T> {
     /// Access to the underlying worker.
-    pub fn worker(&self) -> &Worker { &self.worker }
+    pub fn worker(&self) -> &'scope Worker { self.worker }
     /// This worker's index out of `0 .. self.peers()`.
     pub fn index(&self) -> usize { self.worker.index() }
     /// The total number of workers in the computation.
@@ -118,29 +112,22 @@ impl<'scope, T: Timestamp> Scope<'scope, T> {
         T2: Timestamp + Refines<T>,
         F: FnOnce(&Scope<T2>) -> R,
     {
-        let parent = self.clone();
-        let slot = parent.reserve_operator();
+        let slot = self.reserve_operator();
         let path = slot.addr();
         let identifier = slot.identifier();
 
         let type_name = std::any::type_name::<T2>();
-        let progress_logging = parent.worker().logger_for(&format!("timely/progress/{type_name}"));
-        let summary_logging  = parent.worker().logger_for(&format!("timely/summary/{type_name}"));
+        let summary_logging = self.worker().logger_for(&format!("timely/summary/{type_name}"));
 
         let subgraph = RefCell::new(SubgraphBuilder::new_from(
             path, identifier, self.worker().logging(), summary_logging, name,
         ));
 
-        let child = Scope {
-            subgraph: &subgraph,
-            worker: parent.worker.clone(),
-            logging: parent.logging.clone(),
-            progress_logging,
-        };
+        let child = Scope { subgraph: &subgraph, worker: self.worker };
 
         let result = func(&child);
         drop(child);
-        let subgraph = subgraph.into_inner().build(&parent.worker);
+        let subgraph = subgraph.into_inner().build(self.worker);
         (result, subgraph, slot)
     }
 
@@ -237,9 +224,7 @@ impl<'scope, T: Timestamp> Clone for Scope<'scope, T> {
     fn clone(&self) -> Self {
         Scope {
             subgraph: self.subgraph,
-            worker: self.worker.clone(),
-            logging: self.logging.clone(),
-            progress_logging: self.progress_logging.clone(),
+            worker: self.worker,
         }
     }
 }
