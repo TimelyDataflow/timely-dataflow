@@ -30,7 +30,6 @@ use crate::{Accountable, Container};
 use crate::communication::Push;
 use crate::dataflow::channels::pushers::{Counter, Tee};
 use crate::dataflow::channels::Message;
-use crate::worker::AsWorker;
 use crate::dataflow::{Stream, Scope};
 
 /// Extension trait to move a `Stream` into a child of its current `Scope`.
@@ -85,9 +84,9 @@ where
         };
         let produced = Rc::clone(ingress.targets.produced());
         let input = inner.subgraph.borrow_mut().new_input(produced);
-        let channel_id = inner.clone().new_identifier();
+        let channel_id = inner.worker().new_identifier();
 
-        if let Some(logger) = inner.logging() {
+        if let Some(logger) = inner.worker().logging() {
             let pusher = LogPusher::new(ingress, channel_id, inner.index(), logger);
             self.connect_to(input, pusher, channel_id);
         } else {
@@ -150,9 +149,9 @@ where
         let target = Target::new(0, output.port);
         let (targets, registrar) = Tee::<TOuter, C>::new();
         let egress = EgressNub { targets, phantom: PhantomData };
-        let channel_id = scope.clone().new_identifier();
+        let channel_id = scope.worker().new_identifier();
 
-        if let Some(logger) = scope.logging() {
+        if let Some(logger) = scope.worker().logging() {
             let pusher = LogPusher::new(egress, channel_id, scope.index(), logger);
             self.connect_to(target, pusher, channel_id);
         } else {

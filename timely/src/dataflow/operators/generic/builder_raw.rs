@@ -9,7 +9,6 @@ use std::rc::Rc;
 use std::cell::RefCell;
 
 use crate::scheduling::{Schedule, Activations};
-use crate::worker::AsWorker;
 use crate::scheduling::Scheduler;
 
 use crate::progress::{Source, Target};
@@ -63,7 +62,7 @@ pub struct OperatorBuilder<'scope, T: Timestamp> {
 impl<'scope, T: Timestamp> OperatorBuilder<'scope, T> {
 
     /// Allocates a new generic operator builder from its containing scope.
-    pub fn new(name: String, mut scope: Scope<'scope, T>) -> Self {
+    pub fn new(name: String, scope: Scope<'scope, T>) -> Self {
 
         let slot = scope.reserve_operator();
         let address = slot.addr();
@@ -107,9 +106,9 @@ impl<'scope, T: Timestamp> OperatorBuilder<'scope, T> {
         P: ParallelizationContract<T, C>,
         I: IntoIterator<Item = (usize, Antichain<<T as Timestamp>::Summary>)>,
     {
-        let channel_id = self.scope.new_identifier();
-        let logging = self.scope.logging();
-        let (sender, receiver) = pact.connect(&mut self.scope, channel_id, Rc::clone(&self.address), logging);
+        let channel_id = self.scope.worker().new_identifier();
+        let logging = self.scope.worker().logging();
+        let (sender, receiver) = pact.connect(self.scope.worker(), channel_id, Rc::clone(&self.address), logging);
         let target = Target::new(self.slot.index(), self.shape.inputs);
         stream.connect_to(target, sender, channel_id);
 

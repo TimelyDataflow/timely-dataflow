@@ -3,8 +3,6 @@
 use std::rc::Rc;
 use std::cell::RefCell;
 
-use crate::communication::{Exchangeable, Push, Pull};
-use crate::communication::allocator::thread::{ThreadPusher, ThreadPuller};
 use crate::scheduling::Scheduler;
 use crate::scheduling::activate::Activations;
 use crate::progress::{Timestamp, Operate, Subgraph, SubgraphBuilder};
@@ -13,25 +11,21 @@ use crate::progress::timestamp::Refines;
 use crate::order::Product;
 use crate::logging::TimelyLogger as Logger;
 use crate::logging::TimelyProgressLogger as ProgressLogger;
-use crate::worker::{AsWorker, Config, Worker};
+use crate::worker::Worker;
 
 /// Type alias for an iterative scope.
 pub type Iterative<'scope, TOuter, TInner> = Scope<'scope, Product<TOuter, TInner>>;
 
-/// A `Scope` wraps a `SubgraphBuilder` and manages the addition
-/// of `Operate`s and the connection of edges between them.
+/// A `Scope` manages the creation of new dataflow scopes, of operators and edges between them.
 ///
-/// Importantly, this is a *shared* object, backed by `Rc<RefCell<>>` wrappers. Each method
-/// takes a shared reference, but can be thought of as first calling `.clone()` and then calling the
-/// method. Each method does not hold the `RefCell`'s borrow, and should prevent accidental panics.
+/// This is a shared object that can be freely cloned. It manages the scope construction through
+/// a `RefCell`-wrapped subgraph builder, and all of this types methods use but do not hold write
+/// access through the `RefCell`.
 pub struct Scope<'scope, T: Timestamp> {
     /// The subgraph under assembly.
     ///
-    /// Stored as `Rc<RefCell<...>>` so that multiple `Scope` clones can share the
-    /// same subgraph state during construction. The owning `scoped` / `region` /
-    /// `dataflow` call recovers the inner `SubgraphBuilder` via `Rc::try_unwrap`
-    /// when the closure returns; if a clone has escaped the closure, this fails
-    /// loudly with an actionable panic message.
+    /// Stored as `Rc<RefCell<...>>` so that multiple `Scope` clones can work on the same subgraph.
+    /// All methods on this type must release their borrow on this field before returning.
     pub(crate) subgraph: &'scope RefCell<SubgraphBuilder<T>>,
     /// A copy of the worker hosting this scope.
     pub(crate) worker:   Worker,
@@ -42,6 +36,8 @@ pub struct Scope<'scope, T: Timestamp> {
 }
 
 impl<'scope, T: Timestamp> Scope<'scope, T> {
+    /// Access to the underlying worker.
+    pub fn worker(&self) -> &Worker { &self.worker }
     /// This worker's index out of `0 .. self.peers()`.
     pub fn index(&self) -> usize { self.worker.index() }
     /// The total number of workers in the computation.
@@ -65,9 +61,9 @@ impl<'scope, T: Timestamp> Scope<'scope, T> {
     /// identifier of the future operator. It must be consumed by [`OperatorSlot::install`]
     /// before being dropped; otherwise it will panic, since the scope expects every
     /// reserved slot to eventually be filled.
-    pub fn reserve_operator(&mut self) -> OperatorSlot<'scope, T> {
+    pub fn reserve_operator(&self) -> OperatorSlot<'scope, T> {
         let index = self.subgraph.borrow_mut().allocate_child_id();
-        let identifier = self.new_identifier();
+        let identifier = self.worker().new_identifier();
         OperatorSlot {
             scope: self.clone(),
             index,
@@ -119,17 +115,17 @@ impl<'scope, T: Timestamp> Scope<'scope, T> {
         T2: Timestamp + Refines<T>,
         F: FnOnce(&mut Scope<T2>) -> R,
     {
-        let mut parent = self.clone();
+        let parent = self.clone();
         let slot = parent.reserve_operator();
         let path = slot.addr();
         let identifier = slot.identifier();
 
         let type_name = std::any::type_name::<T2>();
-        let progress_logging = parent.logger_for(&format!("timely/progress/{type_name}"));
-        let summary_logging  = parent.logger_for(&format!("timely/summary/{type_name}"));
+        let progress_logging = parent.worker().logger_for(&format!("timely/progress/{type_name}"));
+        let summary_logging  = parent.worker().logger_for(&format!("timely/summary/{type_name}"));
 
         let subgraph = RefCell::new(SubgraphBuilder::new_from(
-            path, identifier, self.logging(), summary_logging, name,
+            path, identifier, self.worker().logging(), summary_logging, name,
         ));
 
         let mut child = Scope {
@@ -141,7 +137,7 @@ impl<'scope, T: Timestamp> Scope<'scope, T> {
 
         let result = func(&mut child);
         drop(child);
-        let subgraph = subgraph.into_inner().build(&mut parent);
+        let subgraph = subgraph.into_inner().build(&parent.worker);
         (result, subgraph, slot)
     }
 
@@ -232,18 +228,6 @@ impl<'scope, T: Timestamp> Scope<'scope, T> {
     {
         self.scoped::<T, R, F>(name, func)
     }
-}
-
-impl<'scope, T: Timestamp> AsWorker for Scope<'scope, T> {
-    fn config(&self) -> &Config { self.worker.config() }
-    fn index(&self) -> usize { self.worker.index() }
-    fn peers(&self) -> usize { self.worker.peers() }
-    fn allocate<D: Exchangeable>(&mut self, identifier: usize, address: Rc<[usize]>) -> (Vec<Box<dyn Push<D>>>, Box<dyn Pull<D>>) { self.worker.allocate(identifier, address) }
-    fn pipeline<D: 'static>(&mut self, identifier: usize, address: Rc<[usize]>) -> (ThreadPusher<D>, ThreadPuller<D>) { self.worker.pipeline(identifier, address) }
-    fn broadcast<D: Exchangeable + Clone>(&mut self, identifier: usize, address: Rc<[usize]>) -> (Box<dyn Push<D>>, Box<dyn Pull<D>>) { self.worker.broadcast(identifier, address) }
-    fn new_identifier(&mut self) -> usize { self.worker.new_identifier() }
-    fn peek_identifier(&self) -> usize { self.worker.peek_identifier() }
-    fn log_register(&self) -> Option<::std::cell::RefMut<'_, crate::logging_core::Registry>> { self.worker.log_register() }
 }
 
 impl<'scope, T: Timestamp> Scheduler for Scope<'scope, T> {

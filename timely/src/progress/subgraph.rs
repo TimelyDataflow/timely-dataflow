@@ -10,6 +10,7 @@ use std::cell::RefCell;
 use std::collections::BinaryHeap;
 use std::cmp::Reverse;
 
+use crate::scheduling::Scheduler;
 use crate::logging::TimelyLogger as Logger;
 use crate::logging::TimelySummaryLogger as SummaryLogger;
 
@@ -148,7 +149,7 @@ where
     }
 
     /// Now that initialization is complete, actually build a subgraph.
-    pub fn build<A: crate::worker::AsWorker, TOuter: Timestamp>(mut self, worker: &mut A) -> Subgraph<TOuter, TInner> {
+    pub fn build<TOuter: Timestamp>(mut self, worker: &crate::worker::Worker) -> Subgraph<TOuter, TInner> {
         // at this point, the subgraph is frozen. we should initialize any internal state which
         // may have been determined after construction (e.g. the numbers of inputs and outputs).
         // we also need to determine what to return as a summary and initial capabilities, which

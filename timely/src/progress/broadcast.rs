@@ -32,7 +32,7 @@ pub struct Progcaster<T:Timestamp> {
 
 impl<T:Timestamp+Send> Progcaster<T> {
     /// Creates a new `Progcaster` using a channel from the supplied worker.
-    pub fn new<A: crate::worker::AsWorker>(worker: &mut A, addr: Rc<[usize]>, identifier: usize, mut logging: Option<Logger>, progress_logging: Option<ProgressLogger<T>>) -> Progcaster<T> {
+    pub fn new(worker: &crate::worker::Worker, addr: Rc<[usize]>, identifier: usize, mut logging: Option<Logger>, progress_logging: Option<ProgressLogger<T>>) -> Progcaster<T> {
 
         let channel_identifier = worker.new_identifier();
         let (pusher, puller) = worker.broadcast(channel_identifier, addr);

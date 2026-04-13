@@ -134,7 +134,6 @@ impl Config {
     /// let mut config = timely::Config::process(3);
     /// config.worker.set("example".to_string(), 7u64);
     /// timely::execute(config, |worker| {
-    ///    use crate::timely::worker::AsWorker;
     ///    assert_eq!(worker.config().get::<u64>("example"), Some(&7));
     /// }).unwrap();
     /// ```
@@ -157,7 +156,6 @@ impl Config {
     /// let mut config = timely::Config::process(3);
     /// config.worker.set("example".to_string(), 7u64);
     /// timely::execute(config, |worker| {
-    ///    use crate::timely::worker::AsWorker;
     ///    assert_eq!(worker.config().get::<u64>("example"), Some(&7));
     /// }).unwrap();
     /// ```
@@ -166,51 +164,6 @@ impl Config {
     }
 }
 
-/// Methods provided by the root Worker.
-///
-/// These methods are often proxied by child scopes, and this trait provides access.
-pub trait AsWorker : Scheduler {
-    /// Returns the worker configuration parameters.
-    fn config(&self) -> &Config;
-    /// Index of the worker among its peers.
-    fn index(&self) -> usize;
-    /// Number of peer workers.
-    fn peers(&self) -> usize;
-    /// Allocates a new channel from a supplied identifier and address.
-    ///
-    /// The identifier is used to identify the underlying channel and route
-    /// its data. It should be distinct from other identifiers passed used
-    /// for allocation, but can otherwise be arbitrary.
-    ///
-    /// The address should specify a path to an operator that should be
-    /// scheduled in response to the receipt of records on the channel.
-    /// Most commonly, this would be the address of the *target* of the
-    /// channel.
-    fn allocate<T: Exchangeable>(&mut self, identifier: usize, address: Rc<[usize]>) -> (Vec<Box<dyn Push<T>>>, Box<dyn Pull<T>>);
-    /// Constructs a pipeline channel from the worker to itself.
-    ///
-    /// By default this method uses the native channel allocation mechanism, but the expectation is
-    /// that this behavior will be overridden to be more efficient.
-    fn pipeline<T: 'static>(&mut self, identifier: usize, address: Rc<[usize]>) -> (ThreadPusher<T>, ThreadPuller<T>);
-
-    /// Allocates a broadcast channel, where each pushed message is received by all.
-    fn broadcast<T: Exchangeable + Clone>(&mut self, identifier: usize, address: Rc<[usize]>) -> (Box<dyn Push<T>>, Box<dyn Pull<T>>);
-
-    /// Allocates a new worker-unique identifier.
-    fn new_identifier(&mut self) -> usize;
-    /// The next worker-unique identifier to be allocated.
-    fn peek_identifier(&self) -> usize;
-    /// Provides access to named logging streams.
-    fn log_register(&self) -> Option<RefMut<'_, crate::logging_core::Registry>>;
-    /// Acquires a logger by name, if the log register exists and the name is registered.
-    ///
-    /// For a more precise understanding of why a result is `None` one can use the direct functions.
-    fn logger_for<CB: crate::ContainerBuilder>(&self, name: &str) -> Option<timely_logging::Logger<CB>> {
-        self.log_register().and_then(|l| l.get(name))
-    }
-    /// Provides access to the timely logging stream.
-    fn logging(&self) -> Option<crate::logging::TimelyLogger> { self.logger_for("timely").map(Into::into) }
-}
 
 /// A `Worker` is the entry point to a timely dataflow computation. It wraps an `Allocator`
 /// and has a list of dataflows that it manages.
@@ -237,38 +190,6 @@ pub struct Worker {
     temp_channel_ids: Rc<RefCell<Vec<usize>>>,
 }
 
-impl AsWorker for Worker {
-    fn config(&self) -> &Config { &self.config }
-    fn index(&self) -> usize { self.allocator.borrow().index() }
-    fn peers(&self) -> usize { self.allocator.borrow().peers() }
-    fn allocate<D: Exchangeable>(&mut self, identifier: usize, address: Rc<[usize]>) -> (Vec<Box<dyn Push<D>>>, Box<dyn Pull<D>>) {
-        if address.is_empty() { panic!("Unacceptable address: Length zero"); }
-        let mut paths = self.paths.borrow_mut();
-        paths.insert(identifier, address);
-        self.temp_channel_ids.borrow_mut().push(identifier);
-        self.allocator.borrow_mut().allocate(identifier)
-    }
-    fn pipeline<T: 'static>(&mut self, identifier: usize, address: Rc<[usize]>) -> (ThreadPusher<T>, ThreadPuller<T>) {
-        if address.is_empty() { panic!("Unacceptable address: Length zero"); }
-        let mut paths = self.paths.borrow_mut();
-        paths.insert(identifier, address);
-        self.temp_channel_ids.borrow_mut().push(identifier);
-        self.allocator.borrow_mut().pipeline(identifier)
-    }
-    fn broadcast<T: Exchangeable + Clone>(&mut self, identifier: usize, address: Rc<[usize]>) -> (Box<dyn Push<T>>, Box<dyn Pull<T>>) {
-        if address.is_empty() { panic!("Unacceptable address: Length zero"); }
-        let mut paths = self.paths.borrow_mut();
-        paths.insert(identifier, address);
-        self.temp_channel_ids.borrow_mut().push(identifier);
-        self.allocator.borrow_mut().broadcast(identifier)
-    }
-
-    fn new_identifier(&mut self) -> usize { self.new_identifier() }
-    fn peek_identifier(&self) -> usize { self.peek_identifier() }
-    fn log_register(&self) -> Option<RefMut<'_, crate::logging_core::Registry>> {
-        self.log_register()
-    }
-}
 
 impl Scheduler for Worker {
     fn activations(&self) -> Rc<RefCell<Activations>> {
@@ -543,7 +464,7 @@ impl Worker {
     ///
     /// This method is public, though it is not expected to be widely used outside
     /// of the timely dataflow system.
-    pub fn new_identifier(&mut self) -> usize {
+    pub fn new_identifier(&self) -> usize {
         *self.identifiers.borrow_mut() += 1;
         *self.identifiers.borrow() - 1
     }
@@ -569,6 +490,44 @@ impl Worker {
     /// ```
     pub fn log_register(&self) -> Option<RefMut<'_, crate::logging_core::Registry>> {
         self.logging.as_ref().map(|l| l.borrow_mut())
+    }
+
+    /// Returns the worker configuration parameters.
+    pub fn config(&self) -> &Config { &self.config }
+
+    /// Acquires a logger by name, if the log register exists and the name is registered.
+    pub fn logger_for<CB: crate::ContainerBuilder>(&self, name: &str) -> Option<timely_logging::Logger<CB>> {
+        self.log_register().and_then(|l| l.get(name))
+    }
+
+    /// Provides access to the timely logging stream.
+    pub fn logging(&self) -> Option<crate::logging::TimelyLogger> { self.logger_for("timely").map(Into::into) }
+
+    /// Allocates a new channel from a supplied identifier and address.
+    pub fn allocate<D: Exchangeable>(&self, identifier: usize, address: Rc<[usize]>) -> (Vec<Box<dyn Push<D>>>, Box<dyn Pull<D>>) {
+        if address.is_empty() { panic!("Unacceptable address: Length zero"); }
+        let mut paths = self.paths.borrow_mut();
+        paths.insert(identifier, address);
+        self.temp_channel_ids.borrow_mut().push(identifier);
+        self.allocator.borrow_mut().allocate(identifier)
+    }
+
+    /// Constructs a pipeline channel from the worker to itself.
+    pub fn pipeline<T: 'static>(&self, identifier: usize, address: Rc<[usize]>) -> (ThreadPusher<T>, ThreadPuller<T>) {
+        if address.is_empty() { panic!("Unacceptable address: Length zero"); }
+        let mut paths = self.paths.borrow_mut();
+        paths.insert(identifier, address);
+        self.temp_channel_ids.borrow_mut().push(identifier);
+        self.allocator.borrow_mut().pipeline(identifier)
+    }
+
+    /// Allocates a broadcast channel, where each pushed message is received by all.
+    pub fn broadcast<T: Exchangeable + Clone>(&self, identifier: usize, address: Rc<[usize]>) -> (Box<dyn Push<T>>, Box<dyn Pull<T>>) {
+        if address.is_empty() { panic!("Unacceptable address: Length zero"); }
+        let mut paths = self.paths.borrow_mut();
+        paths.insert(identifier, address);
+        self.temp_channel_ids.borrow_mut().push(identifier);
+        self.allocator.borrow_mut().broadcast(identifier)
     }
 
     /// Construct a new dataflow.
