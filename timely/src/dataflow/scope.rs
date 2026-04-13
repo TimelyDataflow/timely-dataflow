@@ -290,10 +290,6 @@ impl<'scope, T: Timestamp> OperatorSlot<'scope, T> {
         self.scope.subgraph.borrow_mut().add_child(operator, self.index, self.identifier);
         self.installed = true;
     }
-
-    /// Mutable access to the containing scope. Used to register a built [`Subgraph`]
-    /// before [`OperatorSlot::install`].
-    pub fn scope_mut(&mut self) -> &mut Scope<'scope, T> { &mut self.scope }
 }
 
 impl<'scope, T: Timestamp> Drop for OperatorSlot<'scope, T> {
