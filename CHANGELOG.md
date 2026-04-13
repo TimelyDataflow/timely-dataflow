@@ -9,18 +9,49 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [0.29.0](https://github.com/TimelyDataflow/timely-dataflow/compare/timely-v0.28.1...timely-v0.29.0) - 2026-04-13
 
+The theme in this release is simplifying specialization by removing monomorphization sprawl.
+The `Scope` trait that used to have numerous implementors is now a concrete type that only varies with lifetime and timestamp.
+Operator closures are boxed by default.
+These resulted in a ~25% reduction in LLVM lines in Materialize.
+
+Some forms of specialization have vanished; reach out if you relied on them.
+Also, check out the `Scope::scoped_raw` method for more flexibility in assembling scopes.
+
+### Scope is now a lightweight, Copy handle
+
+`Scope` has been substantially simplified. It is now a concrete `Copy` type rather than a trait:
+
+```rust
+pub struct Scope<'scope, T: Timestamp> {
+    subgraph: &'scope RefCell<SubgraphBuilder<T>>,
+    worker:   &'scope Worker,
+}
+```
+
+Previously, `Scope` was a trait (implemented by `Child`) and code was generic over `G: Scope`.
+Now `Scope` is a concrete type parameterized by a lifetime and its timestamp, previously hidden in the `G: Scope` implementation, and now code uses `Scope<'scope, T>` directly.
+
+- **`Scope` is a concrete type, not a trait.** The `Child` type is gone. Where you previously had a generic parameter `G: Scope` or `G: Scope<Timestamp = T>`, you now use `Scope<'scope, T>` directly. This means replacing a type-level generic with a lifetime and a concrete timestamp type — you may need to introduce `'scope` and `T: Timestamp` where they weren't needed before, and remove `G` from your generic parameter lists.
+- **`Scope` implements `Copy`.** It is passed by value to dataflow closures and operator constructors. The `FnOnce(&Scope<T>)` pattern becomes `FnOnce(Scope<T>)`.
+- **`AsWorker` and `Scheduler` traits are removed.** Their methods are now inherent on `Worker`. Access the worker from a scope via `scope.worker()`.
+- **All `Scope` methods take `&self`, not `&mut self`.** Extension traits that took `&mut self` on `Scope` (e.g., `Input`, `Feedback`, `UnorderedInput`) now take `&self`.
+
+#### Migration guide
+
+| Before (0.28) | After (0.29) |
+|---|---|
+| `G: Scope` or `G: Scope<Timestamp = T>` | `Scope<'scope, T>` |
+| `Child<'scope, _, T>` | `Scope<'scope, T>` |
+| `AsWorker::logging(&scope)` | `scope.worker().logging()` |
+| `use timely::scheduling::Scheduler;` | *(remove — methods are inherent on `Worker`)* |
+| `FnOnce(&mut Scope<T>)` | `FnOnce(Scope<T>)` |
+| `scope: &Scope<'scope, T>` in free functions | `scope: Scope<'scope, T>` |
+
 ### Other
 
-- Move logging to subgraph building ([#788](https://github.com/TimelyDataflow/timely-dataflow/pull/788))
-- Implement `Copy` for `Scope` ([#787](https://github.com/TimelyDataflow/timely-dataflow/pull/787))
 - Box operator logic by default ([#786](https://github.com/TimelyDataflow/timely-dataflow/pull/786))
-- Return lifetimes to `Scope` and friends ([#785](https://github.com/TimelyDataflow/timely-dataflow/pull/785))
-- Subscope builder ([#781](https://github.com/TimelyDataflow/timely-dataflow/pull/781))
-- Convert `Scope` trait to type ([#780](https://github.com/TimelyDataflow/timely-dataflow/pull/780))
-- Remove lifetime from Child ([#779](https://github.com/TimelyDataflow/timely-dataflow/pull/779))
 - Remove `Allocate` trait; replace with `Allocator`. ([#778](https://github.com/TimelyDataflow/timely-dataflow/pull/778))
 - Checks for WASM compatibility ([#777](https://github.com/TimelyDataflow/timely-dataflow/pull/777))
-- `Child` generics cleanup ([#774](https://github.com/TimelyDataflow/timely-dataflow/pull/774))
 
 ## [0.28.1](https://github.com/TimelyDataflow/timely-dataflow/compare/timely-v0.28.0...timely-v0.28.1) - 2026-04-03
 
