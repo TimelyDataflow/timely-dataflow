@@ -128,7 +128,7 @@ where
     }
 
     /// Now that initialization is complete, actually build a subgraph.
-    pub fn build<TOuter: Timestamp>(self, worker: &crate::worker::Worker) -> Subgraph<TOuter, TInner> {
+    pub fn build<TOuter: Timestamp>(mut self, worker: &crate::worker::Worker) -> Subgraph<TOuter, TInner> {
         // at this point, the subgraph is frozen. we should initialize any internal state which
         // may have been determined after construction (e.g. the numbers of inputs and outputs).
         // we also need to determine what to return as a summary and initial capabilities, which
@@ -141,27 +141,25 @@ where
         let mut logging = worker.logging();
         let mut summary_logging = worker.logger_for(&format!("timely/summary/{type_name}"));
 
-        // Initialize children from stashed operators, with logging.
-        let mut children = Vec::with_capacity(self.children.len() + 1);
-        // Child zero is the empty placeholder for the "outer scope" representative.
-        children.push(PerOperatorState::empty(outputs, inputs));
-        for (operator, index, identifier) in self.children {
-            let child = PerOperatorState::new(operator, index, identifier, logging.clone(), &mut summary_logging);
-            if let Some(l) = &mut logging {
-                let mut child_path = Vec::with_capacity(self.path.len() + 1);
-                child_path.extend_from_slice(&self.path[..]);
-                child_path.push(index);
-                l.log(crate::logging::OperatesEvent {
-                    id: identifier,
-                    addr: child_path,
-                    name: child.name.to_owned(),
-                });
-            }
-            children.push(child);
-        }
-
-        // Check that the children are sanely identified.
-        children.sort_unstable_by(|x,y| x.index.cmp(&y.index));
+        // Sort stashed children by index, and preface with a child zero mirroring the subgraph shape.
+        self.children.sort_unstable_by_key(|&(_, index, _)| index);
+        let mut children: Vec<_> = [PerOperatorState::empty(outputs, inputs)]
+            .into_iter()
+            .chain(self.children.into_iter().map(|(operator, index, identifier)| {
+                let child = PerOperatorState::new(operator, index, identifier, logging.clone(), &mut summary_logging);
+                if let Some(l) = &mut logging {
+                    let mut child_path = Vec::with_capacity(self.path.len() + 1);
+                    child_path.extend_from_slice(&self.path[..]);
+                    child_path.push(index);
+                    l.log(crate::logging::OperatesEvent {
+                        id: identifier,
+                        addr: child_path,
+                        name: child.name.to_owned(),
+                    });
+                }
+                child
+            }))
+            .collect();
         assert!(children.iter().enumerate().all(|(i,x)| i == x.index));
 
         let mut builder = reachability::Builder::new();
