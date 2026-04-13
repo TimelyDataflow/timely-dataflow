@@ -126,7 +126,7 @@ where
     T: Send+'static,
     F: FnOnce(Scope<u64>)->T+Send+Sync+'static
 {
-    crate::execute::execute_directly(|worker| worker.dataflow(|scope| func(scope)))
+    crate::execute::execute_directly(|worker| worker.dataflow(func))
 }
 
 
