@@ -12,6 +12,7 @@ use crate::{Allocate, Push, Pull};
 use crate::allocator::{Process, ProcessBuilder, Exchangeable};
 use crate::allocator::canary::Canary;
 use crate::allocator::zero_copy::bytes_slab::BytesRefill;
+use crate::allocator::zero_copy::spill::SpillPolicyFn;
 use super::bytes_exchange::{BytesPull, SendEndpoint, MergeQueue};
 use super::push_pull::{Pusher, PullerInner};
 
@@ -29,6 +30,8 @@ pub struct TcpBuilder {
     promises:   Vec<Sender<MergeQueue>>,    // to send queues from each network thread.
     /// Byte slab refill function.
     refill: BytesRefill,
+    /// Optional spill factory for recv queues constructed in `build()`.
+    spill: Option<SpillPolicyFn>,
 }
 
 /// Creates a vector of builders, sharing appropriate state.
@@ -48,6 +51,7 @@ pub(crate) fn new_vector(
     my_process: usize,
     processes: usize,
     refill: BytesRefill,
+    spill: Option<SpillPolicyFn>,
 ) -> (Vec<TcpBuilder>,
     Vec<Vec<Sender<MergeQueue>>>,
     Vec<Vec<Receiver<MergeQueue>>>)
@@ -72,6 +76,7 @@ pub(crate) fn new_vector(
                 promises,
                 futures,
                 refill: refill.clone(),
+                spill: spill.clone(),
             }})
         .collect();
 
@@ -87,9 +92,17 @@ impl TcpBuilder {
         let mut recvs = Vec::with_capacity(self.peers);
         for promise in self.promises.into_iter() {
             let buzzer = crate::buzzer::Buzzer::default();
-            let queue = MergeQueue::new(buzzer);
-            promise.send(queue.clone()).expect("Failed to send MergeQueue");
-            recvs.push(queue.clone());
+            let (writer, reader) = match self.spill.as_ref() {
+                Some(build_fn) => {
+                    let (w, r) = build_fn();
+                    MergeQueue::new_pair(buzzer, Some(w), Some(r))
+                }
+                None => MergeQueue::new_pair(buzzer, None, None),
+            };
+            // `recv_loop` is the writer here (it `extend`s with bytes from
+            // TCP), so it keeps the original; the worker is the reader.
+            recvs.push(reader);
+            promise.send(writer).expect("Failed to send MergeQueue");
         }
 
         // Extract pusher commitments.

@@ -117,13 +117,19 @@ impl<T: Clone> Push<T> for Broadcaster<T> {
 }
 
 use crate::allocator::zero_copy::bytes_slab::BytesRefill;
+use crate::allocator::zero_copy::spill::SpillPolicyFn;
 
 /// A builder for vectors of peers.
 pub(crate) trait PeerBuilder {
     /// The peer type.
     type Peer: AllocateBuilder + Sized;
     /// Allocate a list of `Self::Peer` of length `peers`.
-    fn new_vector(peers: usize, refill: BytesRefill) -> Vec<Self::Peer>;
+    ///
+    /// `spill` is an optional factory for spill policies; one fresh policy
+    /// per `MergeQueue` that the resulting peers construct. Implementors
+    /// that don't use `MergeQueue` (e.g. `Typed` mpsc-based intra-process)
+    /// ignore it.
+    fn new_vector(peers: usize, refill: BytesRefill, spill: Option<SpillPolicyFn>) -> Vec<Self::Peer>;
 }
 
 
@@ -146,16 +152,16 @@ impl ProcessBuilder {
     }
 
     /// Constructs a vector of regular (mpsc-based, "Typed") intra-process builders.
-    pub fn new_typed_vector(peers: usize, refill: BytesRefill) -> Vec<Self> {
-        <TypedProcess as PeerBuilder>::new_vector(peers, refill)
+    pub fn new_typed_vector(peers: usize, refill: BytesRefill, spill: Option<SpillPolicyFn>) -> Vec<Self> {
+        <TypedProcess as PeerBuilder>::new_vector(peers, refill, spill)
             .into_iter()
             .map(ProcessBuilder::Typed)
             .collect()
     }
 
     /// Constructs a vector of binary (zero-copy serialized, "Bytes") intra-process builders.
-    pub fn new_bytes_vector(peers: usize, refill: BytesRefill) -> Vec<Self> {
-        <BytesProcessBuilder as PeerBuilder>::new_vector(peers, refill)
+    pub fn new_bytes_vector(peers: usize, refill: BytesRefill, spill: Option<SpillPolicyFn>) -> Vec<Self> {
+        <BytesProcessBuilder as PeerBuilder>::new_vector(peers, refill, spill)
             .into_iter()
             .map(ProcessBuilder::Bytes)
             .collect()

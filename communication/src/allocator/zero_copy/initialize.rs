@@ -1,9 +1,6 @@
 //! Network initialization.
 
 use std::sync::Arc;
-use timely_logging::Logger;
-use crate::allocator::zero_copy::bytes_slab::BytesRefill;
-use crate::logging::CommunicationEventBuilder;
 use crate::networking::create_sockets;
 use super::tcp::{send_loop, recv_loop};
 use crate::allocator::ProcessBuilder;
@@ -47,13 +44,12 @@ pub fn initialize_networking(
     my_index: usize,
     threads: usize,
     noisy: bool,
-    refill: BytesRefill,
-    log_sender: Arc<dyn Fn(CommunicationSetup)->Option<Logger<CommunicationEventBuilder>>+Send+Sync>,
+    hooks: crate::Hooks,
 )
 -> ::std::io::Result<(Vec<TcpBuilder>, CommsGuard)>
 {
     let sockets = create_sockets(addresses, my_index, noisy)?;
-    initialize_networking_from_sockets(process_allocators, sockets, my_index, threads, refill, log_sender)
+    initialize_networking_from_sockets(process_allocators, sockets, my_index, threads, hooks)
 }
 
 /// Initialize send and recv threads from sockets.
@@ -68,8 +64,7 @@ pub fn initialize_networking_from_sockets<S: Stream + 'static>(
     mut sockets: Vec<Option<S>>,
     my_index: usize,
     threads: usize,
-    refill: BytesRefill,
-    log_sender: Arc<dyn Fn(CommunicationSetup)->Option<Logger<CommunicationEventBuilder>>+Send+Sync>,
+    hooks: crate::Hooks,
 )
 -> ::std::io::Result<(Vec<TcpBuilder>, CommsGuard)>
 {
@@ -80,22 +75,22 @@ pub fn initialize_networking_from_sockets<S: Stream + 'static>(
 
     let processes = sockets.len();
 
-    let (builders, promises, futures) = new_vector(process_allocators, my_index, processes, refill.clone());
+    let (builders, promises, futures) = new_vector(process_allocators, my_index, processes, hooks.refill.clone(), hooks.spill.clone());
 
     let mut promises_iter = promises.into_iter();
     let mut futures_iter = futures.into_iter();
 
     let mut send_guards = Vec::with_capacity(sockets.len());
     let mut recv_guards = Vec::with_capacity(sockets.len());
-    let refill = refill.clone();
 
     // for each process, if a stream exists (i.e. not local) ...
     for (index, stream) in sockets.into_iter().enumerate().filter_map(|(i, s)| s.map(|s| (i, s))) {
         let remote_recv = promises_iter.next().unwrap();
 
         {
-            let log_sender = Arc::clone(&log_sender);
+            let log_sender = Arc::clone(&hooks.log_fn);
             let stream = stream.try_clone()?;
+            let spill = hooks.spill.clone();
             let join_guard =
             ::std::thread::Builder::new()
                 .name(format!("timely:send-{}", index))
@@ -107,7 +102,7 @@ pub fn initialize_networking_from_sockets<S: Stream + 'static>(
                         remote: Some(index),
                     });
 
-                    send_loop(stream, remote_recv, my_index, index, logger);
+                    send_loop(stream, remote_recv, my_index, index, spill, logger);
                 })?;
 
             send_guards.push(join_guard);
@@ -117,9 +112,9 @@ pub fn initialize_networking_from_sockets<S: Stream + 'static>(
 
         {
             // let remote_sends = remote_sends.clone();
-            let log_sender = Arc::clone(&log_sender);
+            let log_sender = Arc::clone(&hooks.log_fn);
             let stream = stream.try_clone()?;
-            let refill = refill.clone();
+            let refill = hooks.refill.clone();
             let join_guard =
             ::std::thread::Builder::new()
                 .name(format!("timely:recv-{}", index))

@@ -38,8 +38,6 @@ pub enum Config {
         report: bool,
         /// Enable intra-process zero-copy
         zerocopy: bool,
-        /// Closure to create a new logger for a communication thread
-        log_fn: Arc<dyn Fn(CommunicationSetup) -> Option<Logger<CommunicationEventBuilder>> + Send + Sync>,
     }
 }
 
@@ -49,7 +47,7 @@ impl Debug for Config {
             Config::Thread => write!(f, "Config::Thread()"),
             Config::Process(n) => write!(f, "Config::Process({})", n),
             Config::ProcessBinary(n) => write!(f, "Config::ProcessBinary({})", n),
-            Config::Cluster { threads, process, addresses, report, zerocopy, log_fn: _ } => f
+            Config::Cluster { threads, process, addresses, report, zerocopy } => f
                 .debug_struct("Config::Cluster")
                 .field("threads", threads)
                 .field("process", process)
@@ -57,6 +55,32 @@ impl Debug for Config {
                 .field("report", report)
                 .field("zerocopy", zerocopy)
                 .finish_non_exhaustive()
+        }
+    }
+}
+
+/// Configuration hooks that (currently) live outside the configuration.
+///
+/// Fields are public so callers can mutate `Hooks::default()` before
+/// passing it to `try_build_with`.
+pub struct Hooks {
+    /// A mechanism to set up loggers for each communication thread.
+    pub log_fn: Arc<dyn Fn(CommunicationSetup) -> Option<Logger<CommunicationEventBuilder>> + Send + Sync>,
+    /// A strategy for refreshing bytes for `BytesSlab`.
+    pub refill: BytesRefill,
+    /// A mechanism to get a matched pair of spill policies (writer, reader) per queue.
+    pub spill: Option<crate::allocator::zero_copy::spill::SpillPolicyFn>,
+}
+
+impl Default for Hooks {
+    fn default() -> Self {
+        Self {
+            log_fn: Arc::new(|_| None),
+            refill:  BytesRefill {
+                logic: Arc::new(|size| Box::new(vec![0_u8; size]) as Box<dyn DerefMut<Target=[u8]>>),
+                limit: None,
+            },
+            spill: None,
         }
     }
 }
@@ -122,7 +146,6 @@ impl Config {
                 addresses,
                 report,
                 zerocopy,
-                log_fn: Arc::new(|_| None),
             })
         } else if threads > 1 {
             if zerocopy {
@@ -152,45 +175,41 @@ impl Config {
 
     /// Attempts to assemble the described communication infrastructure.
     pub fn try_build(self) -> Result<(Vec<AllocatorBuilder>, Box<dyn Any+Send>), String> {
-        let refill = BytesRefill {
-            logic: Arc::new(|size| Box::new(vec![0_u8; size]) as Box<dyn DerefMut<Target=[u8]>>),
-            limit: None,
-        };
-        self.try_build_with(refill)
+        self.try_build_with(Hooks::default())
     }
 
     /// Attempts to assemble the described communication infrastructure, using the supplied refill function.
-    pub fn try_build_with(self, refill: BytesRefill) -> Result<(Vec<AllocatorBuilder>, Box<dyn Any+Send>), String> {
+    pub fn try_build_with(self, hooks: Hooks) -> Result<(Vec<AllocatorBuilder>, Box<dyn Any+Send>), String> {
         match self {
             Config::Thread => {
                 Ok((vec![AllocatorBuilder::Thread(ThreadBuilder)], Box::new(())))
             },
             Config::Process(threads) => {
-                let builders = ProcessBuilder::new_typed_vector(threads, refill)
+                let builders = ProcessBuilder::new_typed_vector(threads, hooks.refill, hooks.spill)
                     .into_iter()
                     .map(AllocatorBuilder::Process)
                     .collect();
                 Ok((builders, Box::new(())))
             },
             Config::ProcessBinary(threads) => {
-                let builders = ProcessBuilder::new_bytes_vector(threads, refill)
+                let builders = ProcessBuilder::new_bytes_vector(threads, hooks.refill, hooks.spill)
                     .into_iter()
                     .map(AllocatorBuilder::Process)
                     .collect();
                 Ok((builders, Box::new(())))
             },
-            Config::Cluster { threads, process, addresses, report, zerocopy: false, log_fn } => {
-                let process_allocators = ProcessBuilder::new_typed_vector(threads, refill.clone());
-                match initialize_networking(process_allocators, addresses, process, threads, report, refill, log_fn) {
+            Config::Cluster { threads, process, addresses, report, zerocopy: false } => {
+                let process_allocators = ProcessBuilder::new_typed_vector(threads, hooks.refill.clone(), hooks.spill.clone());
+                match initialize_networking(process_allocators, addresses, process, threads, report, hooks) {
                     Ok((stuff, guard)) => {
                         Ok((stuff.into_iter().map(AllocatorBuilder::Tcp).collect(), Box::new(guard)))
                     },
                     Err(err) => Err(format!("failed to initialize networking: {}", err))
                 }
             },
-            Config::Cluster { threads, process, addresses, report, zerocopy: true, log_fn } => {
-                let process_allocators = ProcessBuilder::new_bytes_vector(threads, refill.clone());
-                match initialize_networking(process_allocators, addresses, process, threads, report, refill, log_fn) {
+            Config::Cluster { threads, process, addresses, report, zerocopy: true } => {
+                let process_allocators = ProcessBuilder::new_bytes_vector(threads, hooks.refill.clone(), hooks.spill.clone());
+                match initialize_networking(process_allocators, addresses, process, threads, report, hooks) {
                     Ok((stuff, guard)) => {
                         Ok((stuff.into_iter().map(AllocatorBuilder::Tcp).collect(), Box::new(guard)))
                     },
