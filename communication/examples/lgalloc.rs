@@ -73,7 +73,8 @@ mod example {
 
         // extract the configuration from user-supplied arguments, initialize the computation.
         let config = timely_communication::Config::ProcessBinary(4);
-        let (allocators, others) = config.try_build_with(refill).unwrap();
+        let hooks = timely_communication::Hooks { refill, ..Default::default() };
+        let (allocators, others) = config.try_build_with(hooks).unwrap();
         let guards = timely_communication::initialize_from(allocators, others, |mut allocator| {
 
             println!("worker {} of {} started", allocator.index(), allocator.peers());

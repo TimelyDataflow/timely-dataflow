@@ -7,6 +7,7 @@ use crate::networking::MessageHeader;
 
 use super::bytes_slab::{BytesRefill, BytesSlab};
 use super::bytes_exchange::MergeQueue;
+use super::spill::SpillPolicyFn;
 use super::stream::Stream;
 
 use timely_logging::Logger;
@@ -139,17 +140,26 @@ pub fn send_loop<S: Stream>(
     sources: Vec<Sender<MergeQueue>>,
     process: usize,
     remote: usize,
+    spill: Option<SpillPolicyFn>,
     logger: Option<Logger<CommunicationEventBuilder>>)
 {
     let mut logger = logger.map(|logger| logger.into_typed::<CommunicationEvent>());
     // Log the send thread's start.
     logger.as_mut().map(|l| l.log(StateEvent { send: true, process, remote, start: true, }));
 
+    // Send the policy-bearing queue to the worker (writer); keep a
+    // reader-side handle for ourselves.
     let mut sources: Vec<MergeQueue> = sources.into_iter().map(|x| {
         let buzzer = crate::buzzer::Buzzer::default();
-        let queue = MergeQueue::new(buzzer);
-        x.send(queue.clone()).expect("failed to send MergeQueue");
-        queue
+        let (writer, reader) = match spill.as_ref() {
+            Some(build_fn) => {
+                let (w, r) = build_fn();
+                MergeQueue::new_pair(buzzer, Some(w), Some(r))
+            }
+            None => MergeQueue::new_pair(buzzer, None, None),
+        };
+        x.send(writer).expect("failed to send MergeQueue");
+        reader
     }).collect();
 
     let mut writer = ::std::io::BufWriter::with_capacity(1 << 16, writer);

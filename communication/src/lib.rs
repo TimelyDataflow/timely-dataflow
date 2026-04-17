@@ -102,7 +102,7 @@ pub mod buzzer;
 
 use allocator::Allocate;
 pub use allocator::{Allocator, AllocatorBuilder, Exchangeable};
-pub use initialize::{initialize, initialize_from, Config, WorkerGuards};
+pub use initialize::{initialize, initialize_from, Config, Hooks, WorkerGuards};
 
 use std::sync::mpsc::{Sender, Receiver};
 

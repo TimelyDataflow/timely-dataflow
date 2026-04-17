@@ -5,32 +5,36 @@ use std::collections::VecDeque;
 
 use timely_bytes::arc::Bytes;
 use super::bytes_slab::{BytesRefill, BytesSlab};
+use super::spill::{BytesFetch, SpillPolicy};
+
+/// An entry in a `MergeQueue`. Either `Bytes` resident in memory, or a
+/// handle to bytes previously written out via a `SpillPolicy`.
+pub enum QueueEntry {
+    /// Bytes resident in memory, ready to be consumed directly.
+    Bytes(Bytes),
+    /// Bytes spilled to a backing store, fetched via the handle.
+    Paged(Box<dyn BytesFetch>),
+}
 
 /// A target for `Bytes`.
 pub trait BytesPush {
-    // /// Pushes bytes at the instance.
-    // fn push(&mut self, bytes: Bytes);
     /// Pushes many bytes at the instance.
     fn extend<I: IntoIterator<Item=Bytes>>(&mut self, iter: I);
 }
 /// A source for `Bytes`.
 pub trait BytesPull {
-    // /// Pulls bytes from the instance.
-    // fn pull(&mut self) -> Option<Bytes>;
     /// Drains many bytes from the instance.
     fn drain_into(&mut self, vec: &mut Vec<Bytes>);
 }
 
 use std::sync::atomic::{AtomicBool, Ordering};
-/// An unbounded queue of bytes intended for point-to-point communication
-/// between threads. Cloning returns another handle to the same queue.
-///
-/// TODO: explain "extend"
-#[derive(Clone)]
+/// An unbounded queue of bytes intended for point-to-point communication between threads.
+/// Writer/reader handle pairs are obtained via [`MergeQueue::new_pair`].
 pub struct MergeQueue {
-    queue: Arc<Mutex<VecDeque<Bytes>>>, // queue of bytes.
-    buzzer: crate::buzzer::Buzzer,  // awakens receiver thread.
-    panic: Arc<AtomicBool>,
+    queue: Arc<Mutex<VecDeque<QueueEntry>>>,    // queue of entries.
+    buzzer: crate::buzzer::Buzzer,              // awakens receiver thread.
+    panic: Arc<AtomicBool>,                     // used to poison the queue.
+    policy: Option<Box<dyn SpillPolicy>>,       // local policy; extend or drain dispatches it.
 }
 
 impl MergeQueue {
@@ -40,7 +44,33 @@ impl MergeQueue {
             queue: Arc::new(Mutex::new(VecDeque::new())),
             buzzer,
             panic: Arc::new(AtomicBool::new(false)),
+            policy: None,
         }
+    }
+    /// Allocates a matched pair of handles on the same underlying queue,
+    /// each carrying its own policy. The first (writer) runs its policy
+    /// after each `extend`; the second (reader) runs its policy before
+    /// each `drain_into`.
+    pub fn new_pair(
+        buzzer: crate::buzzer::Buzzer,
+        writer_policy: Option<Box<dyn SpillPolicy>>,
+        reader_policy: Option<Box<dyn SpillPolicy>>,
+    ) -> (MergeQueue, MergeQueue) {
+        let queue = Arc::new(Mutex::new(VecDeque::new()));
+        let panic = Arc::new(AtomicBool::new(false));
+        let writer = MergeQueue {
+            queue: Arc::clone(&queue),
+            buzzer: buzzer.clone(),
+            panic: Arc::clone(&panic),
+            policy: writer_policy,
+        };
+        let reader = MergeQueue {
+            queue,
+            buzzer,
+            panic,
+            policy: reader_policy,
+        };
+        (writer, reader)
     }
     /// Indicates that all input handles to the queue have dropped.
     pub fn is_complete(&self) -> bool {
@@ -64,24 +94,33 @@ impl BytesPush for MergeQueue {
         let mut iterator = iterator.into_iter();
         let mut should_ping = false;
         if let Some(bytes) = iterator.next() {
-            let mut tail = if let Some(mut tail) = queue.pop_back() {
-                if let Err(bytes) = tail.try_merge(bytes) {
-                    queue.push_back(::std::mem::replace(&mut tail, bytes));
+            let mut tail = match queue.pop_back() {
+                Some(QueueEntry::Bytes(mut tail)) => {
+                    if let Err(bytes) = tail.try_merge(bytes) {
+                        queue.push_back(QueueEntry::Bytes(::std::mem::replace(&mut tail, bytes)));
+                    }
+                    tail
                 }
-                tail
-            }
-            else {
-                should_ping = true;
-                bytes
+                Some(paged @ QueueEntry::Paged(_)) => {
+                    queue.push_back(paged);
+                    bytes
+                }
+                None => {
+                    should_ping = true;
+                    bytes
+                }
             };
 
             for more_bytes in iterator {
                 if let Err(more_bytes) = tail.try_merge(more_bytes) {
-                    queue.push_back(::std::mem::replace(&mut tail, more_bytes));
+                    queue.push_back(QueueEntry::Bytes(::std::mem::replace(&mut tail, more_bytes)));
                 }
             }
-            queue.push_back(tail);
+            queue.push_back(QueueEntry::Bytes(tail));
         }
+
+        // Dispatch the spill policy, if any, while the lock is still held.
+        if let Some(policy) = self.policy.as_mut() { policy.apply(&mut queue); }
 
         // Wakeup corresponding thread *after* releasing the lock
         ::std::mem::drop(queue);
@@ -102,7 +141,24 @@ impl BytesPull for MergeQueue {
         }
         let mut queue = lock_ok.expect("MergeQueue mutex poisoned.");
 
-        vec.extend(queue.drain(..));
+        // If a reader-side policy is installed, let it materialize Paged
+        // entries near the front of the queue (up to its own budget).
+        if let Some(policy) = self.policy.as_mut() { policy.apply(&mut queue); }
+
+        // Drain Bytes entries from the front. Stop at the first Paged entry
+        // (which the policy chose not to materialize) or the empty queue.
+        while let Some(QueueEntry::Bytes(_)) = queue.front() {
+            if let Some(QueueEntry::Bytes(b)) = queue.pop_front() {
+                vec.push(b);
+            }
+        }
+
+        // If we produced nothing but the queue isn't empty, something is
+        // stuck (failed fetch, no reader policy, budget exhausted). Buzz
+        // to ensure the consumer retries rather than parking.
+        if vec.is_empty() && !queue.is_empty() {
+            self.buzzer.buzz();
+        }
     }
 }
 
@@ -120,6 +176,7 @@ impl Drop for MergeQueue {
         }
         // Drop the queue before pinging.
         self.queue = Arc::new(Mutex::new(VecDeque::new()));
+        self.policy = None;
         self.buzzer.buzz();
     }
 }

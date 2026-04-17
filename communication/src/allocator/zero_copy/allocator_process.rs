@@ -13,6 +13,7 @@ use crate::{Allocate, Push, Pull};
 use crate::allocator::{AllocateBuilder, Exchangeable, PeerBuilder};
 use crate::allocator::canary::Canary;
 use crate::allocator::zero_copy::bytes_slab::BytesRefill;
+use crate::allocator::zero_copy::spill::SpillPolicyFn;
 use super::bytes_exchange::{BytesPull, SendEndpoint, MergeQueue};
 
 use super::push_pull::{Pusher, Puller};
@@ -29,6 +30,7 @@ pub struct ProcessBuilder {
     pushers: Vec<Receiver<MergeQueue>>, // for pushing bytes at other workers.
     pullers: Vec<Sender<MergeQueue>>,   // for pulling bytes from other workers.
     refill: BytesRefill,
+    spill: Option<SpillPolicyFn>,       // optional spill factory for recv queues.
 }
 
 impl PeerBuilder for ProcessBuilder {
@@ -36,7 +38,7 @@ impl PeerBuilder for ProcessBuilder {
     /// Creates a vector of builders, sharing appropriate state.
     ///
     /// This method requires access to a byte exchanger, from which it mints channels.
-    fn new_vector(count: usize, refill: BytesRefill) -> Vec<ProcessBuilder> {
+    fn new_vector(count: usize, refill: BytesRefill, spill: Option<SpillPolicyFn>) -> Vec<ProcessBuilder> {
 
         // Channels for the exchange of `MergeQueue` endpoints.
         let (pullers_vec, pushers_vec) = crate::promise_futures(count, count);
@@ -52,6 +54,7 @@ impl PeerBuilder for ProcessBuilder {
                     pushers,
                     pullers,
                     refill: refill.clone(),
+                    spill: spill.clone(),
                 }
             )
             .collect()
@@ -66,9 +69,17 @@ impl ProcessBuilder {
         let mut recvs = Vec::with_capacity(self.peers);
         for puller in self.pullers.into_iter() {
             let buzzer = crate::buzzer::Buzzer::default();
-            let queue = MergeQueue::new(buzzer);
-            puller.send(queue.clone()).expect("Failed to send MergeQueue");
-            recvs.push(queue.clone());
+            let (writer, reader) = match self.spill.as_ref() {
+                Some(build_fn) => {
+                    let (w, r) = build_fn();
+                    MergeQueue::new_pair(buzzer, Some(w), Some(r))
+                }
+                None => MergeQueue::new_pair(buzzer, None, None),
+            };
+            // The puller side is the writer here (the producing worker
+            // `extend`s into it); this builder owns the reader handle.
+            recvs.push(reader);
+            puller.send(writer).expect("Failed to send MergeQueue");
         }
 
         // Extract pusher commitments.
