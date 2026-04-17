@@ -1,6 +1,6 @@
 [package]
 name = "timely_communication"
-version = "0.29.0"
+version = "0.30.0"
 authors = ["Frank McSherry <fmcsherry@me.com>"]
 description = "Communication layer for timely dataflow"
 edition.workspace = true
@@ -25,9 +25,9 @@ columnar = { workspace = true }
 getopts = { version = "0.2.24", optional = true }
 byteorder = "1.5"
 serde = { version = "1.0", features = ["derive"] }
-timely_bytes = { path = "../bytes", version = "0.29" }
-timely_container = { path = "../container", version = "0.29.0" }
-timely_logging = { path = "../logging", version = "0.29" }
+timely_bytes = { path = "../bytes", version = "0.30" }
+timely_container = { path = "../container", version = "0.30.0" }
+timely_logging = { path = "../logging", version = "0.30" }
 
 [dev-dependencies]
 tempfile = "3"
