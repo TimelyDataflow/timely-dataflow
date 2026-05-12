@@ -7,6 +7,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Breaking changes
+
+- `ToStreamBuilder` is now generic over the item type instead of the container builder; the container builder moves to a method-level generic. This enables method-call syntax: `(0..3).to_stream_with_builder::<_, CapacityContainerBuilder<_>>(scope)` instead of the UFCS form `ToStreamBuilder::<CapacityContainerBuilder<_>>::to_stream_with_builder(0..3, scope)`.
+
 ## [0.29.0](https://github.com/TimelyDataflow/timely-dataflow/compare/timely-v0.28.1...timely-v0.29.0) - 2026-04-13
 
 The theme in this release is simplifying specialization by removing monomorphization sprawl.
