@@ -7,7 +7,7 @@ use crate::dataflow::operators::generic::operator::source;
 use crate::dataflow::{Stream, Scope};
 
 /// Converts to a timely [Stream], using a container builder.
-pub trait ToStreamBuilder<CB: ContainerBuilder> {
+pub trait ToStreamBuilder<Item> {
     /// Converts to a timely [Stream], using the supplied container builder type.
     ///
     /// # Examples
@@ -18,10 +18,10 @@ pub trait ToStreamBuilder<CB: ContainerBuilder> {
     /// use timely::container::CapacityContainerBuilder;
     ///
     /// let (data1, data2) = timely::example(|scope| {
-    ///     let data1 = ToStreamBuilder::<CapacityContainerBuilder<_>>::to_stream_with_builder(0..3, scope)
+    ///     let data1 = (0..3).to_stream_with_builder::<_, CapacityContainerBuilder<_>>(scope)
     ///         .container::<Vec<_>>()
     ///         .capture();
-    ///     let data2 = ToStreamBuilder::<CapacityContainerBuilder<_>>::to_stream_with_builder(vec![0,1,2], scope)
+    ///     let data2 = vec![0,1,2].to_stream_with_builder::<_, CapacityContainerBuilder<_>>(scope)
     ///         .container::<Vec<_>>()
     ///         .capture();
     ///     (data1, data2)
@@ -29,12 +29,16 @@ pub trait ToStreamBuilder<CB: ContainerBuilder> {
     ///
     /// assert_eq!(data1.extract(), data2.extract());
     /// ```
-    fn to_stream_with_builder<'scope, T: Timestamp>(self, scope: Scope<'scope, T>) -> Stream<'scope, T, CB::Container>;
+    fn to_stream_with_builder<'scope, T: Timestamp, CB: ContainerBuilder>(self, scope: Scope<'scope, T>) -> Stream<'scope, T, CB::Container>
+    where
+        CB: PushInto<Item>;
 }
 
-impl<CB: ContainerBuilder, I: IntoIterator+'static> ToStreamBuilder<CB> for I where CB: PushInto<I::Item> {
-    fn to_stream_with_builder<'scope, T: Timestamp>(self, scope: Scope<'scope, T>) -> Stream<'scope, T, CB::Container> {
-
+impl<I: IntoIterator+'static> ToStreamBuilder<I::Item> for I {
+    fn to_stream_with_builder<'scope, T: Timestamp, CB: ContainerBuilder>(self, scope: Scope<'scope, T>) -> Stream<'scope, T, CB::Container>
+    where
+        CB: PushInto<I::Item>
+    {
         source::<_, CB, _, _>(scope, "ToStreamBuilder", |capability, info| {
 
             // Acquire an activator, so that the operator can rescheduled itself.
@@ -84,6 +88,6 @@ pub trait ToStream<C> {
 
 impl<C: Container + SizableContainer, I: IntoIterator+'static> ToStream<C> for I where C: PushInto<I::Item> {
     fn to_stream<'scope, T: Timestamp>(self, scope: Scope<'scope, T>) -> Stream<'scope, T, C> {
-        ToStreamBuilder::<CapacityContainerBuilder<C>>::to_stream_with_builder(self, scope)
+        ToStreamBuilder::to_stream_with_builder::<_, CapacityContainerBuilder<C>>(self, scope)
     }
 }
