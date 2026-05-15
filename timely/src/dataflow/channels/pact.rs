@@ -11,7 +11,6 @@ use std::fmt::Debug;
 use std::rc::Rc;
 
 use crate::Accountable;
-use crate::communication::allocator::thread::{ThreadPusher, ThreadPuller};
 use crate::communication::{Push, Pull};
 use crate::dataflow::channels::Message;
 use crate::logging::TimelyLogger as Logger;
@@ -32,8 +31,8 @@ pub trait ParallelizationContract<T, C> {
 pub struct Pipeline;
 
 impl<T: 'static, C: Accountable + 'static> ParallelizationContract<T, C> for Pipeline {
-    type Pusher = LogPusher<ThreadPusher<Message<T, C>>>;
-    type Puller = LogPuller<ThreadPuller<Message<T, C>>>;
+    type Pusher = LogPusher<Box<dyn Push<Message<T, C>>>>;
+    type Puller = LogPuller<Box<dyn Pull<Message<T, C>>>>;
     fn connect(self, worker: &Worker, identifier: usize, address: Rc<[usize]>, logging: Option<Logger>) -> (Self::Pusher, Self::Puller) {
         let (pusher, puller) = worker.pipeline::<Message<T, C>>(identifier, address);
         (LogPusher::new(pusher, worker.index(), worker.index(), identifier, logging.clone()),

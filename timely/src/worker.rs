@@ -10,7 +10,6 @@ use std::collections::hash_map::Entry;
 use std::sync::Arc;
 
 use crate::communication::{Allocator, Exchangeable, Push, Pull};
-use crate::communication::allocator::thread::{ThreadPusher, ThreadPuller};
 use crate::scheduling::{Schedule, Activations, Activator, SyncActivator};
 use crate::progress::timestamp::{Refines};
 use crate::progress::SubgraphBuilder;
@@ -523,7 +522,7 @@ impl Worker {
     }
 
     /// Constructs a pipeline channel from the worker to itself.
-    pub fn pipeline<T: 'static>(&self, identifier: usize, address: Rc<[usize]>) -> (ThreadPusher<T>, ThreadPuller<T>) {
+    pub fn pipeline<T: 'static>(&self, identifier: usize, address: Rc<[usize]>) -> (Box<dyn Push<T>>, Box<dyn Pull<T>>) {
         if address.is_empty() { panic!("Unacceptable address: Length zero"); }
         let mut paths = self.paths.borrow_mut();
         paths.insert(identifier, address);

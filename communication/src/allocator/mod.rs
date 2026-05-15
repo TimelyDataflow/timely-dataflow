@@ -92,6 +92,12 @@ pub(crate) trait Allocate {
         let (pushers, pull) = self.allocate(identifier);
         (Box::new(Broadcaster { spare: None, pushers }), pull)
     }
+
+    /// Allocates a pipeline channel where each message is received by the worker-local receiver.
+    fn pipeline<T: 'static>(&mut self, identifier: usize) -> (Box<dyn Push<T>>, Box<dyn Pull<T>>) {
+        let (push, pull) = Thread::new_from(identifier, Rc::clone(self.events()));
+        (Box::new(push), Box::new(pull))
+    }
 }
 
 /// An adapter to broadcast any pushed element.
@@ -230,6 +236,13 @@ impl Process {
         match self {
             Process::Typed(p) => p.await_events(duration),
             Process::Bytes(pb) => pb.await_events(duration),
+        }
+    }
+    /// Allocates a pipeline channel where each message is received by the worker-local receiver.
+    pub(crate) fn pipeline<T: 'static>(&mut self, identifier: usize) -> (Box<dyn Push<T>>, Box<dyn Pull<T>>) {
+        match self {
+            Process::Typed(p) => p.pipeline(identifier),
+            Process::Bytes(pb) => pb.pipeline(identifier),
         }
     }
 }
