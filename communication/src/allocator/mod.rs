@@ -93,7 +93,12 @@ pub(crate) trait Allocate {
         (Box::new(Broadcaster { spare: None, pushers }), pull)
     }
 
-    /// Allocates a pipeline channel where each message is received by the worker-local receiver.
+    /// Allocates a pipeline channel from the worker to itself.
+    ///
+    /// The default implementation returns a thread-local channel backed by a shared
+    /// `VecDeque` (see [`thread::Thread::new_from`]). Implementors may override this
+    /// to return any pair of pusher and puller that satisfy `Push<T>` / `Pull<T>`,
+    /// erased behind `Box<dyn ..>` so callers do not need to name the concrete type.
     fn pipeline<T: 'static>(&mut self, identifier: usize) -> (Box<dyn Push<T>>, Box<dyn Pull<T>>) {
         let (push, pull) = Thread::new_from(identifier, Rc::clone(self.events()));
         (Box::new(push), Box::new(pull))
@@ -238,7 +243,9 @@ impl Process {
             Process::Bytes(pb) => pb.await_events(duration),
         }
     }
-    /// Allocates a pipeline channel where each message is received by the worker-local receiver.
+    /// Allocates a pipeline channel from the worker to itself.
+    ///
+    /// Dispatches to the inner `Process` variant's [`Allocate::pipeline`].
     pub(crate) fn pipeline<T: 'static>(&mut self, identifier: usize) -> (Box<dyn Push<T>>, Box<dyn Pull<T>>) {
         match self {
             Process::Typed(p) => p.pipeline(identifier),
