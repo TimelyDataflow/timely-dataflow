@@ -92,13 +92,16 @@ impl Allocator {
 
     /// Constructs a pipeline channel from the worker to itself.
     ///
-    /// By default, this method uses the thread-local channel constructor
-    /// based on a shared `VecDeque` which updates the event queue.
-    pub fn pipeline<T: 'static>(&mut self, identifier: usize) ->
-        (crate::allocator::thread::ThreadPusher<T>,
-         crate::allocator::thread::ThreadPuller<T>)
-    {
-        crate::allocator::thread::Thread::new_from(identifier, Rc::clone(self.events()))
+    /// Dispatches to the inner allocator's [`Allocate::pipeline`], which by default
+    /// returns a thread-local channel backed by a shared `VecDeque` that updates the
+    /// event queue. The concrete pusher and puller types are erased behind
+    /// `Box<dyn Push>` / `Box<dyn Pull>`.
+    pub fn pipeline<T: 'static>(&mut self, identifier: usize) -> (Box<dyn Push<T>>, Box<dyn Pull<T>>) {
+        match self {
+            Allocator::Thread(t) => t.pipeline(identifier),
+            Allocator::Process(p) => p.pipeline(identifier),
+            Allocator::Tcp(z) => z.pipeline(identifier),
+        }
     }
 }
 

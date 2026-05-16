@@ -10,7 +10,7 @@ use timely_bytes::arc::Bytes;
 use crate::networking::MessageHeader;
 
 use crate::{Allocate, Push, Pull};
-use crate::allocator::{AllocateBuilder, Exchangeable, PeerBuilder};
+use crate::allocator::{AllocateBuilder, Exchangeable, PeerBuilder, PipelineFactoryFn};
 use crate::allocator::canary::Canary;
 use crate::allocator::zero_copy::bytes_slab::BytesRefill;
 use crate::allocator::zero_copy::spill::SpillPolicyFn;
@@ -31,6 +31,7 @@ pub struct ProcessBuilder {
     pullers: Vec<Sender<MergeQueue>>,   // for pulling bytes from other workers.
     refill: BytesRefill,
     spill: Option<SpillPolicyFn>,       // optional spill factory for recv queues.
+    pipeline_factory: Option<PipelineFactoryFn>,
 }
 
 impl PeerBuilder for ProcessBuilder {
@@ -38,7 +39,12 @@ impl PeerBuilder for ProcessBuilder {
     /// Creates a vector of builders, sharing appropriate state.
     ///
     /// This method requires access to a byte exchanger, from which it mints channels.
-    fn new_vector(count: usize, refill: BytesRefill, spill: Option<SpillPolicyFn>) -> Vec<ProcessBuilder> {
+    fn new_vector(
+        count: usize,
+        refill: BytesRefill,
+        spill: Option<SpillPolicyFn>,
+        pipeline_factory: Option<PipelineFactoryFn>,
+    ) -> Vec<ProcessBuilder> {
 
         // Channels for the exchange of `MergeQueue` endpoints.
         let (pullers_vec, pushers_vec) = crate::promise_futures(count, count);
@@ -55,6 +61,7 @@ impl PeerBuilder for ProcessBuilder {
                     pullers,
                     refill: refill.clone(),
                     spill: spill.clone(),
+                    pipeline_factory: pipeline_factory.clone(),
                 }
             )
             .collect()
@@ -100,6 +107,7 @@ impl ProcessBuilder {
             sends,
             recvs,
             to_local: HashMap::new(),
+            pipeline_factory: self.pipeline_factory,
         }
     }
 }
@@ -130,6 +138,7 @@ pub struct ProcessAllocator {
     sends:      Vec<Rc<RefCell<SendEndpoint<MergeQueue>>>>, // sends[x] -> goes to thread x.
     recvs:      Vec<MergeQueue>,                            // recvs[x] <- from thread x.
     to_local:   HashMap<usize, Rc<RefCell<VecDeque<Bytes>>>>,          // to worker-local typed pullers.
+    pipeline_factory: Option<PipelineFactoryFn>,
 }
 
 impl Allocate for ProcessAllocator {
@@ -263,4 +272,6 @@ impl Allocate for ProcessAllocator {
             }
         }
     }
+
+    fn pipeline_factory(&self) -> Option<&PipelineFactoryFn> { self.pipeline_factory.as_ref() }
 }

@@ -70,6 +70,8 @@ pub struct Hooks {
     pub refill: BytesRefill,
     /// A mechanism to get a matched pair of spill policies (writer, reader) per queue.
     pub spill: Option<crate::allocator::zero_copy::spill::SpillPolicyFn>,
+    /// Optional `TypeId`-keyed factory consulted by [`crate::Allocate::pipeline`].
+    pub pipeline_factory: Option<crate::allocator::PipelineFactoryFn>,
 }
 
 impl Default for Hooks {
@@ -81,6 +83,7 @@ impl Default for Hooks {
                 limit: None,
             },
             spill: None,
+            pipeline_factory: None,
         }
     }
 }
@@ -182,24 +185,24 @@ impl Config {
     pub fn try_build_with(self, hooks: Hooks) -> Result<(Vec<AllocatorBuilder>, Box<dyn Any+Send>), String> {
         match self {
             Config::Thread => {
-                Ok((vec![AllocatorBuilder::Thread(ThreadBuilder)], Box::new(())))
+                Ok((vec![AllocatorBuilder::Thread(ThreadBuilder { pipeline_factory: hooks.pipeline_factory })], Box::new(())))
             },
             Config::Process(threads) => {
-                let builders = ProcessBuilder::new_typed_vector(threads, hooks.refill, hooks.spill)
+                let builders = ProcessBuilder::new_typed_vector(threads, hooks.refill, hooks.spill, hooks.pipeline_factory)
                     .into_iter()
                     .map(AllocatorBuilder::Process)
                     .collect();
                 Ok((builders, Box::new(())))
             },
             Config::ProcessBinary(threads) => {
-                let builders = ProcessBuilder::new_bytes_vector(threads, hooks.refill, hooks.spill)
+                let builders = ProcessBuilder::new_bytes_vector(threads, hooks.refill, hooks.spill, hooks.pipeline_factory)
                     .into_iter()
                     .map(AllocatorBuilder::Process)
                     .collect();
                 Ok((builders, Box::new(())))
             },
             Config::Cluster { threads, process, addresses, report, zerocopy: false } => {
-                let process_allocators = ProcessBuilder::new_typed_vector(threads, hooks.refill.clone(), hooks.spill.clone());
+                let process_allocators = ProcessBuilder::new_typed_vector(threads, hooks.refill.clone(), hooks.spill.clone(), hooks.pipeline_factory.clone());
                 match initialize_networking(process_allocators, addresses, process, threads, report, hooks) {
                     Ok((stuff, guard)) => {
                         Ok((stuff.into_iter().map(AllocatorBuilder::Tcp).collect(), Box::new(guard)))
@@ -208,7 +211,7 @@ impl Config {
                 }
             },
             Config::Cluster { threads, process, addresses, report, zerocopy: true } => {
-                let process_allocators = ProcessBuilder::new_bytes_vector(threads, hooks.refill.clone(), hooks.spill.clone());
+                let process_allocators = ProcessBuilder::new_bytes_vector(threads, hooks.refill.clone(), hooks.spill.clone(), hooks.pipeline_factory.clone());
                 match initialize_networking(process_allocators, addresses, process, threads, report, hooks) {
                     Ok((stuff, guard)) => {
                         Ok((stuff.into_iter().map(AllocatorBuilder::Tcp).collect(), Box::new(guard)))

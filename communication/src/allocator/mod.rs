@@ -2,6 +2,7 @@
 
 use std::rc::Rc;
 use std::cell::RefCell;
+use std::sync::Arc;
 use std::time::Duration;
 
 pub use self::thread::Thread;
@@ -17,8 +18,20 @@ pub mod counters;
 pub mod zero_copy;
 
 use crate::{Bytesable, Push, Pull};
+use crate::allocator::counters::{Pusher as CountPusher, Puller as CountPuller};
 use crate::allocator::process::{Process as TypedProcess, ProcessBuilder as TypedProcessBuilder};
 use crate::allocator::zero_copy::allocator_process::{ProcessAllocator as BytesProcess, ProcessBuilder as BytesProcessBuilder};
+
+/// A factory for runtime-supplied pipeline channels.
+///
+/// Keyed by `TypeId::of::<T>()` for the `T` that the pipeline channel will carry.
+/// The returned `Box<dyn Any>` must downcast to
+/// `(Box<dyn Push<T>>, Box<dyn Pull<T>>)`; the allocator wraps the resulting
+/// pusher and puller with the standard event-counter so the worker's event
+/// queue stays consistent. Return `None` to fall through to the default
+/// thread-local channel.
+pub type PipelineFactoryFn =
+    Arc<dyn Fn(std::any::TypeId) -> Option<Box<dyn Any>> + Send + Sync>;
 
 /// A proto-allocator, which implements `Send` and can be completed with `build`.
 ///
@@ -92,6 +105,40 @@ pub(crate) trait Allocate {
         let (pushers, pull) = self.allocate(identifier);
         (Box::new(Broadcaster { spare: None, pushers }), pull)
     }
+
+    /// Returns the runtime-supplied pipeline factory, if any.
+    ///
+    /// The default implementation returns `None`. Allocators that carry a
+    /// [`PipelineFactoryFn`] should override this to expose it; the default
+    /// [`Allocate::pipeline`] body consults it before falling back to the
+    /// thread-local channel.
+    fn pipeline_factory(&self) -> Option<&PipelineFactoryFn> { None }
+
+    /// Allocates a pipeline channel from the worker to itself.
+    ///
+    /// Consults [`Allocate::pipeline_factory`] first: if a factory is installed
+    /// and produces a pair for `T`, the pair is wrapped with the standard event
+    /// counter and returned. Otherwise returns a thread-local channel backed by
+    /// a shared `VecDeque` (see [`thread::Thread::new_from`]).
+    fn pipeline<T: 'static>(&mut self, identifier: usize) -> (Box<dyn Push<T>>, Box<dyn Pull<T>>) {
+        if let Some(factory) = self.pipeline_factory() {
+            if let Some(any) = factory(std::any::TypeId::of::<T>()) {
+                let pair = any
+                    .downcast::<(Box<dyn Push<T>>, Box<dyn Pull<T>>)>()
+                    .unwrap_or_else(|_| panic!(
+                        "pipeline_factory returned wrong shape for {}",
+                        std::any::type_name::<T>(),
+                    ));
+                let (push, pull) = *pair;
+                let events = Rc::clone(self.events());
+                let push = CountPusher::new(push, identifier, Rc::clone(&events));
+                let pull = CountPuller::new(pull, identifier, events);
+                return (Box::new(push), Box::new(pull));
+            }
+        }
+        let (push, pull) = Thread::new_from(identifier, Rc::clone(self.events()));
+        (Box::new(push), Box::new(pull))
+    }
 }
 
 /// An adapter to broadcast any pushed element.
@@ -128,8 +175,15 @@ pub(crate) trait PeerBuilder {
     /// `spill` is an optional factory for spill policies; one fresh policy
     /// per `MergeQueue` that the resulting peers construct. Implementors
     /// that don't use `MergeQueue` (e.g. `Typed` mpsc-based intra-process)
-    /// ignore it.
-    fn new_vector(peers: usize, refill: BytesRefill, spill: Option<SpillPolicyFn>) -> Vec<Self::Peer>;
+    /// ignore it. `pipeline_factory` is an optional `TypeId`-keyed factory
+    /// that each peer's allocator consults from [`Allocate::pipeline`] before
+    /// falling back to the default thread-local channel.
+    fn new_vector(
+        peers: usize,
+        refill: BytesRefill,
+        spill: Option<SpillPolicyFn>,
+        pipeline_factory: Option<PipelineFactoryFn>,
+    ) -> Vec<Self::Peer>;
 }
 
 
@@ -152,16 +206,26 @@ impl ProcessBuilder {
     }
 
     /// Constructs a vector of regular (mpsc-based, "Typed") intra-process builders.
-    pub fn new_typed_vector(peers: usize, refill: BytesRefill, spill: Option<SpillPolicyFn>) -> Vec<Self> {
-        <TypedProcess as PeerBuilder>::new_vector(peers, refill, spill)
+    pub fn new_typed_vector(
+        peers: usize,
+        refill: BytesRefill,
+        spill: Option<SpillPolicyFn>,
+        pipeline_factory: Option<PipelineFactoryFn>,
+    ) -> Vec<Self> {
+        <TypedProcess as PeerBuilder>::new_vector(peers, refill, spill, pipeline_factory)
             .into_iter()
             .map(ProcessBuilder::Typed)
             .collect()
     }
 
     /// Constructs a vector of binary (zero-copy serialized, "Bytes") intra-process builders.
-    pub fn new_bytes_vector(peers: usize, refill: BytesRefill, spill: Option<SpillPolicyFn>) -> Vec<Self> {
-        <BytesProcessBuilder as PeerBuilder>::new_vector(peers, refill, spill)
+    pub fn new_bytes_vector(
+        peers: usize,
+        refill: BytesRefill,
+        spill: Option<SpillPolicyFn>,
+        pipeline_factory: Option<PipelineFactoryFn>,
+    ) -> Vec<Self> {
+        <BytesProcessBuilder as PeerBuilder>::new_vector(peers, refill, spill, pipeline_factory)
             .into_iter()
             .map(ProcessBuilder::Bytes)
             .collect()
@@ -230,6 +294,22 @@ impl Process {
         match self {
             Process::Typed(p) => p.await_events(duration),
             Process::Bytes(pb) => pb.await_events(duration),
+        }
+    }
+    /// Allocates a pipeline channel from the worker to itself.
+    ///
+    /// Dispatches to the inner `Process` variant's [`Allocate::pipeline`].
+    pub(crate) fn pipeline<T: 'static>(&mut self, identifier: usize) -> (Box<dyn Push<T>>, Box<dyn Pull<T>>) {
+        match self {
+            Process::Typed(p) => p.pipeline(identifier),
+            Process::Bytes(pb) => pb.pipeline(identifier),
+        }
+    }
+    /// Returns the inner variant's [`Allocate::pipeline_factory`].
+    pub(crate) fn pipeline_factory(&self) -> Option<&PipelineFactoryFn> {
+        match self {
+            Process::Typed(p) => p.pipeline_factory(),
+            Process::Bytes(pb) => pb.pipeline_factory(),
         }
     }
 }

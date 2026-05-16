@@ -9,7 +9,7 @@ use std::collections::{HashMap};
 use std::sync::mpsc::{Sender, Receiver};
 
 use crate::allocator::thread::{ThreadBuilder};
-use crate::allocator::{Allocate, AllocateBuilder, PeerBuilder, Thread};
+use crate::allocator::{Allocate, AllocateBuilder, PeerBuilder, PipelineFactoryFn, Thread};
 use crate::{Push, Pull};
 use crate::buzzer::Buzzer;
 
@@ -79,6 +79,7 @@ impl PeerBuilder for Process {
         peers: usize,
         _refill: crate::allocator::BytesRefill,
         _spill: Option<crate::allocator::zero_copy::spill::SpillPolicyFn>,
+        pipeline_factory: Option<PipelineFactoryFn>,
     ) -> Vec<ProcessBuilder> {
 
         let mut counters_send = Vec::with_capacity(peers);
@@ -101,7 +102,7 @@ impl PeerBuilder for Process {
             .enumerate()
             .map(|(index, ((recv, bsend), brecv))| {
                 ProcessBuilder {
-                    inner: ThreadBuilder,
+                    inner: ThreadBuilder { pipeline_factory: pipeline_factory.clone() },
                     index,
                     peers,
                     buzzers_send: bsend,
@@ -196,6 +197,8 @@ impl Allocate for Process {
             events.push(index);
         }
     }
+
+    fn pipeline_factory(&self) -> Option<&PipelineFactoryFn> { self.inner.pipeline_factory() }
 }
 
 /// The push half of an intra-process channel.
