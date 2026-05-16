@@ -222,6 +222,22 @@ Beyond the main `"timely"` stream, there are typed log streams for deeper intros
 
 The `<T>` in the stream names is the Rust type name of the dataflow's timestamp, obtained from `std::any::type_name::<T>()` (e.g., `"timely/progress/usize"` for a dataflow using `usize` timestamps). Note that `type_name` is best-effort and not guaranteed to be stable across compiler versions, so these stream names should be treated accordingly.
 
+Because the typed-stream names embed `type_name::<T>()`, the exact key for a given dataflow can be awkward to predict (especially for nested or composite timestamps). `Registry::names()` returns an iterator over the names currently bound, which you can call after constructing a dataflow to see what is available:
+
+```rust,no_run
+timely::execute_from_args(std::env::args(), |worker| {
+    worker.dataflow::<usize,_,_>(|scope| {
+        // ... build your dataflow ...
+    });
+
+    if let Some(registry) = worker.log_register() {
+        for name in registry.names() {
+            println!("{name}");
+        }
+    }
+}).unwrap();
+```
+
 **`TimelyProgressEvent<T>`** captures the exchange of progress information between operators. Each event records whether it is a send or receive (`is_send`), the `source` worker, the `channel` and `seq_no`, the `identifier` of the operator, and two lists of updates: `messages` (updates to message counts at targets) and `internal` (updates to capabilities at sources). Each update is a tuple `(node, port, timestamp, delta)`. These are primarily useful for debugging the progress tracking protocol.
 
 **`TrackerEvent<T>`** records updates to the reachability tracker, which maintains the set of timestamps that could still arrive at each operator port. Each scope (subgraph) has its own tracker, identified by `tracker_id` — this is the worker-unique `id` of the scope operator (the same `id` from `OperatesEvent`).

@@ -66,6 +66,11 @@ impl Registry {
             .map(|x| (*x).clone())
     }
 
+    /// Iterates over the names of currently bound loggers.
+    pub fn names(&self) -> impl Iterator<Item = &str> {
+        self.map.keys().map(String::as_str)
+    }
+
     /// Creates a new logger registry.
     pub fn new(time: Instant) -> Self {
         Registry {
