@@ -9,7 +9,7 @@ use timely_bytes::arc::Bytes;
 use crate::networking::MessageHeader;
 
 use crate::{Allocate, Push, Pull};
-use crate::allocator::{Process, ProcessBuilder, Exchangeable};
+use crate::allocator::{PipelineFactoryFn, Process, ProcessBuilder, Exchangeable};
 use crate::allocator::canary::Canary;
 use crate::allocator::zero_copy::bytes_slab::BytesRefill;
 use crate::allocator::zero_copy::spill::SpillPolicyFn;
@@ -330,4 +330,5 @@ impl Allocate for TcpAllocator {
     fn await_events(&self, duration: Option<std::time::Duration>) {
         self.inner.await_events(duration);
     }
+    fn pipeline_factory(&self) -> Option<&PipelineFactoryFn> { self.inner.pipeline_factory() }
 }

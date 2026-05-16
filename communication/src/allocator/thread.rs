@@ -5,17 +5,26 @@ use std::cell::RefCell;
 use std::time::Duration;
 use std::collections::VecDeque;
 
-use crate::allocator::{Allocate, AllocateBuilder};
+use crate::allocator::{Allocate, AllocateBuilder, PipelineFactoryFn};
 use crate::allocator::counters::Pusher as CountPusher;
 use crate::allocator::counters::Puller as CountPuller;
 use crate::{Push, Pull};
 
 /// Builder for single-threaded allocator.
-pub struct ThreadBuilder;
+#[derive(Default)]
+pub struct ThreadBuilder {
+    /// Optional factory for runtime-supplied pipeline channels.
+    pub pipeline_factory: Option<PipelineFactoryFn>,
+}
 
 impl AllocateBuilder for ThreadBuilder {
     type Allocator = Thread;
-    fn build(self) -> Self::Allocator { Thread::default() }
+    fn build(self) -> Self::Allocator {
+        Thread {
+            events: Default::default(),
+            pipeline_factory: self.pipeline_factory,
+        }
+    }
 }
 
 
@@ -24,6 +33,8 @@ impl AllocateBuilder for ThreadBuilder {
 pub struct Thread {
     /// Shared counts of messages in channels.
     events: Rc<RefCell<Vec<usize>>>,
+    /// Optional factory for runtime-supplied pipeline channels.
+    pipeline_factory: Option<PipelineFactoryFn>,
 }
 
 impl Allocate for Thread {
@@ -46,6 +57,7 @@ impl Allocate for Thread {
             }
         }
     }
+    fn pipeline_factory(&self) -> Option<&PipelineFactoryFn> { self.pipeline_factory.as_ref() }
 }
 
 /// Thread-local counting channel push endpoint.
