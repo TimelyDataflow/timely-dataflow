@@ -532,18 +532,13 @@ impl<T> MutableAntichain<T> {
         T: Clone + PartialOrder + Ord,
         I: IntoIterator<Item = (T, i64)>,
     {
-        let updates = updates.into_iter();
-
         // track whether a rebuild is needed.
         let mut rebuild_required = false;
         for (time, delta) in updates {
-
             // If we do not yet require a rebuild, test whether we might require one
             // and set the flag in that case.
             if !rebuild_required {
-                let beyond_frontier = self.frontier.iter().any(|f| f.less_than(&time));
-                let before_frontier = !self.frontier.iter().any(|f| f.less_equal(&time));
-                rebuild_required = !(beyond_frontier || (delta < 0 && before_frontier));
+                rebuild_required = self.requires_rebuild(&time, delta);
             }
 
             self.updates.update(time, delta);
@@ -553,6 +548,34 @@ impl<T> MutableAntichain<T> {
             self.rebuild()
         }
         self.changes.drain()
+    }
+
+    /// Tests whether applying `(time, delta)` will require a frontier rebuild.
+    ///
+    /// Factored out of [`Self::update_iter`] so it is generic only over `T` and not
+    /// the iterator type, deduplicating the inlined `frontier.iter().any(...)` bodies
+    /// across `update_iter` monomorphizations.
+    fn requires_rebuild(&self, time: &T, delta: i64) -> bool
+    where
+        T: PartialOrder,
+    {
+        // Single-pass `for` loop (instead of two `Iterator::any` calls) avoids
+        // monomorphizing `slice::Iter::any` over per-call-site closure types and
+        // traverses `self.frontier` at most once.
+        let mut beyond_frontier = false;
+        let mut before_frontier = true;
+        for f in &self.frontier {
+            if !beyond_frontier && f.less_than(time) {
+                beyond_frontier = true;
+            }
+            if before_frontier && f.less_equal(time) {
+                before_frontier = false;
+            }
+            if beyond_frontier && !before_frontier {
+                break;
+            }
+        }
+        !(beyond_frontier || (delta < 0 && before_frontier))
     }
 
     /// Rebuilds `self.frontier` from `self.updates`.
