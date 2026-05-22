@@ -146,7 +146,9 @@ impl<CB: ContainerBuilder<Container: Default>> Logger<CB> {
     /// that the `action` only sees one stream of events with increasing timestamps. This may
     /// have a cost that we don't entirely understand.
     pub fn log<T>(&self, event: T) where CB: PushInto<(Duration, T)> {
-        self.log_many(Some(event));
+        let mut inner = self.inner.borrow_mut();
+        let elapsed = inner.time.elapsed() + inner.offset;
+        inner.log_one(elapsed, event);
     }
 
     /// Logs multiple events.
@@ -247,15 +249,26 @@ impl<CB: ContainerBuilder<Container: Default>, A: ?Sized + FnMut(&Duration, &mut
         }
     }
 
+    /// Push a single event into the builder, draining any complete containers.
+    ///
+    /// Generic only over `T`, not the iterator type, so multiple `log_many` call sites
+    /// with the same event type share this implementation.
+    #[inline]
+    fn log_one<T>(&mut self, elapsed: Duration, event: T)
+    where CB: PushInto<(Duration, T)>,
+    {
+        self.builder.push_into((elapsed, event));
+        while let Some(container) = self.builder.extract() {
+            Self::push(&mut self.action, &elapsed, container);
+        }
+    }
+
     fn log_many<I>(&mut self, events: I)
         where I: IntoIterator, CB: PushInto<(Duration, I::Item)>,
     {
         let elapsed = self.time.elapsed() + self.offset;
         for event in events {
-            self.builder.push_into((elapsed, event));
-            while let Some(container) = self.builder.extract() {
-                Self::push(&mut self.action, &elapsed, container);
-            }
+            self.log_one(elapsed, event);
         }
     }
 
