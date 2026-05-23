@@ -35,7 +35,7 @@
             const path_to_root = "../";
             const default_light_theme = "light";
             const default_dark_theme = "navy";
-            window.path_to_searchindex_js = "../searchindex-77feb808.js";
+            window.path_to_searchindex_js = "../searchindex-16ec0894.js";
         </script>
         <!-- Start loading toc.js asap -->
         <script src="../toc-3e2444f9.js"></script>
@@ -412,6 +412,21 @@ Inside the child scope, a <code>ChannelsEvent</code> with <code>source: (0, i)</
 </table>
 </div>
 <p>The <code>&lt;T&gt;</code> in the stream names is the Rust type name of the dataflow’s timestamp, obtained from <code>std::any::type_name::&lt;T&gt;()</code> (e.g., <code>"timely/progress/usize"</code> for a dataflow using <code>usize</code> timestamps). Note that <code>type_name</code> is best-effort and not guaranteed to be stable across compiler versions, so these stream names should be treated accordingly.</p>
+<p>Because the typed-stream names embed <code>type_name::&lt;T&gt;()</code>, the exact key for a given dataflow can be awkward to predict (especially for nested or composite timestamps). <code>Registry::names()</code> returns an iterator over the names currently bound, which you can call after constructing a dataflow to see what is available:</p>
+<pre class="playground"><code class="language-rust no_run"><span class="boring">#![allow(unused)]
+</span><span class="boring">fn main() {
+</span>timely::execute_from_args(std::env::args(), |worker| {
+    worker.dataflow::&lt;usize,_,_&gt;(|scope| {
+        // ... build your dataflow ...
+    });
+
+    if let Some(registry) = worker.log_register() {
+        for name in registry.names() {
+            println!("{name}");
+        }
+    }
+}).unwrap();
+<span class="boring">}</span></code></pre>
 <p><strong><code>TimelyProgressEvent&lt;T&gt;</code></strong> captures the exchange of progress information between operators. Each event records whether it is a send or receive (<code>is_send</code>), the <code>source</code> worker, the <code>channel</code> and <code>seq_no</code>, the <code>identifier</code> of the operator, and two lists of updates: <code>messages</code> (updates to message counts at targets) and <code>internal</code> (updates to capabilities at sources). Each update is a tuple <code>(node, port, timestamp, delta)</code>. These are primarily useful for debugging the progress tracking protocol.</p>
 <p><strong><code>TrackerEvent&lt;T&gt;</code></strong> records updates to the reachability tracker, which maintains the set of timestamps that could still arrive at each operator port. Each scope (subgraph) has its own tracker, identified by <code>tracker_id</code> — this is the worker-unique <code>id</code> of the scope operator (the same <code>id</code> from <code>OperatesEvent</code>).</p>
 <p>The tracker monitors two kinds of locations:</p>
