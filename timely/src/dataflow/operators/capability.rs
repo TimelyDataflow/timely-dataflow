@@ -250,8 +250,7 @@ impl<T: Timestamp> CapabilityTrait<T> for InputCapability<T> {
         let summaries_borrow = self.summaries.borrow();
         let internal_borrow = self.internal.borrow();
         // To be valid, the output buffer must match and the timestamp summary needs to be the default.
-        Rc::ptr_eq(&internal_borrow[port], query_buffer) &&
-        summaries_borrow.get(port).map_or(false, |path| path.elements() == [Default::default()])
+        Rc::ptr_eq(&internal_borrow[port], query_buffer) && summaries_borrow.is_default(port)
     }
 }
 
@@ -280,15 +279,17 @@ impl<T: Timestamp> InputCapability<T> {
     /// This method panics if `self.time` is not less or equal to `new_time`.
     pub fn delayed(&self, new_time: &T, output_port: usize) -> Capability<T> {
         use crate::progress::timestamp::PathSummary;
-        if let Some(path) = self.summaries.borrow().get(output_port) {
-            if path.iter().flat_map(|summary| summary.results_in(self.time())).any(|time| time.less_equal(new_time)) {
-                Capability::new(new_time.clone(), Rc::clone(&self.internal.borrow()[output_port]))
-            } else {
-                panic!("Attempted to delay to a time ({:?}) not greater or equal to the operators input-output summary ({:?}) applied to the capabilities time ({:?})", new_time, path, self.time());
-            }
-        }
-        else {
+        let summaries = self.summaries.borrow();
+        if !summaries.contains(output_port) {
             panic!("Attempted to delay a capability for a disconnected output");
+        }
+        let valid = summaries.any_summary(output_port, |summary| {
+            summary.results_in(self.time()).is_some_and(|time| time.less_equal(new_time))
+        });
+        if valid {
+            Capability::new(new_time.clone(), Rc::clone(&self.internal.borrow()[output_port]))
+        } else {
+            panic!("Attempted to delay to a time ({:?}) not greater or equal to the operators input-output summary ({:?}) applied to the capabilities time ({:?})", new_time, summaries, self.time());
         }
     }
 
