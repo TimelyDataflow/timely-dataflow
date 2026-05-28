@@ -7,7 +7,10 @@ use crate::dataflow::operators::generic::operator::source;
 use crate::dataflow::{Stream, Scope};
 
 /// Converts to a timely [Stream], using a container builder.
-pub trait ToStreamBuilder<Item> {
+pub trait ToStreamBuilder {
+    /// The item type produced by this iterator-like source.
+    type Item;
+
     /// Converts to a timely [Stream], using the supplied container builder type.
     ///
     /// # Examples
@@ -31,10 +34,12 @@ pub trait ToStreamBuilder<Item> {
     /// ```
     fn to_stream_with_builder<'scope, T: Timestamp, CB: ContainerBuilder>(self, scope: Scope<'scope, T>) -> Stream<'scope, T, CB::Container>
     where
-        CB: PushInto<Item>;
+        CB: PushInto<Self::Item>;
 }
 
-impl<I: IntoIterator+'static> ToStreamBuilder<I::Item> for I {
+impl<I: IntoIterator+'static> ToStreamBuilder for I {
+    type Item = I::Item;
+
     fn to_stream_with_builder<'scope, T: Timestamp, CB: ContainerBuilder>(self, scope: Scope<'scope, T>) -> Stream<'scope, T, CB::Container>
     where
         CB: PushInto<I::Item>
