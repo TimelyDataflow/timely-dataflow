@@ -7,6 +7,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.30.0](https://github.com/TimelyDataflow/timely-dataflow/compare/timely-v0.29.0...timely-v0.30.0) - 2026-05-28
+
+### Other
+
+- Correct soundness hole, add Sync bound ([#800](https://github.com/TimelyDataflow/timely-dataflow/pull/800))
+- Move ToStreamBuilder's container builder to method generic ([#792](https://github.com/TimelyDataflow/timely-dataflow/pull/792))
+- hoist rebuild check out of update_iter ([#797](https://github.com/TimelyDataflow/timely-dataflow/pull/797))
+- Benchmark spill machinery ([#791](https://github.com/TimelyDataflow/timely-dataflow/pull/791))
+
 ### Breaking changes
 
 - `ToStreamBuilder` exposes the item type via the `Item` associated type instead of a trait-level generic, and the container builder moves to a method-level generic. This enables method-call syntax: `(0..3).to_stream_with_builder::<_, CapacityContainerBuilder<_>>(scope)` instead of the UFCS form `ToStreamBuilder::<CapacityContainerBuilder<_>>::to_stream_with_builder(0..3, scope)`.
