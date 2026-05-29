@@ -83,7 +83,7 @@ use crate::progress::Timestamp;
 use crate::progress::{Source, Target};
 use crate::progress::ChangeBatch;
 use crate::progress::{Location, Port};
-use crate::progress::operate::{Connectivity, PortConnectivity};
+use crate::progress::operate::{Connectivity, PortConnectivity, PortEntry};
 use crate::progress::frontier::MutableAntichain;
 use crate::progress::timestamp::PathSummary;
 
@@ -302,12 +302,18 @@ impl<T: Timestamp> Builder<T> {
             for (input, outputs) in summary.iter().enumerate() {
                 let target = Location::new_target(index, input);
                 in_degree.entry(target).or_insert(0);
-                for (output, summaries) in outputs.iter_ports() {
+                for (output, entry) in outputs.iter_ports() {
                     let source = Location::new_source(index, output);
-                    for summary in summaries.elements().iter() {
-                        if summary == &Default::default() {
-                            *in_degree.entry(source).or_insert(0) += 1;
-                        }
+                    let default_count = match entry {
+                        PortEntry::Default => 1,
+                        PortEntry::Specific(ac) => ac
+                            .elements()
+                            .iter()
+                            .filter(|s| *s == &Default::default())
+                            .count(),
+                    };
+                    if default_count > 0 {
+                        *in_degree.entry(source).or_insert(0) += default_count;
                     }
                 }
             }
@@ -339,15 +345,21 @@ impl<T: Timestamp> Builder<T> {
                     }
                 },
                 Port::Target(port) => {
-                    for (output, summaries) in self.nodes[node][port].iter_ports() {
+                    for (output, entry) in self.nodes[node][port].iter_ports() {
                         let source = Location::new_source(node, output);
-                        for summary in summaries.elements().iter() {
-                            if summary == &Default::default() {
-                                *in_degree.get_mut(&source).unwrap() -= 1;
-                                if in_degree[&source] == 0 {
-                                    in_degree.remove(&source);
-                                    worklist.push(source);
-                                }
+                        let default_count = match entry {
+                            PortEntry::Default => 1,
+                            PortEntry::Specific(ac) => ac
+                                .elements()
+                                .iter()
+                                .filter(|s| *s == &Default::default())
+                                .count(),
+                        };
+                        for _ in 0..default_count {
+                            *in_degree.get_mut(&source).unwrap() -= 1;
+                            if in_degree[&source] == 0 {
+                                in_degree.remove(&source);
+                                worklist.push(source);
                             }
                         }
                     }
@@ -564,11 +576,7 @@ impl<T:Timestamp> Tracker<T> {
 
         // Build columnar nodes: Vecs<Vecs<Vec<(usize, T::Summary)>>>.
         let nodes = build_nested_vecs(builder.nodes.iter().map(|connectivity| {
-            connectivity.iter().map(|port_conn| {
-                port_conn.iter_ports().flat_map(|(port, antichain)| {
-                    antichain.elements().iter().map(move |s| (port, s.clone()))
-                })
-            })
+            connectivity.iter().map(|port_conn| port_conn.iter_summaries_owned())
         }));
 
         // Build columnar edges: Vecs<Vecs<Vec<Target>>>.
@@ -578,18 +586,10 @@ impl<T:Timestamp> Tracker<T> {
 
         // Build columnar target and source summaries.
         let target_summaries = build_nested_vecs(target_sum.iter().map(|ports| {
-            ports.iter().map(|port_conn| {
-                port_conn.iter_ports().flat_map(|(port, antichain)| {
-                    antichain.elements().iter().map(move |s| (port, s.clone()))
-                })
-            })
+            ports.iter().map(|port_conn| port_conn.iter_summaries_owned())
         }));
         let source_summaries = build_nested_vecs(source_sum.iter().map(|ports| {
-            ports.iter().map(|port_conn| {
-                port_conn.iter_ports().flat_map(|(port, antichain)| {
-                    antichain.elements().iter().map(move |s| (port, s.clone()))
-                })
-            })
+            ports.iter().map(|port_conn| port_conn.iter_summaries_owned())
         }));
 
         let scope_outputs = builder.shape[0].0;
@@ -803,10 +803,12 @@ fn summarize_outputs<T: Timestamp>(
     }
 
     // A reverse map from operator outputs to inputs, along their internal summaries.
-    let mut reverse_internal: HashMap<_, Vec<_>> = HashMap::new();
+    // Each entry pairs the input port with one summary element drawn from the
+    // antichain; default-port entries are materialized as `T::Summary::default()`.
+    let mut reverse_internal: HashMap<_, Vec<(usize, T::Summary)>> = HashMap::new();
     for (node, connectivity) in nodes.iter().enumerate() {
         for (input, outputs) in connectivity.iter().enumerate() {
-            for (output, summary) in outputs.iter_ports() {
+            for (output, summary) in outputs.iter_summaries_owned() {
                 reverse_internal
                     .entry(Location::new_source(node, output))
                     .or_default()
@@ -838,13 +840,11 @@ fn summarize_outputs<T: Timestamp>(
             // We want to crawl up the operator, to its inputs.
             Port::Source(_output_port) => {
                 if let Some(inputs) = reverse_internal.get(&location) {
-                    for (input_port, operator_summary) in inputs.iter() {
+                    for (input_port, op_summary) in inputs.iter() {
                         let new_location = Location::new_target(location.node, *input_port);
-                        for op_summary in operator_summary.elements().iter() {
-                            if let Some(combined) = op_summary.followed_by(&summary) {
-                                if results.entry(new_location).or_default().insert_ref(output, &combined) {
-                                    worklist.push_back((new_location, output, combined));
-                                }
+                        if let Some(combined) = op_summary.followed_by(&summary) {
+                            if results.entry(new_location).or_default().insert_ref(output, &combined) {
+                                worklist.push_back((new_location, output, combined));
                             }
                         }
                     }

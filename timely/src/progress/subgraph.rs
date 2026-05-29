@@ -567,10 +567,9 @@ where
         // of how long `self.scope_summary` is
         let mut internal_summary = vec![PortConnectivity::default(); self.inputs()];
         for (input_idx, input) in self.scope_summary.iter().enumerate() {
-            for (output_idx, output) in input.iter_ports() {
-                for outer in output.elements().iter().cloned().map(TInner::summarize) {
-                    internal_summary[input_idx].insert(output_idx, outer);
-                }
+            for (output_idx, inner_summary) in input.iter_summaries_owned() {
+                let outer = TInner::summarize(inner_summary);
+                internal_summary[input_idx].insert(output_idx, outer);
             }
         }
 
