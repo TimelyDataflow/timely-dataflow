@@ -9,20 +9,22 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [0.30.0](https://github.com/TimelyDataflow/timely-dataflow/compare/timely-v0.29.0...timely-v0.30.0) - 2026-05-28
 
-### Other
-
-- Correct soundness hole, add Sync bound ([#800](https://github.com/TimelyDataflow/timely-dataflow/pull/800))
-- Move ToStreamBuilder's container builder to method generic ([#792](https://github.com/TimelyDataflow/timely-dataflow/pull/792))
-- hoist rebuild check out of update_iter ([#797](https://github.com/TimelyDataflow/timely-dataflow/pull/797))
-- Benchmark spill machinery ([#791](https://github.com/TimelyDataflow/timely-dataflow/pull/791))
+This release adds opt-in spill-to-disk support for the zero-copy network allocator, makes `Bytes` `Sync` (a soundness fix), and continues trimming compile-time monomorphization sprawl.
 
 ### Breaking changes
 
-- `ToStreamBuilder` exposes the item type via the `Item` associated type instead of a trait-level generic, and the container builder moves to a method-level generic. This enables method-call syntax: `(0..3).to_stream_with_builder::<_, CapacityContainerBuilder<_>>(scope)` instead of the UFCS form `ToStreamBuilder::<CapacityContainerBuilder<_>>::to_stream_with_builder(0..3, scope)`.
+- **`Bytes` is now `Sync`, and byte buffers must be `Send`.** `timely_bytes::arc::Bytes` now implements `Sync` in addition to `Send`. To make both impls sound, `BytesMut::from` now requires its payload to be `Send`. This is a breaking change to `timely_communication`: `BytesRefill::logic` now produces `Box<dyn DerefMut<Target=[u8]> + Send>` rather than `Box<dyn DerefMut<Target=[u8]>>`. Custom refills whose buffer type wraps a raw pointer (e.g. `NonNull`) must assert `unsafe impl Send` on that type. ([#800](https://github.com/TimelyDataflow/timely-dataflow/pull/800))
+- **`ToStreamBuilder`** exposes the item type via the `Item` associated type instead of a trait-level generic, and the container builder moves to a method-level generic. This enables method-call syntax: `(0..3).to_stream_with_builder::<_, CapacityContainerBuilder<_>>(scope)` instead of the UFCS form `ToStreamBuilder::<CapacityContainerBuilder<_>>::to_stream_with_builder(0..3, scope)`. ([#792](https://github.com/TimelyDataflow/timely-dataflow/pull/792))
 
-### `Bytes` is now `Sync`, and byte buffers must be `Send`
+### Added
 
-`timely_bytes::arc::Bytes` now implements `Sync` in addition to `Send`. To make both impls sound, `BytesMut::from` now requires its payload to be `Send`. This is a breaking change to `timely_communication`: `BytesRefill::logic` now produces `Box<dyn DerefMut<Target=[u8]> + Send>` rather than `Box<dyn DerefMut<Target=[u8]>>`. Custom refills whose buffer type wraps a raw pointer (e.g. `NonNull`) must assert `unsafe impl Send` on that type.
+- **Spill-to-disk for the zero-copy allocator (`timely_communication`).** A new `allocator::zero_copy::spill` module lets a `MergeQueue` shed resident bytes under memory pressure. It composes three pluggable traits: `SpillPolicy` (whether and how to reshape a queue on each `extend`), `BytesSpill` (where spilled bytes go — file, object store, mock, …), and `BytesFetch` (reads them back). The shipped `threshold::Threshold` policy spills the middle of a queue once resident bytes exceed configurable threshold/reserve/budget knobs. It is opt-in via the `spill` hook on the communication configuration and defaults to `None`, so existing deployments are unaffected. See the `spill_stress` and `spill_compare` examples. ([#789](https://github.com/TimelyDataflow/timely-dataflow/pull/789), [#791](https://github.com/TimelyDataflow/timely-dataflow/pull/791))
+- `logging::Registry::names` iterates the names of the currently bound loggers. ([#795](https://github.com/TimelyDataflow/timely-dataflow/pull/795))
+
+### Other
+
+- Updated the `columnar` dependency to 0.13.
+- Hoisted the per-update rebuild check out of `MutableAntichain::update_iter` into a `requires_rebuild` helper generic only over the timestamp, reducing monomorphization sprawl (~1600 fewer LLVM lines on the `event_driven` example). ([#797](https://github.com/TimelyDataflow/timely-dataflow/pull/797))
 
 ## [0.29.0](https://github.com/TimelyDataflow/timely-dataflow/compare/timely-v0.28.1...timely-v0.29.0) - 2026-04-13
 
