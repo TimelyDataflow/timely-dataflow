@@ -34,7 +34,7 @@ There will be more to do to get data into `input`, and we aren't going to worry 
 At this point you may also have questions about the `container()` method with many symbols.
 Rust is statically typed, and needs to know the type of things that each program will manipulate.
 Timely dataflow bundles your individual data atoms into batches backed by a "container" type, and we need to communicate this type to Rust as well.
-In our first case, we've said we have an input but we haven't provided any clues about the type of data, and must do so to compile the program even thought we don't care for the example.
+In our first case, we've said we have an input but we haven't provided any clues about the type of data, and must do so to compile the program even though we don't care for the example.
 In our second case, we've shown some data (integers) but we haven't revealed how we want to hold on to them, as we communicate the `Vec` structure and leave the data type unspecified with `_` (which Rust can fill in from the type of the integers).
 
 ## Other sources
