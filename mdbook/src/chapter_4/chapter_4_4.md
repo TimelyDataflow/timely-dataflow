@@ -6,7 +6,7 @@ Timely dataflow has two fairly handy operators, `capture_into` and `replay_into`
 
 At its core, `capture_into` records everything it sees about the stream it is attached to. If some data arrive, it records that. If there is a change in the possibility that timestamps might arrive on its input, it records that.
 
-The `capture_into` method is relative simple, and we can just look at it:
+The `capture_into` method is relatively simple, and we can just look at it:
 
 ```rust,ignore
     fn capture_into<P: EventPusher<S::Timestamp, C>+'static>(&self, mut event_pusher: P) {
