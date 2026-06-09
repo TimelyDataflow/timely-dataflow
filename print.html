@@ -36,7 +36,7 @@
             const path_to_root = "";
             const default_light_theme = "light";
             const default_dark_theme = "navy";
-            window.path_to_searchindex_js = "searchindex-16ec0894.js";
+            window.path_to_searchindex_js = "searchindex-4d685fb0.js";
         </script>
         <!-- Start loading toc.js asap -->
         <script src="toc-3e2444f9.js"></script>
@@ -694,7 +694,7 @@ fn main() {
 <p>At this point you may also have questions about the <code>container()</code> method with many symbols.
 Rust is statically typed, and needs to know the type of things that each program will manipulate.
 Timely dataflow bundles your individual data atoms into batches backed by a “container” type, and we need to communicate this type to Rust as well.
-In our first case, we’ve said we have an input but we haven’t provided any clues about the type of data, and must do so to compile the program even thought we don’t care for the example.
+In our first case, we’ve said we have an input but we haven’t provided any clues about the type of data, and must do so to compile the program even though we don’t care for the example.
 In our second case, we’ve shown some data (integers) but we haven’t revealed how we want to hold on to them, as we communicate the <code>Vec</code> structure and leave the data type unspecified with <code>_</code> (which Rust can fill in from the type of the integers).</p>
 <h2 id="other-sources"><a class="header" href="#other-sources">Other sources</a></h2>
 <p>There are other sources of input that are a bit more advanced. Once we learn how to create custom operators, the <code>source</code> method will allow us to create a custom operator with zero input streams and one output stream, which looks like a source of data (hence the name). There are also the <code>Capture</code> and <code>Replay</code> traits that allow us to exfiltrate the contents of a stream from one dataflow (using <code>capture_into</code>) and re-load it in another dataflow (using <code>replay_into</code>).</p>
@@ -1879,7 +1879,7 @@ fn main() {
 <p>Timely dataflow has two fairly handy operators, <code>capture_into</code> and <code>replay_into</code>, that are great for transporting a timely dataflow stream from its native representation into data, and then back again. They are also a fine way to think about interoperating with other systems for streaming data.</p>
 <h2 id="capturing-streams-1"><a class="header" href="#capturing-streams-1">Capturing Streams</a></h2>
 <p>At its core, <code>capture_into</code> records everything it sees about the stream it is attached to. If some data arrive, it records that. If there is a change in the possibility that timestamps might arrive on its input, it records that.</p>
-<p>The <code>capture_into</code> method is relative simple, and we can just look at it:</p>
+<p>The <code>capture_into</code> method is relatively simple, and we can just look at it:</p>
 <pre><code class="language-rust ignore">    fn capture_into&lt;P: EventPusher&lt;S::Timestamp, C&gt;+'static&gt;(&amp;self, mut event_pusher: P) {
 
         let mut builder = OperatorBuilder::new("Capture".to_owned(), self.scope());

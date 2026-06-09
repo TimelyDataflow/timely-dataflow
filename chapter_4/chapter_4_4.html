@@ -35,7 +35,7 @@
             const path_to_root = "../";
             const default_light_theme = "light";
             const default_dark_theme = "navy";
-            window.path_to_searchindex_js = "../searchindex-16ec0894.js";
+            window.path_to_searchindex_js = "../searchindex-4d685fb0.js";
         </script>
         <!-- Start loading toc.js asap -->
         <script src="../toc-3e2444f9.js"></script>
@@ -178,7 +178,7 @@
 <p>Timely dataflow has two fairly handy operators, <code>capture_into</code> and <code>replay_into</code>, that are great for transporting a timely dataflow stream from its native representation into data, and then back again. They are also a fine way to think about interoperating with other systems for streaming data.</p>
 <h2 id="capturing-streams"><a class="header" href="#capturing-streams">Capturing Streams</a></h2>
 <p>At its core, <code>capture_into</code> records everything it sees about the stream it is attached to. If some data arrive, it records that. If there is a change in the possibility that timestamps might arrive on its input, it records that.</p>
-<p>The <code>capture_into</code> method is relative simple, and we can just look at it:</p>
+<p>The <code>capture_into</code> method is relatively simple, and we can just look at it:</p>
 <pre><code class="language-rust ignore">    fn capture_into&lt;P: EventPusher&lt;S::Timestamp, C&gt;+'static&gt;(&amp;self, mut event_pusher: P) {
 
         let mut builder = OperatorBuilder::new("Capture".to_owned(), self.scope());
