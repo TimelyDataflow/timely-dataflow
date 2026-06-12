@@ -143,8 +143,10 @@ impl<T:Timestamp+Send> Progcaster<T> {
                 });
             });
 
-            // We clone rather than drain to avoid deserialization.
-            changes.extend(recv_changes.iter().map(|(u,d)| (u.clone(), *d)));
+            // The puller yields an owned, already deserialized message, which we
+            // may drain. A zero-copy receive path would hand us a borrowed view
+            // instead, and this would return to cloning.
+            changes.extend(recv_changes.drain());
         }
 
     }
