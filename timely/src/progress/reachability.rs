@@ -74,7 +74,7 @@
 //! assert_eq!(results[2], ((Location::new_target(2, 0), 17), -1));
 //! ```
 
-use std::collections::{BinaryHeap, HashMap};
+use std::collections::BinaryHeap;
 use std::cmp::Reverse;
 
 use columnar::{Vecs, Index as ColumnarIndex};
@@ -287,31 +287,40 @@ impl<T: Timestamp> Builder<T> {
     /// ```
     pub fn is_acyclic(&self) -> bool {
 
-        let locations = self.shape.iter().map(|(targets, sources)| targets + sources).sum();
-        let mut in_degree = HashMap::with_capacity(locations);
+        // Dense per-location in-degree counts, with each node's targets and
+        // then sources laid out contiguously at a per-node offset.
+        let mut offsets = Vec::with_capacity(self.shape.len());
+        let mut locations = 0;
+        for (targets, sources) in self.shape.iter() {
+            offsets.push(locations);
+            locations += targets + sources;
+        }
+        let index_of = |location: &Location| {
+            let (targets, _) = self.shape[location.node];
+            match location.port {
+                Port::Target(port) => offsets[location.node] + port,
+                Port::Source(port) => offsets[location.node] + targets + port,
+            }
+        };
+        let mut in_degree = vec![0usize; locations];
 
         // Load edges as default summaries.
-        for (index, ports) in self.edges.iter().enumerate() {
-            for (output, targets) in ports.iter().enumerate() {
-                let source = Location::new_source(index, output);
-                in_degree.entry(source).or_insert(0);
+        for ports in self.edges.iter() {
+            for targets in ports.iter() {
                 for &target in targets.iter() {
-                    let target = Location::from(target);
-                    *in_degree.entry(target).or_insert(0) += 1;
+                    in_degree[index_of(&Location::from(target))] += 1;
                 }
             }
         }
 
         // Load default intra-node summaries.
         for (index, summary) in self.nodes.iter().enumerate() {
-            for (input, outputs) in summary.iter().enumerate() {
-                let target = Location::new_target(index, input);
-                in_degree.entry(target).or_insert(0);
+            for outputs in summary.iter() {
                 for (output, summaries) in outputs.iter_ports() {
                     let source = Location::new_source(index, output);
                     for summary in summaries.elements().iter() {
                         if summary == &Default::default() {
-                            *in_degree.entry(source).or_insert(0) += 1;
+                            in_degree[index_of(&source)] += 1;
                         }
                     }
                 }
@@ -319,16 +328,21 @@ impl<T: Timestamp> Builder<T> {
         }
 
         // A worklist of nodes that cannot be reached from the whole graph.
-        // Initially this list contains observed locations with no incoming
-        // edges, but as the algorithm develops we add to it any locations
-        // that can only be reached by nodes that have been on this list.
-        let mut worklist = Vec::with_capacity(in_degree.len());
-        for (key, val) in in_degree.iter() {
-            if *val == 0 {
-                worklist.push(*key);
+        // Initially this list contains locations with no incoming edges, but
+        // as the algorithm develops we add to it any locations that can only
+        // be reached by nodes that have been on this list.
+        let mut remaining = in_degree.iter().filter(|count| **count > 0).count();
+        let mut worklist = Vec::with_capacity(locations);
+        for (node, &(targets, sources)) in self.shape.iter().enumerate() {
+            for port in 0 .. targets {
+                let location = Location::new_target(node, port);
+                if in_degree[index_of(&location)] == 0 { worklist.push(location); }
+            }
+            for port in 0 .. sources {
+                let location = Location::new_source(node, port);
+                if in_degree[index_of(&location)] == 0 { worklist.push(location); }
             }
         }
-        in_degree.retain(|_key, val| val != &0);
 
         // Repeatedly remove nodes and update adjacent in-edges.
         while let Some(Location { node, port }) = worklist.pop() {
@@ -336,9 +350,10 @@ impl<T: Timestamp> Builder<T> {
                 Port::Source(port) => {
                     for target in self.edges[node][port].iter() {
                         let target = Location::from(*target);
-                        *in_degree.get_mut(&target).unwrap() -= 1;
-                        if in_degree[&target] == 0 {
-                            in_degree.remove(&target);
+                        let index = index_of(&target);
+                        in_degree[index] -= 1;
+                        if in_degree[index] == 0 {
+                            remaining -= 1;
                             worklist.push(target);
                         }
                     }
@@ -346,11 +361,12 @@ impl<T: Timestamp> Builder<T> {
                 Port::Target(port) => {
                     for (output, summaries) in self.nodes[node][port].iter_ports() {
                         let source = Location::new_source(node, output);
+                        let index = index_of(&source);
                         for summary in summaries.elements().iter() {
                             if summary == &Default::default() {
-                                *in_degree.get_mut(&source).unwrap() -= 1;
-                                if in_degree[&source] == 0 {
-                                    in_degree.remove(&source);
+                                in_degree[index] -= 1;
+                                if in_degree[index] == 0 {
+                                    remaining -= 1;
                                     worklist.push(source);
                                 }
                             }
@@ -360,8 +376,8 @@ impl<T: Timestamp> Builder<T> {
             }
         }
 
-        // Acyclic graphs should reduce to empty collections.
-        in_degree.is_empty()
+        // Acyclic graphs should drain every positive in-degree to zero.
+        remaining == 0
     }
 }
 
