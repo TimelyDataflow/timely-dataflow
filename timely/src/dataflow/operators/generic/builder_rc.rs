@@ -115,7 +115,13 @@ impl<'scope, T: Timestamp> OperatorBuilder<'scope, T> {
         self.produced.push(Rc::clone(counter.produced()));
 
         for (input, entry) in connection {
-            self.summaries[input].borrow_mut().add_port(new_output, entry);
+            // The summaries are shared with input handles (and through them, input
+            // capabilities), so we re-freeze the shared value in place rather than
+            // replace it: take the frozen value, extend it, and put the result back.
+            let mut shared = self.summaries[input].borrow_mut();
+            let mut builder = std::mem::take(&mut *shared).into_builder();
+            builder.add_port(new_output, entry);
+            *shared = builder.freeze();
         }
 
         (pushers::Output::new(counter, internal, new_output), stream)

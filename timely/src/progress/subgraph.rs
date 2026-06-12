@@ -19,7 +19,7 @@ use crate::scheduling::activate::Activations;
 use crate::progress::frontier::{MutableAntichain, MutableAntichainFilter};
 use crate::progress::{Timestamp, Operate, operate::SharedProgress};
 use crate::progress::{Location, Port, Source, Target};
-use crate::progress::operate::{FrontierInterest, Connectivity, Consolidate, PortConnectivity};
+use crate::progress::operate::{FrontierInterest, Connectivity, PortConnectivity, PortConnectivityBuilder};
 use crate::progress::ChangeBatch;
 use crate::progress::broadcast::Progcaster;
 use crate::progress::reachability;
@@ -565,7 +565,7 @@ where
         // Note that we need to have `self.inputs()` elements in the summary
         // with each element containing `self.outputs()` antichains regardless
         // of how long `self.scope_summary` is
-        let mut internal_summary = vec![PortConnectivity::default(); self.inputs()];
+        let mut internal_summary = vec![PortConnectivityBuilder::default(); self.inputs()];
         for (input_idx, input) in self.scope_summary.iter().enumerate() {
             for (output_idx, output) in input.iter_ports() {
                 for outer in output.elements().iter().cloned().map(TInner::summarize) {
@@ -573,9 +573,7 @@ where
                 }
             }
         }
-
-        // Establish the canonical form required of `initialize` output.
-        internal_summary.consolidate();
+        let internal_summary: Connectivity<_> = internal_summary.into_iter().map(|b| b.freeze()).collect();
 
         debug_assert_eq!(
             internal_summary.len(),
@@ -660,13 +658,7 @@ impl<T: Timestamp> PerOperatorState<T> {
         let outputs = scope.outputs();
         let notify = scope.notify_me().to_vec();
 
-        let (mut internal_summary, shared_progress, operator) = scope.initialize();
-
-        // Defense in depth: `initialize` is required to produce canonical connectivity
-        // (see `Operate::initialize`); consolidating here guards against foreign
-        // implementations that have not upheld that obligation.
-        debug_assert!(internal_summary.is_consolidated(), "`initialize` returned unconsolidated connectivity");
-        internal_summary.consolidate();
+        let (internal_summary, shared_progress, operator) = scope.initialize();
 
         if let Some(l) = summary_logging {
             l.log(crate::logging::OperatesSummaryEvent {

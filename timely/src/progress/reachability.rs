@@ -83,7 +83,7 @@ use crate::progress::Timestamp;
 use crate::progress::{Source, Target};
 use crate::progress::ChangeBatch;
 use crate::progress::{Location, Port};
-use crate::progress::operate::{Connectivity, Consolidate, PortConnectivity};
+use crate::progress::operate::{Connectivity, PortConnectivity, PortConnectivityBuilder};
 use crate::progress::frontier::{Antichain, MutableAntichain};
 use crate::progress::timestamp::PathSummary;
 
@@ -173,12 +173,7 @@ impl<T: Timestamp> Builder<T> {
     /// Add links internal to operators.
     ///
     /// This method overwrites any existing summary, instead of anything more sophisticated.
-    pub fn add_node(&mut self, index: usize, inputs: usize, outputs: usize, mut summary: Connectivity<T::Summary>) {
-
-        // Restore canonical form for summaries built by out-of-order insertions.
-        // (`add_node` is a construction-time entry point, so unlike `initialize`
-        // it accepts unconsolidated input and canonicalizes it here.)
-        summary.consolidate();
+    pub fn add_node(&mut self, index: usize, inputs: usize, outputs: usize, summary: Connectivity<T::Summary>) {
 
         // Assert that all summaries exist.
         debug_assert_eq!(inputs, summary.len());
@@ -958,18 +953,18 @@ fn summarize_outputs<T: Timestamp>(
         merged = merge_disjoint(level, merged);
     }
 
-    let mut results: Vec<(Location, PortConnectivity<T::Summary>)> = Vec::new();
+    let mut results: Vec<(Location, PortConnectivityBuilder<T::Summary>)> = Vec::new();
     for ((location, output), antichain) in merged {
         match results.last_mut() {
             Some((last, connectivity)) if *last == location => { connectivity.add_port(output, antichain); }
             _ => {
-                let mut connectivity = PortConnectivity::default();
+                let mut connectivity = PortConnectivityBuilder::default();
                 connectivity.add_port(output, antichain);
                 results.push((location, connectivity));
             }
         }
     }
-    results
+    results.into_iter().map(|(location, builder)| (location, builder.freeze())).collect()
 }
 
 /// Logging types for reachability tracking events.
