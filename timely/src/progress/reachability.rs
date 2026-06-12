@@ -800,9 +800,11 @@ impl<T:Timestamp> Tracker<T> {
 /// sizes of the sorted runs in order. Adjacent runs may in fact be parts
 /// of larger sorted runs, but we make no attempt to claim those wins.
 ///
-/// Keys are distinct across all runs. Batches of novel keys are introduced
-/// by merging trailing runs as in binary addition, which makes introduction
-/// amortized logarithmic per element, and lookups visit at most
+/// Keys are distinct across all runs. Novel keys are introduced by
+/// re-sorting the suffix whose run structure their addition changes, as
+/// in binary addition. Each element is re-sorted at most logarithmically
+/// often (so `O(n log^2 n)` comparisons in total, a log factor more than
+/// merging would cost, for much less code), and lookups visit at most
 /// logarithmically many runs.
 struct BinaryRuns<K, V> { entries: Vec<(K, V)> }
 
@@ -829,53 +831,26 @@ impl<K: Ord, V> BinaryRuns<K, V> {
         position.map(|index| &mut self.entries[index].1)
     }
 
-    /// Introduces a sorted batch of keys distinct from each other and from those present.
+    /// Introduces a batch of keys distinct from each other and from those present.
     fn insert_batch(&mut self, batch: Vec<(K, V)>) {
-        debug_assert!(batch.windows(2).all(|w| w[0].0 < w[1].0));
         if batch.is_empty() { return; }
         let total = self.entries.len() + batch.len();
         // Runs at the common leading bits of the old and new lengths are unaffected.
-        let mut keep = 0;
+        let mut stable = 0;
         for bit in (0..usize::BITS).rev() {
             let size = 1usize << bit;
             if (self.entries.len() & size) != (total & size) { break; }
-            keep += total & size;
+            stable += total & size;
         }
-        // The remaining runs absorb the batch as in binary addition: the smallest
-        // run is always the lowest set bit of the current length.
-        let mut merged = batch;
-        while self.entries.len() > keep {
-            let size = 1usize << self.entries.len().trailing_zeros();
-            let run = self.entries.split_off(self.entries.len() - size);
-            merged = merge_disjoint(run, merged);
-        }
-        self.entries.append(&mut merged);
+        self.entries.extend(batch);
+        self.entries[stable..].sort_unstable_by(|x, y| x.0.cmp(&y.0));
     }
 
     /// Merges all runs into one sorted vector.
     fn into_sorted(mut self) -> Vec<(K, V)> {
-        let mut merged = Vec::new();
-        while !self.entries.is_empty() {
-            let size = 1usize << self.entries.len().trailing_zeros();
-            let run = self.entries.split_off(self.entries.len() - size);
-            merged = merge_disjoint(run, merged);
-        }
-        merged
+        self.entries.sort_unstable_by(|x, y| x.0.cmp(&y.0));
+        self.entries
     }
-}
-
-/// Merges two sorted lists with disjoint keys into one sorted list.
-fn merge_disjoint<K: Ord, V>(a: Vec<(K, V)>, b: Vec<(K, V)>) -> Vec<(K, V)> {
-    let mut result = Vec::with_capacity(a.len() + b.len());
-    let mut a = a.into_iter().peekable();
-    let mut b = b.into_iter().peekable();
-    while let (Some(x), Some(y)) = (a.peek(), b.peek()) {
-        if x.0 < y.0 { result.push(a.next().unwrap()); }
-        else { result.push(b.next().unwrap()); }
-    }
-    result.extend(a);
-    result.extend(b);
-    result
 }
 
 /// Determines summaries from locations to scope outputs.
