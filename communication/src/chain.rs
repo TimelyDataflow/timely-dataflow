@@ -1,24 +1,39 @@
-//! An intra-process single-writer, multi-reader all-reduce structure.
+//! An intra-process multi-writer, multi-reader all-reduce structure.
 //!
 //! This module provides a forward-linked, compacting chain of "atoms", intended to
-//! eventually replace the intra-process leg of timely's progress broadcasting: each
-//! worker writes progress updates into its own [`Chain`], and all workers (and any
-//! network threads) read from all chains. A [`Mesh`] bundles one chain per writer.
+//! eventually replace the intra-process leg of timely's progress broadcasting: all
+//! workers write progress updates into one shared [`Chain`], and all workers (and
+//! any network threads) read from it.
+//!
+//! # Why one multi-writer chain (rather than one chain per writer)
+//!
+//! The primary goal is *cross-writer cancellation*: in progress traffic, one
+//! worker's `{(T, +1)}` is typically retired by another worker's `{(T, -1)}`.
+//! With per-writer chains (see [`Mesh`], retained for comparison), each chain's
+//! content is internally incompressible — two workers emitting `{(T, +1)}` and
+//! `{(T, -1)}` at distinct increasing `T` build two chains whose accumulated
+//! values never shrink, even though their union cancels to nothing; a laggard then
+//! performs `O(elapsed)` fold work to catch up. With a single shared chain, the
+//! writers' atoms meet at the shared head, where `merge_from` cancels them: the
+//! accumulated nodes hold only the *net* update, so a laggard's catch-up work is
+//! bounded by the net content, not by elapsed sends.
 //!
 //! # Contract
 //!
-//! - A [`Chain<T>`] has **one writer** ([`Writer`]) and any number of readers
-//!   ([`Reader`]), created from the [`Chain`] handle. Readers created later observe
-//!   only atoms sent after their creation.
-//! - [`Writer::send`] commits an atom. Every reader eventually folds, exactly once,
+//! - A [`Chain<T>`] is a cloneable handle: any holder may [`Chain::send`] atoms,
+//!   and any holder may create readers ([`Reader`], via [`Chain::reader`]).
+//!   Readers created later observe only atoms sent after their creation.
+//! - [`Chain::send`] commits an atom. Every reader eventually folds, exactly once,
 //!   every atom committed after its registration. Atoms may be merged with adjacent
 //!   atoms (never split) via [`Chainable`], which must be a **commutative** monoid:
-//!   commutativity is required because multiple chains and multiple readers impose
-//!   no cross-atom ordering (a reader of a [`Mesh`] sees atoms from different chains
-//!   in no particular relative order, and merging may reorder contributions).
-//! - Live state is bounded by `O(#readers)`, independent of the number of sends,
-//!   provided readers occasionally call [`Reader::recv`] (each `recv`, and each
-//!   reader drop, runs a compaction sweep over the whole chain).
+//!   commutativity is required because multiple writers and multiple readers impose
+//!   no cross-atom ordering (concurrent sends are merged in whatever order they win
+//!   the head, and a reader of a [`Mesh`] sees atoms from different chains in no
+//!   particular relative order).
+//! - Live state is bounded by `O(#readers)` *nodes*, independent of the number of
+//!   sends, provided readers occasionally call [`Reader::recv`] (each `recv`, and
+//!   each reader drop, runs a compaction sweep over the whole chain). The *content*
+//!   of those nodes is the merged net of the unread atoms.
 //!
 //! # Structure
 //!
@@ -28,24 +43,25 @@
 //! count of the readers currently *pinned* at the node. A reader pinned at a node
 //! has folded every atom up to and including that node, and resumes from its `next`.
 //!
-//! The chain object holds a `newest` pointer (where the writer appends or merges)
+//! The chain object holds a `newest` pointer (where writers append or merge)
 //! and an `oldest` pointer (where compaction sweeps begin). Nodes strictly before
 //! `oldest` are unreachable and reclaimed by `Arc` reference counting: forward links
 //! mean old nodes are kept alive only by `oldest`, by reader pins, and by their
 //! predecessors' `next` pointers, so abandoning a prefix frees it.
 //!
-//! # Writer fast path
+//! # Send path
 //!
-//! `send` locks the newest pointer and the newest node's payload; if the node's
-//! `holders` is zero it merges the value in place (zero allocation — the common
-//! case when no reader has just caught up); otherwise it allocates a new node,
-//! links it from the old newest, and swaps the newest pointer.
+//! `send` locks the `newest` pointer (serializing writers) and the newest node's
+//! payload; if the node's `holders` is zero it merges the value in place (zero
+//! allocation — the common case when no reader has just caught up); otherwise it
+//! allocates a new node, links it from the old newest, and swaps the pointer.
+//! In-place merging at the shared head is where cross-writer cancellation happens.
 //!
 //! # Compaction rule
 //!
 //! Node `a` may absorb its successor `b` (merging `b`'s value into `a` and setting
 //! `a.next = b.next`) iff **both** `a.holders == 0` and `b.holders == 0`, and `b`
-//! is not the newest node (the writer merges into the newest node instead). The
+//! is not the newest node (writers merge into the newest node instead). The
 //! `holders` checks are made under both payload write locks, which excludes
 //! concurrent pinning (pins are taken under a payload read lock, or under the
 //! newest-pointer lock for the newest node).
@@ -80,14 +96,15 @@
 //!
 //! 1. the chain's `oldest` mutex (held for the duration of a sweep, serializing
 //!    sweeps against one another),
-//! 2. the chain's `newest` mutex,
+//! 2. the chain's `newest` mutex (serializing writers against one another and
+//!    against reader registration),
 //! 3. node payload locks, in chain order (older before newer), at most two at once.
 //!
 //! Every code path acquires locks consistently with this order, so no cycle exists.
-//! Walkers hold at most one payload read lock at a time; the writer holds the
-//! `newest` mutex and the newest node's payload write lock; sweeps hold the
-//! `oldest` mutex, briefly the `newest` mutex (released before node locks are
-//! taken), and pairwise payload write locks in chain order.
+//! Walkers hold at most one payload read lock at a time; `send` holds the `newest`
+//! mutex (2) and then the newest node's payload write lock (3) — consistent with
+//! the order; sweeps hold the `oldest` mutex, briefly the `newest` mutex (released
+//! before node locks are taken), and pairwise payload write locks in chain order.
 //!
 //! [`Mesh`] operations touch one chain at a time, so the per-chain order suffices.
 
@@ -97,7 +114,7 @@ use std::sync::atomic::{AtomicUsize, Ordering};
 /// A commutative monoid into which atoms can be merged.
 ///
 /// Adjacent atoms in a chain may be merged (never split) before a reader observes
-/// them. Commutativity is required because multiple chains and multiple readers
+/// them. Commutativity is required because multiple writers and multiple readers
 /// impose no cross-atom ordering: the merged result must not depend on the order
 /// in which contributions are folded.
 pub trait Chainable {
@@ -133,8 +150,8 @@ struct Node<T> {
     /// The number of readers currently pinned at this node.
     ///
     /// Incremented either under the chain's `newest` mutex (for the newest node)
-    /// or under this node's payload read lock (mid-walk, hand-over-hand); the
-    /// writer and the compactor re-check this count under the payload write lock,
+    /// or under this node's payload read lock (mid-walk, hand-over-hand); writers
+    /// and the compactor re-check this count under the payload write lock,
     /// which excludes concurrent pinning.
     holders: AtomicUsize,
     /// The node's value and successor.
@@ -151,7 +168,7 @@ impl<T> Node<T> {
 }
 
 /// An RAII pin on a node: while held, the node will be neither absorbed nor
-/// bypassed, nor merged into by the writer, and its `next` leads into the live
+/// bypassed, nor merged into by writers, and its `next` leads into the live
 /// chain.
 ///
 /// Construction does *not* increment `holders`: callers increment it inside the
@@ -172,9 +189,9 @@ impl<T> Drop for Held<T> {
     }
 }
 
-/// State shared by the writer, the readers, and the chain handle.
+/// State shared by the chain handles and the readers.
 struct ChainInner<T> {
-    /// The newest node, where the writer appends or merges.
+    /// The newest node, where writers append or merge.
     newest: Mutex<Arc<Node<T>>>,
     /// The oldest retained node, where compaction sweeps begin.
     ///
@@ -206,7 +223,7 @@ impl<T: Chainable> ChainInner<T> {
 
         // Merge adjacent unpinned pairs in `[oldest, newest)`. The pair's `holders`
         // are checked under both payload write locks, excluding concurrent pinning.
-        // We never absorb the (snapshot) newest node: the writer may be merging into
+        // We never absorb the (snapshot) newest node: a writer may be merging into
         // the true newest node, and the newest pointer must not be left dangling.
         // (If the true newest has moved past our snapshot, we conservatively treat
         // the snapshot as un-absorbable this sweep; the true newest is newer still.)
@@ -261,10 +278,11 @@ impl<T: Chainable> ChainInner<T> {
     }
 }
 
-/// A handle to a single-writer, multi-reader compacting chain.
+/// A handle to a multi-writer, multi-reader compacting chain.
 ///
-/// Cloneable; used to create [`Reader`]s (and for diagnostics). The unique
-/// [`Writer`] is created together with the chain by [`Chain::new`].
+/// Cloneable; any holder may [`Chain::send`] atoms and create [`Reader`]s.
+/// Concurrent sends are serialized at the chain's head, where they merge — and,
+/// for cancelling updates, annihilate.
 pub struct Chain<T> {
     inner: Arc<ChainInner<T>>,
 }
@@ -273,49 +291,34 @@ impl<T> Clone for Chain<T> {
     fn clone(&self) -> Self { Self { inner: Arc::clone(&self.inner) } }
 }
 
+impl<T: Chainable> Default for Chain<T> {
+    fn default() -> Self { Self::new() }
+}
+
 impl<T: Chainable> Chain<T> {
-    /// Creates a new chain, returning its unique writer and a reader-factory handle.
-    pub fn new() -> (Writer<T>, Chain<T>) {
+    /// Creates a new, empty chain.
+    pub fn new() -> Chain<T> {
         let sentinel = Arc::new(Node::new(None));
         let inner = Arc::new(ChainInner {
             newest: Mutex::new(Arc::clone(&sentinel)),
             oldest: Mutex::new(sentinel),
         });
-        (Writer { inner: Arc::clone(&inner) }, Chain { inner })
+        Chain { inner }
     }
 
-    /// Creates a new reader, which will observe exactly the atoms sent after this call.
-    pub fn reader(&self) -> Reader<T> {
-        // Pin the newest node under the `newest` mutex: this excludes the writer,
-        // so atoms sent after we return go to nodes after our pin.
-        let newest = self.inner.newest.lock().expect("lock poisoned");
-        newest.holders.fetch_add(1, Ordering::SeqCst);
-        let pin = Held::pinned(Arc::clone(&newest));
-        drop(newest);
-        Reader { inner: Arc::clone(&self.inner), pin: Some(pin) }
-    }
-
-    /// The number of nodes currently retained by the chain.
-    ///
-    /// A diagnostic; `O(length)`, and approximate under concurrent activity.
-    pub fn live_len(&self) -> usize { self.inner.live_len() }
-}
-
-/// The unique writing endpoint of a [`Chain`].
-pub struct Writer<T> {
-    inner: Arc<ChainInner<T>>,
-}
-
-impl<T: Chainable> Writer<T> {
     /// Commits an atom: every reader registered before this call will fold `value`
-    /// exactly once, possibly merged with adjacent atoms.
-    pub fn send(&mut self, value: T) {
+    /// exactly once, possibly merged with adjacent atoms (including atoms from
+    /// other writers — this is where cross-writer cancellation happens).
+    pub fn send(&self, value: T) {
+        // Lock order: the `newest` mutex (2), then the newest node's payload
+        // write lock (3) — consistent with the documented ordering. The `newest`
+        // mutex serializes concurrent writers.
         let mut newest = self.inner.newest.lock().expect("lock poisoned");
         let node = Arc::clone(&newest);
         let mut payload = node.payload.write().expect("lock poisoned");
         // The `holders` check happens under the payload write lock: mid-walk pins
         // are taken under the payload read lock, and reader registration under the
-        // `newest` mutex, so neither can race this check.
+        // `newest` mutex (which we hold), so neither can race this check.
         if node.holders.load(Ordering::SeqCst) == 0 {
             // Fast path: no reader is pinned here, so none has folded this node's
             // value yet; merge in place without allocating.
@@ -332,6 +335,22 @@ impl<T: Chainable> Writer<T> {
             *newest = appended;
         }
     }
+
+    /// Creates a new reader, which will observe exactly the atoms sent after this call.
+    pub fn reader(&self) -> Reader<T> {
+        // Pin the newest node under the `newest` mutex: this excludes writers,
+        // so atoms sent after we return go to nodes after our pin.
+        let newest = self.inner.newest.lock().expect("lock poisoned");
+        newest.holders.fetch_add(1, Ordering::SeqCst);
+        let pin = Held::pinned(Arc::clone(&newest));
+        drop(newest);
+        Reader { inner: Arc::clone(&self.inner), pin: Some(pin) }
+    }
+
+    /// The number of nodes currently retained by the chain.
+    ///
+    /// A diagnostic; `O(length)`, and approximate under concurrent activity.
+    pub fn live_len(&self) -> usize { self.inner.live_len() }
 }
 
 /// A reading endpoint of a [`Chain`].
@@ -370,9 +389,9 @@ impl<T: Chainable> Reader<T> {
             // A node has no successor iff it is the chain's newest: we are caught up.
             let Some(node) = next else { return };
             {
-                // Pin and fold under the payload read lock: the writer re-checks
+                // Pin and fold under the payload read lock: writers re-check
                 // `holders` under the payload write lock before merging in place,
-                // so we either fold a value the writer will not extend, or the
+                // so we either fold a value no writer will extend, or the
                 // writer sees our pin and appends a fresh node (which we will
                 // visit next, or on a later call).
                 let payload = node.payload.read().expect("lock poisoned");
@@ -406,26 +425,23 @@ impl<T: Chainable> Drop for Reader<T> {
     }
 }
 
-/// A bundle of `W` single-writer chains: one per writer, swept by every reader.
+/// A bundle of `W` chains, one per writer, swept by every reader.
 ///
-/// This is the shape the progress broadcaster would use: each worker holds the
-/// [`Writer`] for its own chain and a [`MeshReader`] over all chains; network
-/// threads are just more readers, and a receiving network thread is one more
-/// writer.
+/// **Retained for benchmarking comparison only**: per-writer chains have a known
+/// cancellation pathology. Updates from different writers never meet, so a `+1`
+/// on one chain and its retiring `-1` on another accumulate indefinitely instead
+/// of cancelling; a laggard's catch-up work is then `O(elapsed sends)` rather
+/// than `O(net content)`. Use a single shared [`Chain`] instead, whose head
+/// merging performs cross-writer cancellation.
 pub struct Mesh<T> {
     chains: Vec<Chain<T>>,
 }
 
 impl<T: Chainable> Mesh<T> {
-    /// Creates `writers` chains, returning the writer handles and the mesh.
-    pub fn new(writers: usize) -> (Vec<Writer<T>>, Mesh<T>) {
-        let mut handles = Vec::with_capacity(writers);
-        let mut chains = Vec::with_capacity(writers);
-        for _ in 0 .. writers {
-            let (writer, chain) = Chain::new();
-            handles.push(writer);
-            chains.push(chain);
-        }
+    /// Creates `writers` chains, returning per-writer send handles and the mesh.
+    pub fn new(writers: usize) -> (Vec<Chain<T>>, Mesh<T>) {
+        let chains: Vec<Chain<T>> = (0 .. writers).map(|_| Chain::new()).collect();
+        let handles = chains.clone();
         (handles, Mesh { chains })
     }
 
@@ -490,9 +506,9 @@ mod tests {
 
     #[test]
     fn single_reader_observes_all() {
-        let (mut writer, chain) = Chain::<u64>::new();
+        let chain = Chain::<u64>::new();
         let mut reader = chain.reader();
-        for i in 1 ..= 100 { writer.send(i); }
+        for i in 1 ..= 100 { chain.send(i); }
         let mut total = 0;
         reader.recv(&mut total);
         assert_eq!(total, 5050);
@@ -501,9 +517,9 @@ mod tests {
 
     #[test]
     fn multiple_readers_each_observe_all() {
-        let (mut writer, chain) = Chain::<u64>::new();
+        let chain = Chain::<u64>::new();
         let mut readers = (0 .. 4).map(|_| chain.reader()).collect::<Vec<_>>();
-        for i in 1 ..= 100 { writer.send(i); }
+        for i in 1 ..= 100 { chain.send(i); }
         for reader in readers.iter_mut() {
             let mut total = 0;
             reader.recv(&mut total);
@@ -513,12 +529,12 @@ mod tests {
 
     #[test]
     fn late_reader_sees_only_subsequent() {
-        let (mut writer, chain) = Chain::<u64>::new();
+        let chain = Chain::<u64>::new();
         let mut early = chain.reader();
-        for i in 1 ..= 10 { writer.send(i); }
+        for i in 1 ..= 10 { chain.send(i); }
         let mut late = chain.reader();
         assert!(late.is_caught_up());
-        for i in 1 ..= 10 { writer.send(100 * i); }
+        for i in 1 ..= 10 { chain.send(100 * i); }
         let (mut early_total, mut late_total) = (0, 0);
         early.recv(&mut early_total);
         late.recv(&mut late_total);
@@ -528,22 +544,22 @@ mod tests {
 
     #[test]
     fn repeated_recv_yields_only_new() {
-        let (mut writer, chain) = Chain::<u64>::new();
+        let chain = Chain::<u64>::new();
         let mut reader = chain.reader();
-        writer.send(3);
+        chain.send(3);
         let mut total = 0;
         reader.recv(&mut total);
         assert_eq!(total, 3);
         reader.recv(&mut total);
         assert_eq!(total, 3);
-        writer.send(4);
+        chain.send(4);
         reader.recv(&mut total);
         assert_eq!(total, 7);
     }
 
     #[test]
     fn empty_recv_is_noop() {
-        let (_writer, chain) = Chain::<u64>::new();
+        let chain = Chain::<u64>::new();
         let mut reader = chain.reader();
         assert!(reader.is_caught_up());
         let mut total = 0;
@@ -558,12 +574,12 @@ mod tests {
     /// the chain length must stay bounded by a small constant (#readers + 2).
     #[test]
     fn compaction_bounds_with_laggard() {
-        let (mut writer, chain) = Chain::<u64>::new();
+        let chain = Chain::<u64>::new();
         let laggard = chain.reader();
         let mut active = chain.reader();
         let mut total = 0;
         for _ in 0 .. 10_000 {
-            writer.send(1);
+            chain.send(1);
             active.recv(&mut total);
             assert!(chain.live_len() <= 4, "live_len {} exceeds bound", chain.live_len());
         }
@@ -577,7 +593,7 @@ mod tests {
     /// Sums survive heavy sending with only occasional recvs.
     #[test]
     fn sums_preserved_under_heavy_send() {
-        let (mut writer, chain) = Chain::<u64>::new();
+        let chain = Chain::<u64>::new();
         let mut reader = chain.reader();
         let mut total = 0;
         let mut expected = 0;
@@ -585,7 +601,7 @@ mod tests {
         for i in 0 .. 100_000u64 {
             let value = rng.below(1000);
             expected += value;
-            writer.send(value);
+            chain.send(value);
             if i % 1017 == 0 { reader.recv(&mut total); }
         }
         reader.recv(&mut total);
@@ -595,12 +611,12 @@ mod tests {
     /// Dropping a laggard releases its pin, and the chain compacts afterwards.
     #[test]
     fn reader_drop_releases_pin() {
-        let (mut writer, chain) = Chain::<u64>::new();
+        let chain = Chain::<u64>::new();
         let laggard = chain.reader();
         let mut active = chain.reader();
         let mut total = 0;
         for _ in 0 .. 1000 {
-            writer.send(1);
+            chain.send(1);
             active.recv(&mut total);
         }
         // The laggard's pin retains the prefix.
@@ -617,9 +633,9 @@ mod tests {
     /// exactly the pinned caught-up node plus one accumulating newest node.
     #[test]
     fn in_place_merge_fast_path() {
-        let (mut writer, chain) = Chain::<u64>::new();
+        let chain = Chain::<u64>::new();
         let mut readers = (0 .. 3).map(|_| chain.reader()).collect::<Vec<_>>();
-        for i in 1 ..= 5 { writer.send(i); }
+        for i in 1 ..= 5 { chain.send(i); }
         // Two recvs each: the first folds and re-pins at the newest node; the
         // second's sweep advances `oldest` past the abandoned prefix.
         let mut totals = vec![0; readers.len()];
@@ -631,7 +647,7 @@ mod tests {
         assert_eq!(chain.live_len(), 1);
         // N sends with no recv: the first allocates (the newest node is pinned by
         // all readers); the rest merge in place into the new newest node.
-        for _ in 0 .. 1000 { writer.send(1); }
+        for _ in 0 .. 1000 { chain.send(1); }
         assert_eq!(chain.live_len(), 2);
         for (reader, total) in readers.iter_mut().zip(totals.iter_mut()) {
             reader.recv(total);
@@ -639,11 +655,137 @@ mod tests {
         }
     }
 
+    /// Multiple writers sending sequentially through clones of the handle.
+    #[test]
+    fn multiple_writers_sequential() {
+        let chain = Chain::<u64>::new();
+        let other = chain.clone();
+        let mut reader = chain.reader();
+        for i in 1 ..= 10 { chain.send(i); other.send(100 * i); }
+        let mut total = 0;
+        reader.recv(&mut total);
+        assert_eq!(total, 55 + 5500);
+    }
+
+    /// Cross-writer cancellation: with no reader catching up mid-stream, paired
+    /// `+v`/`-v` sends from two handles merge in place at the shared head, so the
+    /// chain stays at one or two nodes regardless of the number of sends.
+    #[test]
+    fn cross_writer_cancellation_bounds_state() {
+        let chain = Chain::<i64>::new();
+        let other = chain.clone();
+        let mut reader = chain.reader();
+        for i in 1 ..= 100_000i64 {
+            chain.send(i);
+            other.send(-i);
+        }
+        // The reader's registration pin is on the sentinel; everything since is
+        // merged into at most one additional node.
+        assert!(chain.live_len() <= 2, "live_len {}", chain.live_len());
+        let mut total = 0i64;
+        let mut atoms = 0;
+        reader.recv_with(|value| { total += *value; atoms += 1; });
+        assert_eq!(total, 0);
+        assert!(atoms <= 1, "laggard folded {} atoms", atoms);
+    }
+
+    /// Concurrent writers, one reader: the reader's final total must equal the
+    /// sum of everything sent, and live state must stay bounded at quiescence.
+    #[test]
+    fn concurrent_writers_one_reader() {
+        const WRITERS: usize = 4;
+        const SENDS: u64 = 50_000;
+        let chain = Chain::<u64>::new();
+        let mut reader = chain.reader();
+        let barrier = Arc::new(Barrier::new(WRITERS + 1));
+        let mut threads = Vec::new();
+        for index in 0 .. WRITERS {
+            let chain = chain.clone();
+            let barrier = Arc::clone(&barrier);
+            threads.push(std::thread::spawn(move || -> u64 {
+                let mut rng = Rng::new(0xABCD + index as u64);
+                let mut sent = 0;
+                barrier.wait();
+                for _ in 0 .. SENDS {
+                    let value = rng.below(100);
+                    sent += value;
+                    chain.send(value);
+                }
+                sent
+            }));
+        }
+        barrier.wait();
+        // Recv concurrently with the writers, then drain after they finish.
+        let mut total = 0;
+        for _ in 0 .. 100 {
+            reader.recv(&mut total);
+            std::thread::yield_now();
+        }
+        let expected: u64 = threads.into_iter().map(|t| t.join().unwrap()).sum();
+        reader.recv(&mut total);
+        assert_eq!(total, expected);
+        assert!(reader.is_caught_up());
+        reader.recv(&mut total);
+        assert!(chain.live_len() <= 2, "live_len {}", chain.live_len());
+    }
+
+    /// Concurrent writers, many readers (each reader on its own thread, recv-ing
+    /// while the writers send): every reader's total must equal the sum sent.
+    #[test]
+    fn concurrent_writers_many_readers() {
+        const WRITERS: usize = 3;
+        const READERS: usize = 3;
+        const SENDS: u64 = 20_000;
+        let chain = Chain::<u64>::new();
+        let readers = (0 .. READERS).map(|_| chain.reader()).collect::<Vec<_>>();
+        let barrier = Arc::new(Barrier::new(WRITERS + READERS));
+        let done = Arc::new(std::sync::atomic::AtomicUsize::new(0));
+        let mut threads = Vec::new();
+        for index in 0 .. WRITERS {
+            let chain = chain.clone();
+            let barrier = Arc::clone(&barrier);
+            let done = Arc::clone(&done);
+            threads.push(std::thread::spawn(move || -> u64 {
+                let mut rng = Rng::new(0xFACE + index as u64);
+                let mut sent = 0;
+                barrier.wait();
+                for _ in 0 .. SENDS {
+                    let value = rng.below(100);
+                    sent += value;
+                    chain.send(value);
+                    if rng.below(64) == 0 { std::thread::yield_now(); }
+                }
+                done.fetch_add(1, std::sync::atomic::Ordering::SeqCst);
+                sent
+            }));
+        }
+        let mut reader_threads = Vec::new();
+        for mut reader in readers {
+            let barrier = Arc::clone(&barrier);
+            let done = Arc::clone(&done);
+            reader_threads.push(std::thread::spawn(move || -> u64 {
+                let mut total = 0;
+                barrier.wait();
+                while done.load(std::sync::atomic::Ordering::SeqCst) < WRITERS {
+                    reader.recv(&mut total);
+                    std::thread::yield_now();
+                }
+                reader.recv(&mut total);
+                total
+            }));
+        }
+        let expected: u64 = threads.into_iter().map(|t| t.join().unwrap()).sum();
+        for thread in reader_threads {
+            assert_eq!(thread.join().unwrap(), expected);
+        }
+        assert!(chain.live_len() <= READERS + 2, "live_len {}", chain.live_len());
+    }
+
     #[test]
     fn mesh_readers_observe_all_writers() {
-        let (mut writers, mesh) = Mesh::<u64>::new(3);
+        let (writers, mesh) = Mesh::<u64>::new(3);
         let mut readers = (0 .. 2).map(|_| mesh.reader()).collect::<Vec<_>>();
-        for (index, writer) in writers.iter_mut().enumerate() {
+        for (index, writer) in writers.iter().enumerate() {
             for i in 1 ..= 10 { writer.send((index as u64 + 1) * i); }
         }
         for reader in readers.iter_mut() {
@@ -654,9 +796,9 @@ mod tests {
         }
     }
 
-    /// Randomized stress: `W` writer threads (via `Mesh`), `R` reader threads
+    /// Randomized stress: `W` writer threads sharing one chain, `R` reader threads
     /// recv-ing at random intervals, one deliberate laggard that recvs rarely.
-    /// At quiescent checkpoints each chain's length must stay within bounds,
+    /// At quiescent checkpoints the chain's length must stay within bounds,
     /// and every reader's final total must equal the sum of all atoms sent.
     #[test]
     fn stress_randomized() {
@@ -666,15 +808,16 @@ mod tests {
         const READERS: usize = ACTIVES + 1;   // plus one laggard
         const PHASES: usize = 50;
 
-        let (writers, mesh) = Mesh::<u64>::new(WRITERS);
-        let readers = (0 .. READERS).map(|_| mesh.reader()).collect::<Vec<_>>();
+        let chain = Chain::<u64>::new();
+        let readers = (0 .. READERS).map(|_| chain.reader()).collect::<Vec<_>>();
 
         // Four barrier waits per phase: start, quiesce, checkpoint, done.
         let barrier = Arc::new(Barrier::new(WRITERS + READERS + 1));
 
         let mut threads = Vec::new();
 
-        for (index, mut writer) in writers.into_iter().enumerate() {
+        for index in 0 .. WRITERS {
+            let chain = chain.clone();
             let barrier = Arc::clone(&barrier);
             threads.push(std::thread::spawn(move || -> u64 {
                 let mut rng = Rng::new(0xC0FFEE + index as u64);
@@ -684,7 +827,7 @@ mod tests {
                     for _ in 0 .. rng.below(200) {
                         let value = rng.below(100);
                         sent += value;
-                        writer.send(value);
+                        chain.send(value);
                         if rng.below(16) == 0 { std::thread::yield_now(); }
                     }
                     barrier.wait();                         // quiesce
@@ -711,7 +854,7 @@ mod tests {
                         }
                     }
                     barrier.wait();                         // quiesce
-                    // Drain and heal: two recvs leave each chain fully compacted.
+                    // Drain and heal: two recvs leave the chain fully compacted.
                     // The laggard recvs rarely, pinning old positions for a while.
                     if !laggard {
                         reader.recv(&mut total);
@@ -729,14 +872,13 @@ mod tests {
             }));
         }
 
-        // The main thread asserts chain lengths at each quiescent checkpoint.
+        // The main thread asserts the chain length at each quiescent checkpoint.
         for _ in 0 .. PHASES {
             barrier.wait();                                 // start
             barrier.wait();                                 // quiesce
             barrier.wait();                                 // checkpoint
-            for len in mesh.live_lens() {
-                assert!(len <= READERS + 2, "live_len {} exceeds bound {}", len, READERS + 2);
-            }
+            let len = chain.live_len();
+            assert!(len <= READERS + 2, "live_len {} exceeds bound {}", len, READERS + 2);
             barrier.wait();                                 // done
         }
 

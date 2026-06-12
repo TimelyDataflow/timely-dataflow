@@ -1,23 +1,43 @@
 # `timely_communication::chain` design notes
 
-Per-writer, forward-linked, compacting chains: an intra-process all-reduce intended
-to eventually replace the Progcaster's intra-process leg. Lives at
-`communication/src/chain.rs`.
+A single multi-writer, forward-linked, compacting chain: an intra-process
+all-reduce intended to eventually replace the Progcaster's intra-process leg.
+Lives at `communication/src/chain.rs`.
+
+## Why multi-writer (the cancellation argument; why per-writer lost)
+
+The first version used per-writer chains (`Mesh<T>`: one `Chain` per worker, every
+reader sweeps all chains). This fails the primary goal — **cross-writer
+cancellation**. In progress traffic, one worker's `{(T, +1)}` is typically retired
+by another worker's `{(T, -1)}`. With per-writer chains those updates never meet:
+two workers sending `{(T, +1)}` and `{(T, -1)}` at distinct increasing `T` produce
+internally-incompressible content per chain whose union cancels to nothing.
+Compaction bounds the node *count* but not the *content*: the merged values grow
+without bound, and a laggard does `O(elapsed sends)` fold work to catch up.
+
+With one shared multi-writer chain, atoms from all writers meet at the shared head,
+where `merge_from` cancels them. Accumulated nodes hold only the *net* update, so a
+laggard's catch-up work — and the unread backlog's content — is bounded by the net,
+not by elapsed sends. This is why per-writer lost (maintainer-agreed decision).
+
+`Mesh<T>` is retained as a benchmarking comparison structure only; its docs mark
+the known cancellation pathology.
 
 ## Contract
 
-- A `Chain<T>` has one writer (`Writer<T>`, created by `Chain::new`) and any number
-  of readers (`Chain::reader`). Readers created later observe only later sends.
-- `Writer::send(v)` commits an atom. Every reader folds, exactly once, every atom
-  committed after its registration. Atoms may be merged with adjacent atoms (never
-  split) via `T: Chainable`, a commutative monoid (`fn merge_from(&mut self, &Self)`).
-  Commutativity is required because multiple chains and multiple readers impose no
-  cross-atom ordering.
-- Live state is bounded by `O(#readers)`, independent of send count, provided
-  readers occasionally `recv` (every `recv` and every reader drop compacts).
-- `Mesh<T>::new(writers)` bundles `W` chains: per-worker `Writer<T>` handles plus
-  `MeshReader<T>` handles (`Mesh::reader`) that sweep all chains. Network threads
-  are just more readers; a receiving network thread is one more writer.
+- A `Chain<T>` is a cloneable handle: any holder may `send` and create readers
+  (`Chain::reader`). Readers created later observe only later sends.
+- `Chain::send(&self, v)` commits an atom. Every reader folds, exactly once, every
+  atom committed after its registration. Atoms may be merged with adjacent atoms
+  (never split) via `T: Chainable`, a commutative monoid
+  (`fn merge_from(&mut self, &Self)`). Commutativity is required because multiple
+  writers and multiple readers impose no cross-atom ordering.
+- Live state is bounded by `O(#readers)` nodes, independent of send count, provided
+  readers occasionally `recv` (every `recv` and every reader drop compacts); node
+  content is the merged net of unread atoms.
+- `Mesh<T>::new(writers)` bundles `W` per-writer chains (comparison only): per-
+  worker `Chain<T>` send handles plus `MeshReader<T>` handles (`Mesh::reader`)
+  that sweep all chains.
 - `Reader::recv(&mut self, out: &mut T)` folds; `recv_with(f)` hands each atom to
   the caller; `is_caught_up()` is an O(1) peek (pin ptr == newest ptr).
 
@@ -31,10 +51,14 @@ holds `newest: Mutex<Arc<Node>>` (writer's append point) and `oldest:
 Mutex<Arc<Node>>` (compaction sweep origin; invariant: every pin is at or after
 `oldest`). Pins are RAII (`Held`), as in the prototype.
 
-Writer fast path: under the `newest` mutex and the newest node's payload write
-lock, if `holders == 0` merge in place (zero allocation); else allocate, link
-`old.next = new`, swap the pointer. The `holders` check happens under the payload
-*write* lock, which excludes concurrent pinning (see deviations).
+Send path (multi-writer): `send(&self, v)` locks the `newest` mutex — serializing
+concurrent writers and reader registration — then the newest node's payload write
+lock. If `holders == 0`, merge in place (zero allocation in steady state; this is
+where cross-writer cancellation happens); else allocate, link `old.next = new`,
+swap the pointer. Allocation occurs only when a reader has just caught up and
+pinned the head, so laggard *content* stays the accumulated net. The `holders`
+check happens under the payload *write* lock, which excludes concurrent pinning
+(see deviations).
 
 Reader walk: from its pin, hand-over-hand — pin and fold each successor under that
 successor's payload read lock, then drop the old pin. The fold frontier is thus
@@ -77,9 +101,14 @@ otherwise drain a value into a just-unlinked node).
 2. `newest` mutex,
 3. node payload `RwLock`s in chain order (older before newer), at most two at once.
 
-Writer: (2) then (3, newest node only). Reader registration: (2) only. Walk: (3),
+Send: (2) then (3, newest node only) — taking the newest node's payload write lock
+while still holding the `newest` mutex is consistent with the order (2 before 3),
+and is required: releasing (2) first would let another writer swap the newest
+pointer between the check and the merge. Reader registration: (2) only. Walk: (3),
 one at a time. Sweep: (1), then (2) briefly (released before node locks), then (3)
-pairwise in order. No cycle.
+pairwise in order. No cycle. Concurrent `send`s serialize on (2), which is the
+multi-writer contention point (see chain-bench-results.md for how it trends with
+worker count).
 
 ## Deviations from the brief
 
@@ -118,10 +147,14 @@ pairwise in order. No cycle.
 
 ## Test results
 
-`cargo test -p timely_communication`: 19 passed (11 new chain tests, including the
-randomized stress test with 3 writer threads, 3 active reader threads, and one
-laggard over 50 phases, asserting per-chain length ≤ #readers + 2 at quiescent
-checkpoints and exact final totals; also a fast-path test asserting chain length is
-exactly 2 — the pinned caught-up node plus one accumulating newest — after N sends
-with no recv). `cargo test -p timely`: all pass, untouched. Clippy (workspace lint
-set): no findings on the new module.
+`cargo test -p timely_communication`: all pass (15 chain tests, including: the
+randomized stress test with 3 writer threads sharing one chain, 3 active reader
+threads, and one laggard over 50 phases, asserting chain length ≤ #readers + 2 at
+quiescent checkpoints and exact final totals; concurrent-writers tests with one
+and with many readers recv-ing while writers send; a cross-writer cancellation
+test asserting that 200k paired ±v sends from two handles leave live_len ≤ 2 and
+at most one folded atom for a laggard; and a fast-path test asserting chain length
+is exactly 2 — the pinned caught-up node plus one accumulating newest — after N
+sends with no recv). `cargo test -p timely`: all pass, untouched. Clippy
+(workspace lint set): no findings on the new module (one pre-existing warning in
+zero_copy/tcp.rs, untouched).
