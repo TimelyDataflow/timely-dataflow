@@ -835,13 +835,9 @@ impl<K: Ord, V> BinaryRuns<K, V> {
     fn insert_batch(&mut self, batch: Vec<(K, V)>) {
         if batch.is_empty() { return; }
         let total = self.entries.len() + batch.len();
-        // Runs at the common leading bits of the old and new lengths are unaffected.
-        let mut stable = 0;
-        for bit in (0..usize::BITS).rev() {
-            let size = 1usize << bit;
-            if (self.entries.len() & size) != (total & size) { break; }
-            stable += total & size;
-        }
+        // Runs at the leading bits on which the lengths agree are unaffected; mask
+        // away the highest differing bit (the xor is non-zero) and below.
+        let stable = total & !(usize::MAX >> (self.entries.len() ^ total).leading_zeros());
         self.entries.extend(batch);
         self.entries[stable..].sort_unstable_by(|x, y| x.0.cmp(&y.0));
     }
