@@ -133,7 +133,7 @@ impl<T: Timestamp, C: Container> Capture<T, C> for Stream<'_, T, C> {
                 if !progress.frontiers[0].is_empty() {
                     // transmit any frontier progress.
                     let to_send = ::std::mem::replace(&mut progress.frontiers[0], ChangeBatch::new());
-                    event_pusher.push(Event::Progress(to_send.into_inner().to_vec()));
+                    event_pusher.push(Event::Progress(to_send.into_inner().into_vec()));
                 }
 
                 // turn each received message into an event.
