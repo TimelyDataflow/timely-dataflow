@@ -657,7 +657,12 @@ impl<T: Timestamp> PerOperatorState<T> {
         let outputs = scope.outputs();
         let notify = scope.notify_me().to_vec();
 
-        let (internal_summary, shared_progress, operator) = scope.initialize();
+        let (mut internal_summary, shared_progress, operator) = scope.initialize();
+
+        // Restore canonical form for summaries built by out-of-order insertions.
+        for ports in internal_summary.iter_mut() {
+            ports.consolidate();
+        }
 
         if let Some(l) = summary_logging {
             l.log(crate::logging::OperatesSummaryEvent {

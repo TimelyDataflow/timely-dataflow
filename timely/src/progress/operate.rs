@@ -77,49 +77,104 @@ pub enum FrontierInterest {
 /// Operator internal connectivity, from inputs to outputs.
 pub type Connectivity<TS> = Vec<PortConnectivity<TS>>;
 /// Internal connectivity from one port to any number of opposing ports.
+///
+/// Represented as a list of `(port, antichain)` pairs. When `dirty` is unset the
+/// list is sorted by port, ports are distinct, and no antichain is empty; reads
+/// (`get`, `iter_ports`) require this canonical form. Mutations (`insert`,
+/// `add_port`) append, and keep the canonical form when ports arrive in
+/// non-decreasing order (the common case at all build sites); out-of-order
+/// mutations set `dirty`, and a call to `consolidate` restores the canonical
+/// form by sorting and merging duplicate ports (robustly `O(n log n)` for any
+/// insertion order).
 #[derive(serde::Serialize, serde::Deserialize, columnar::Columnar, Debug, Clone, Eq, PartialEq)]
 pub struct PortConnectivity<TS> {
-    tree: std::collections::BTreeMap<usize, Antichain<TS>>,
+    /// Pairs of port and path summary antichain.
+    entries: Vec<(usize, Antichain<TS>)>,
+    /// Set when `entries` may be unsorted or contain duplicate ports.
+    dirty: bool,
 }
 
 impl<TS> Default for PortConnectivity<TS> {
     fn default() -> Self {
-        Self { tree: std::collections::BTreeMap::new() }
+        Self { entries: Vec::new(), dirty: false }
     }
 }
 
 impl<TS> PortConnectivity<TS> {
-    /// Inserts an element by reference, ensuring that the index exists.
-    pub fn insert(&mut self, index: usize, element: TS) -> bool where TS : crate::PartialOrder {
-        self.tree.entry(index).or_default().insert(element)
-    }
-    /// Inserts an element by reference, ensuring that the index exists.
-    pub fn insert_ref(&mut self, index: usize, element: &TS) -> bool where TS : crate::PartialOrder + Clone {
-        self.tree.entry(index).or_default().insert_ref(element)
-    }
-    /// Introduces a summary for `port`. Panics if a summary already exists.
-    pub fn add_port(&mut self, port: usize, summary: Antichain<TS>) {
-        if !summary.is_empty() {
-            let prior = self.tree.insert(port, summary);
-            assert!(prior.is_none());
+    /// Inserts a summary element for `index`, merging with any existing antichain at `index`.
+    pub fn insert(&mut self, index: usize, element: TS) where TS : crate::PartialOrder {
+        if !self.dirty {
+            match self.entries.last_mut() {
+                Some((port, antichain)) if *port == index => { antichain.insert(element); return; }
+                Some((port, _)) if *port > index => { self.dirty = true; }
+                _ => { }
+            }
         }
-        else {
-            assert!(self.tree.remove(&port).is_none());
+        self.entries.push((index, Antichain::from_elem(element)));
+    }
+    /// Introduces a summary for `port`, which must not already have one.
+    ///
+    /// Panics if a summary already exists for `port`, when this can be cheaply detected
+    /// (ports added in non-decreasing order); otherwise duplicate additions are merged
+    /// by antichain insertion at the next `consolidate`.
+    pub fn add_port(&mut self, port: usize, summary: Antichain<TS>) {
+        if summary.is_empty() { return; }
+        if !self.dirty {
+            match self.entries.last() {
+                Some((last, _)) if *last == port => { panic!("add_port: summary already exists for port {}", port); }
+                Some((last, _)) if *last > port => { self.dirty = true; }
+                _ => { }
+            }
+        }
+        self.entries.push((port, summary));
+    }
+    /// Restores the canonical (sorted, distinct, non-empty) form after out-of-order mutations.
+    ///
+    /// Duplicate ports are merged by antichain insertion, whose result is independent of
+    /// the order in which elements were introduced.
+    pub fn consolidate(&mut self) where TS : crate::PartialOrder {
+        if self.dirty {
+            let mut entries = std::mem::take(&mut self.entries);
+            entries.sort_unstable_by_key(|(port, _)| *port);
+            for (port, summary) in entries {
+                match self.entries.last_mut() {
+                    Some((last, antichain)) if *last == port => {
+                        for element in summary { antichain.insert(element); }
+                    }
+                    _ => { self.entries.push((port, summary)); }
+                }
+            }
+            self.entries.retain(|(_, antichain)| !antichain.is_empty());
+            self.dirty = false;
         }
     }
     /// Borrowing iterator of port identifiers and antichains.
+    ///
+    /// Requires the canonical form (see `consolidate`).
     pub fn iter_ports(&self) -> impl Iterator<Item = (usize, &Antichain<TS>)> {
-        self.tree.iter().map(|(o,p)| (*o, p))
+        debug_assert!(!self.dirty, "PortConnectivity read while unconsolidated");
+        self.entries.iter().map(|(o,p)| (*o, p))
     }
     /// Returns the associated path summary, if it exists.
+    ///
+    /// Requires the canonical form (see `consolidate`).
     pub fn get(&self, index: usize) -> Option<&Antichain<TS>> {
-        self.tree.get(&index)
+        debug_assert!(!self.dirty, "PortConnectivity read while unconsolidated");
+        self.entries
+            .binary_search_by_key(&index, |(port, _)| *port)
+            .ok()
+            .map(|position| &self.entries[position].1)
     }
 }
 
-impl<TS> FromIterator<(usize, Antichain<TS>)> for PortConnectivity<TS> {
+impl<TS: crate::PartialOrder> FromIterator<(usize, Antichain<TS>)> for PortConnectivity<TS> {
     fn from_iter<T>(iter: T) -> Self where T: IntoIterator<Item = (usize, Antichain<TS>)> {
-        Self { tree: iter.into_iter().filter(|(_,p)| !p.is_empty()).collect() }
+        let mut result = Self {
+            entries: iter.into_iter().filter(|(_,p)| !p.is_empty()).collect(),
+            dirty: true,
+        };
+        result.consolidate();
+        result
     }
 }
 

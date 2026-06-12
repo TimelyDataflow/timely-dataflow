@@ -74,7 +74,7 @@
 //! assert_eq!(results[2], ((Location::new_target(2, 0), 17), -1));
 //! ```
 
-use std::collections::{BinaryHeap, HashMap, VecDeque};
+use std::collections::{BinaryHeap, HashMap};
 use std::cmp::Reverse;
 
 use columnar::{Vecs, Index as ColumnarIndex};
@@ -84,7 +84,7 @@ use crate::progress::{Source, Target};
 use crate::progress::ChangeBatch;
 use crate::progress::{Location, Port};
 use crate::progress::operate::{Connectivity, PortConnectivity};
-use crate::progress::frontier::MutableAntichain;
+use crate::progress::frontier::{Antichain, MutableAntichain};
 use crate::progress::timestamp::PathSummary;
 
 /// Build a `Vecs<Vecs<Vec<S>>>` from nested iterators.
@@ -173,7 +173,12 @@ impl<T: Timestamp> Builder<T> {
     /// Add links internal to operators.
     ///
     /// This method overwrites any existing summary, instead of anything more sophisticated.
-    pub fn add_node(&mut self, index: usize, inputs: usize, outputs: usize, summary: Connectivity<T::Summary>) {
+    pub fn add_node(&mut self, index: usize, inputs: usize, outputs: usize, mut summary: Connectivity<T::Summary>) {
+
+        // Restore canonical form for summaries built by out-of-order insertions.
+        for ports in summary.iter_mut() {
+            ports.consolidate();
+        }
 
         // Assert that all summaries exist.
         debug_assert_eq!(inputs, summary.len());
@@ -777,93 +782,177 @@ impl<T:Timestamp> Tracker<T> {
     }
 }
 
+/// Merges two sorted lists with disjoint keys into one sorted list.
+fn merge_disjoint<K: Ord, V>(a: Vec<(K, V)>, b: Vec<(K, V)>) -> Vec<(K, V)> {
+    let mut result = Vec::with_capacity(a.len() + b.len());
+    let mut a = a.into_iter().peekable();
+    let mut b = b.into_iter().peekable();
+    loop {
+        match (a.peek(), b.peek()) {
+            (Some(x), Some(y)) => {
+                if x.0 < y.0 { result.push(a.next().unwrap()); }
+                else { result.push(b.next().unwrap()); }
+            }
+            (Some(_), None) => { result.push(a.next().unwrap()); }
+            (None, Some(_)) => { result.push(b.next().unwrap()); }
+            (None, None) => { break; }
+        }
+    }
+    result
+}
+
 /// Determines summaries from locations to scope outputs.
 ///
 /// Specifically, for each location whose node identifier is non-zero, we compile
 /// the summaries along which they can reach each output.
 ///
 /// Graph locations may be missing from the output, in which case they have no
-/// paths to scope outputs.
+/// paths to scope outputs. The result is sorted by location.
 fn summarize_outputs<T: Timestamp>(
     nodes: &[Connectivity<T::Summary>],
     edges: &[Vec<Vec<Target>>],
-    ) -> HashMap<Location, PortConnectivity<T::Summary>>
+    ) -> Vec<(Location, PortConnectivity<T::Summary>)>
 {
     // A reverse edge map, to allow us to walk back up the dataflow graph.
-    let mut reverse = HashMap::new();
+    // Sorted by target location; each target should have at most one source.
+    let mut reverse_edges = Vec::new();
     for (node, outputs) in edges.iter().enumerate() {
         for (output, targets) in outputs.iter().enumerate() {
             for target in targets.iter() {
-                reverse.insert(
+                reverse_edges.push((
                     Location::from(*target),
                     Location { node, port: Port::Source(output) }
-                );
+                ));
             }
         }
     }
+    reverse_edges.sort_unstable();
+    reverse_edges.dedup();
 
     // A reverse map from operator outputs to inputs, along their internal summaries.
-    let mut reverse_internal: HashMap<_, Vec<_>> = HashMap::new();
+    // Sorted by source location, so that the entries for a location are contiguous.
+    let mut reverse_internal = Vec::new();
     for (node, connectivity) in nodes.iter().enumerate() {
         for (input, outputs) in connectivity.iter().enumerate() {
             for (output, summary) in outputs.iter_ports() {
-                reverse_internal
-                    .entry(Location::new_source(node, output))
-                    .or_default()
-                    .push((input, summary));
+                reverse_internal.push((Location::new_source(node, output), input, summary));
             }
         }
     }
+    reverse_internal.sort_unstable_by(|x, y| (x.0, x.1).cmp(&(y.0, y.1)));
 
-    let mut results: HashMap<Location, PortConnectivity<T::Summary>> = HashMap::new();
-    let mut worklist = VecDeque::<(Location, usize, T::Summary)>::new();
+    // Accumulated summaries to scope outputs, as a sequence of sorted lists keyed by
+    // `(location, output)`. The lists hold disjoint keys and geometrically increasing
+    // sizes (towards the front): novel keys are introduced as a new list, and lists of
+    // comparable sizes are merged. This keeps key introduction amortized logarithmic
+    // and lookups `O(log^2 n)`, without ever rebuilding one large map per round.
+    let mut levels: Vec<Vec<((Location, usize), Antichain<T::Summary>)>> = Vec::new();
 
-    let outputs =
+    // Round-based (semi-naive) fixed point. Each round walks reverse edges and reverse
+    // internal summaries from the triples that changed last round, and the proposals
+    // that improve the accumulated antichains form the next round's frontier.
+    // The scope may have no outputs, in which case we can do no work.
+    let mut frontier: Vec<(Location, usize, T::Summary)> =
     edges
         .iter()
         .flat_map(|x| x.iter())
         .flat_map(|x| x.iter())
-        .filter(|target| target.node == 0);
+        .filter(|target| target.node == 0)
+        .map(|target| (Location::from(*target), target.port, Default::default()))
+        .collect();
 
-    // The scope may have no outputs, in which case we can do no work.
-    for output_target in outputs {
-        worklist.push_back((Location::from(*output_target), output_target.port, Default::default()));
-    }
+    let mut proposals: Vec<((Location, usize), T::Summary)> = Vec::new();
 
     // Loop until we stop discovering novel reachability paths.
-    while let Some((location, output, summary)) = worklist.pop_front() {
-        match location.port {
+    while !frontier.is_empty() {
 
-            // This is an output port of an operator, or a scope input.
-            // We want to crawl up the operator, to its inputs.
-            Port::Source(_output_port) => {
-                if let Some(inputs) = reverse_internal.get(&location) {
-                    for (input_port, operator_summary) in inputs.iter() {
+        // Collect proposed summaries from the triples changed last round.
+        for (location, output, summary) in frontier.drain(..) {
+            match location.port {
+
+                // This is an output port of an operator, or a scope input.
+                // We want to crawl up the operator, to its inputs.
+                Port::Source(_output_port) => {
+                    let start = reverse_internal.partition_point(|(source, _, _)| *source < location);
+                    let inputs = reverse_internal[start..].iter().take_while(|(source, _, _)| *source == location);
+                    for (_, input_port, operator_summary) in inputs {
                         let new_location = Location::new_target(location.node, *input_port);
                         for op_summary in operator_summary.elements().iter() {
                             if let Some(combined) = op_summary.followed_by(&summary) {
-                                if results.entry(new_location).or_default().insert_ref(output, &combined) {
-                                    worklist.push_back((new_location, output, combined));
-                                }
+                                proposals.push(((new_location, output), combined));
                             }
                         }
                     }
                 }
-            }
 
-            // This is an input port of an operator, or a scope output.
-            // We want to walk back the edges leading to it.
-            Port::Target(_port) => {
-                // Each target should have (at most) one source.
-                if let Some(&source) = reverse.get(&location) {
-                    if results.entry(source).or_default().insert_ref(output, &summary) {
-                        worklist.push_back((source, output, summary));
+                // This is an input port of an operator, or a scope output.
+                // We want to walk back the (unique) edge leading to it.
+                Port::Target(_port) => {
+                    if let Ok(index) = reverse_edges.binary_search_by_key(&location, |(target, _)| *target) {
+                        proposals.push(((reverse_edges[index].1, output), summary));
                     }
                 }
-            },
+            }
+        }
+
+        // Merge the batch of proposals into the accumulated summaries. Proposals which
+        // improve an antichain (in an order-independent sense) seed the next round.
+        proposals.sort_unstable_by(|x, y| x.0.cmp(&y.0));
+        let mut fresh: Vec<((Location, usize), Antichain<T::Summary>)> = Vec::new();
+        for ((location, output), summary) in proposals.drain(..) {
+            // Find any existing antichain for this key: consecutive sorted proposals
+            // with a novel key accumulate in `fresh`, others live in some level.
+            let existing =
+            if fresh.last().map(|(key, _)| *key == (location, output)).unwrap_or(false) {
+                fresh.last_mut().map(|(_, antichain)| antichain)
+            }
+            else {
+                levels.iter_mut().find_map(|level| {
+                    match level.binary_search_by_key(&(location, output), |(key, _)| *key) {
+                        Ok(index) => Some(&mut level[index].1),
+                        Err(_) => None,
+                    }
+                })
+            };
+            if let Some(antichain) = existing {
+                if antichain.insert_ref(&summary) {
+                    frontier.push((location, output, summary));
+                }
+            }
+            else {
+                frontier.push((location, output, summary.clone()));
+                fresh.push(((location, output), Antichain::from_elem(summary)));
+            }
+        }
+
+        // Introduce novel keys as a new level, restoring geometric level sizes.
+        if !fresh.is_empty() {
+            levels.push(fresh);
+            while levels.len() > 1 && levels[levels.len()-2].len() <= 2 * levels[levels.len()-1].len() {
+                let upper = levels.pop().unwrap();
+                let lower = levels.pop().unwrap();
+                levels.push(merge_disjoint(lower, upper));
+            }
         }
     }
 
+    // Merge all levels into one sorted list, and group it by location.
+    let mut merged = levels.pop().unwrap_or_default();
+    while let Some(level) = levels.pop() {
+        merged = merge_disjoint(level, merged);
+    }
+
+    let mut results: Vec<(Location, PortConnectivity<T::Summary>)> = Vec::new();
+    for ((location, output), antichain) in merged {
+        match results.last_mut() {
+            Some((last, connectivity)) if *last == location => { connectivity.add_port(output, antichain); }
+            _ => {
+                let mut connectivity = PortConnectivity::default();
+                connectivity.add_port(output, antichain);
+                results.push((location, connectivity));
+            }
+        }
+    }
     results
 }
 
