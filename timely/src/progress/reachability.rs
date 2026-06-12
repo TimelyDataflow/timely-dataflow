@@ -939,28 +939,28 @@ fn summarize_outputs<T: Timestamp>(
             }
         }
 
-        // Merge the batch of proposals into the accumulated summaries. Proposals which
-        // improve an antichain (in an order-independent sense) seed the next round.
+        // Merge the batch of proposals into the accumulated summaries. Proposals are
+        // first collapsed per key into an antichain, so that only elements novel to
+        // the accumulated antichain (in an order-independent sense) seed the next round.
         proposals.sort_unstable_by(|x, y| x.0.cmp(&y.0));
         let mut fresh: Vec<((Location, usize), Antichain<T::Summary>)> = Vec::new();
-        for ((location, output), summary) in proposals.drain(..) {
-            // Find any existing antichain for this key: consecutive sorted proposals
-            // with a novel key accumulate in `fresh`, others live in some level.
-            let existing =
-            if fresh.last().map(|(key, _)| *key == (location, output)).unwrap_or(false) {
-                fresh.last_mut().map(|(_, antichain)| antichain)
+        let mut iter = proposals.drain(..).peekable();
+        while let Some(((location, output), summary)) = iter.next() {
+            // Collapse this round's proposals for the key into one antichain.
+            let mut batch = Antichain::from_elem(summary);
+            while iter.peek().map(|(key, _)| *key == (location, output)).unwrap_or(false) {
+                batch.insert(iter.next().unwrap().1);
             }
-            else {
-                accumulated.get_mut(&(location, output))
-            };
-            if let Some(antichain) = existing {
-                if antichain.insert_ref(&summary) {
-                    todo.push((location, output, summary));
+            if let Some(antichain) = accumulated.get_mut(&(location, output)) {
+                for summary in batch {
+                    if antichain.insert_ref(&summary) {
+                        todo.push((location, output, summary));
+                    }
                 }
             }
             else {
-                todo.push((location, output, summary.clone()));
-                fresh.push(((location, output), Antichain::from_elem(summary)));
+                todo.extend(batch.elements().iter().map(|summary| (location, output, summary.clone())));
+                fresh.push(((location, output), batch));
             }
         }
 
@@ -969,10 +969,8 @@ fn summarize_outputs<T: Timestamp>(
     }
 
     // Merge all runs into one sorted list, and group it by location.
-    let merged = accumulated.into_sorted();
-
     let mut results: Vec<(Location, PortConnectivityBuilder<T::Summary>)> = Vec::new();
-    for ((location, output), antichain) in merged {
+    for ((location, output), antichain) in accumulated.into_sorted() {
         match results.last_mut() {
             Some((last, connectivity)) if *last == location => { connectivity.add_port(output, antichain); }
             _ => {
