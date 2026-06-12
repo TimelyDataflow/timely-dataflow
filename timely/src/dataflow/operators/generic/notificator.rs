@@ -317,14 +317,19 @@ impl<T: Timestamp> FrontierNotificator<T> {
             }
             self.pending.retain(|x| x.1 > 0);
 
-            for i in 0 .. self.pending.len() {
-                if frontiers.iter().all(|f| !f.less_equal(&self.pending[i].0)) {
-                    // TODO : This clones a capability, whereas we could move it instead.
-                    self.available.push(OrderReversed::new(self.pending[i].0.clone(), self.pending[i].1));
-                    self.pending[i].1 = 0;
+            // Move available capabilities rather than cloning them, which would
+            // tour a spurious increment and decrement through progress tracking.
+            // `available` is a heap, so the order disruption is harmless.
+            let mut index = 0;
+            while index < self.pending.len() {
+                if frontiers.iter().all(|f| !f.less_equal(&self.pending[index].0)) {
+                    let (capability, count) = self.pending.swap_remove(index);
+                    self.available.push(OrderReversed::new(capability, count));
+                }
+                else {
+                    index += 1;
                 }
             }
-            self.pending.retain(|x| x.1 > 0);
         }
     }
 
