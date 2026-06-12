@@ -1,7 +1,7 @@
 //! Types to build operators with general shapes.
 
 use std::rc::Rc;
-use std::cell::RefCell;
+use std::cell::{OnceCell, RefCell};
 use std::default::Default;
 
 use crate::progress::{ChangeBatch, Timestamp};
@@ -18,7 +18,7 @@ use crate::dataflow::operators::capability::Capability;
 use crate::dataflow::operators::generic::handles::{InputHandleCore, new_input_handle};
 use crate::dataflow::operators::generic::operator_info::OperatorInfo;
 use crate::dataflow::operators::generic::builder_raw::OperatorShape;
-use crate::progress::operate::{FrontierInterest, PortConnectivity};
+use crate::progress::operate::{FrontierInterest, PortConnectivity, PortConnectivityBuilder};
 
 use super::builder_raw::OperatorBuilder as OperatorBuilderRaw;
 
@@ -29,8 +29,10 @@ pub struct OperatorBuilder<'scope, T: Timestamp> {
     frontier: Vec<MutableAntichain<T>>,
     consumed: Vec<Rc<RefCell<ChangeBatch<T>>>>,
     internal: Rc<RefCell<Vec<Rc<RefCell<ChangeBatch<T>>>>>>,
-    /// For each input, a shared list of summaries to each output.
-    summaries: Vec<Rc<RefCell<PortConnectivity<<T as Timestamp>::Summary>>>>,
+    /// For each input, summaries to each output: a builder accumulating the
+    /// summaries during construction, and a shared cell that `build` freezes
+    /// them into for runtime readers (input handles and capabilities).
+    summaries: Vec<(Rc<OnceCell<PortConnectivity<<T as Timestamp>::Summary>>>, PortConnectivityBuilder<<T as Timestamp>::Summary>)>,
     produced: Vec<Rc<RefCell<ChangeBatch<T>>>>,
 }
 
@@ -81,8 +83,8 @@ impl<'scope, T: Timestamp> OperatorBuilder<'scope, T> {
         self.frontier.push(MutableAntichain::new());
         self.consumed.push(Rc::clone(input.consumed()));
 
-        let shared_summary = Rc::new(RefCell::new(connection.into_iter().collect()));
-        self.summaries.push(Rc::clone(&shared_summary));
+        let shared_summary = Rc::new(OnceCell::new());
+        self.summaries.push((Rc::clone(&shared_summary), connection.into_iter().collect()));
 
         new_input_handle(input, Rc::clone(&self.internal), shared_summary)
     }
@@ -115,13 +117,7 @@ impl<'scope, T: Timestamp> OperatorBuilder<'scope, T> {
         self.produced.push(Rc::clone(counter.produced()));
 
         for (input, entry) in connection {
-            // The summaries are shared with input handles (and through them, input
-            // capabilities), so we re-freeze the shared value in place rather than
-            // replace it: take the frozen value, extend it, and put the result back.
-            let mut shared = self.summaries[input].borrow_mut();
-            let mut builder = std::mem::take(&mut *shared).into_builder();
-            builder.add_port(new_output, entry);
-            *shared = builder.freeze();
+            self.summaries[input].1.add_port(new_output, entry);
         }
 
         (pushers::Output::new(counter, internal, new_output), stream)
@@ -174,11 +170,18 @@ impl<'scope, T: Timestamp> OperatorBuilder<'scope, T> {
     ///
     /// This method calls `build_typed` directly using a new closure, mirroring
     /// the variation in `L`, rather than forcing it to be reboxed via `build`.
-    pub fn build_reschedule_typed<B, L>(self, constructor: B)
+    pub fn build_reschedule_typed<B, L>(mut self, constructor: B)
     where
         B: FnOnce(Vec<Capability<T>>) -> L,
         L: FnMut(&[MutableAntichain<T>])->bool+'static
     {
+        // Freeze the per-input connectivity, now complete, for runtime readers.
+        for (cell, builder) in std::mem::take(&mut self.summaries) {
+            if cell.set(builder.freeze()).is_err() {
+                unreachable!("connectivity frozen before build");
+            }
+        }
+
         let mut logic = constructor(self.mint_capabilities());
 
         let mut bookkeeping = ProgressBookkeeping {

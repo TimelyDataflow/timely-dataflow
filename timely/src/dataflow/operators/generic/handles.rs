@@ -4,7 +4,7 @@
 //! the operator would with its input and output streams.
 
 use std::rc::Rc;
-use std::cell::RefCell;
+use std::cell::{OnceCell, RefCell};
 use std::collections::VecDeque;
 
 use crate::progress::Timestamp;
@@ -27,7 +27,7 @@ pub struct InputHandleCore<T: Timestamp, C, P: Pull<Message<T, C>>> {
     ///
     /// Each timestamp received through this input may only produce output timestamps
     /// greater or equal to the input timestamp subjected to at least one of these summaries.
-    summaries: Rc<RefCell<PortConnectivity<T::Summary>>>,
+    summaries: Rc<OnceCell<PortConnectivity<T::Summary>>>,
     /// Staged capabilities and containers.
     staging: VecDeque<(InputCapability<T>, C)>,
     staged: Vec<C>,
@@ -76,7 +76,7 @@ impl<T: Timestamp, C: Accountable, P: Pull<Message<T, C>>> InputHandleCore<T, C,
 pub fn new_input_handle<T: Timestamp, C: Accountable, P: Pull<Message<T, C>>>(
     pull_counter: PullCounter<T, C, P>,
     internal: Rc<RefCell<Vec<Rc<RefCell<ChangeBatch<T>>>>>>,
-    summaries: Rc<RefCell<PortConnectivity<T::Summary>>>,
+    summaries: Rc<OnceCell<PortConnectivity<T::Summary>>>,
 ) -> InputHandleCore<T, C, P> {
     InputHandleCore {
         pull_counter,
