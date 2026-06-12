@@ -166,7 +166,8 @@ impl<T: Timestamp> Capability<T> {
 // to send data and request notification at the associated timestamp.
 impl<T: Timestamp> Drop for Capability<T> {
     fn drop(&mut self) {
-        self.internal.borrow_mut().update(self.time.clone(), -1);
+        let time = ::std::mem::replace(&mut self.time, T::minimum());
+        self.internal.borrow_mut().update(time, -1);
     }
 }
 
