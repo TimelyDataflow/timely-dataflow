@@ -167,8 +167,9 @@ where
         // Child 0 has `inputs` outputs and `outputs` inputs, not yet connected.
         let summary = (0..outputs).map(|_| PortConnectivity::default()).collect();
         builder.add_node(0, outputs, inputs, summary);
-        for (index, child) in children.iter().enumerate().skip(1) {
-            builder.add_node(index, child.inputs, child.outputs, child.internal_summary.clone());
+        for (index, child) in children.iter_mut().enumerate().skip(1) {
+            let summary = std::mem::take(&mut child.internal_summary);
+            builder.add_node(index, child.inputs, child.outputs, summary);
         }
 
         for (source, target) in self.edge_stash {
@@ -618,7 +619,7 @@ struct PerOperatorState<T: Timestamp> {
 
     shared_progress: Rc<RefCell<SharedProgress<T>>>,
 
-    internal_summary: Connectivity<T::Summary>,   // cached result from initialize.
+    internal_summary: Connectivity<T::Summary>,   // from initialize; moved into the reachability builder.
 
     logging: Option<Logger>,
 }
