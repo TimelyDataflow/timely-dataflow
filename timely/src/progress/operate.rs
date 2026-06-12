@@ -153,6 +153,13 @@ impl<TS> Default for PortConnectivity<TS> {
     }
 }
 
+impl<TS> IntoIterator for PortConnectivity<TS> {
+    type Item = (usize, Antichain<TS>);
+    type IntoIter = std::vec::IntoIter<(usize, Antichain<TS>)>;
+    /// Consumes the connectivity, yielding each port and its antichain.
+    fn into_iter(self) -> Self::IntoIter { self.entries.into_iter() }
+}
+
 impl<TS> PortConnectivity<TS> {
     /// Borrowing iterator of port identifiers and antichains.
     pub fn iter_ports(&self) -> impl Iterator<Item = (usize, &Antichain<TS>)> {

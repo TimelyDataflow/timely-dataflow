@@ -579,10 +579,10 @@ impl<T:Timestamp> Tracker<T> {
         }
 
         // Build columnar nodes: Vecs<Vecs<Vec<(usize, T::Summary)>>>.
-        let nodes = build_nested_vecs(builder.nodes.iter().map(|connectivity| {
-            connectivity.iter().map(|port_conn| {
-                port_conn.iter_ports().flat_map(|(port, antichain)| {
-                    antichain.elements().iter().map(move |s| (port, s.clone()))
+        let nodes = build_nested_vecs(builder.nodes.into_iter().map(|connectivity| {
+            connectivity.into_iter().map(|port_conn| {
+                port_conn.into_iter().flat_map(|(port, antichain)| {
+                    antichain.into_iter().map(move |s| (port, s))
                 })
             })
         }));
@@ -593,17 +593,17 @@ impl<T:Timestamp> Tracker<T> {
         }));
 
         // Build columnar target and source summaries.
-        let target_summaries = build_nested_vecs(target_sum.iter().map(|ports| {
-            ports.iter().map(|port_conn| {
-                port_conn.iter_ports().flat_map(|(port, antichain)| {
-                    antichain.elements().iter().map(move |s| (port, s.clone()))
+        let target_summaries = build_nested_vecs(target_sum.into_iter().map(|ports| {
+            ports.into_iter().map(|port_conn| {
+                port_conn.into_iter().flat_map(|(port, antichain)| {
+                    antichain.into_iter().map(move |s| (port, s))
                 })
             })
         }));
-        let source_summaries = build_nested_vecs(source_sum.iter().map(|ports| {
-            ports.iter().map(|port_conn| {
-                port_conn.iter_ports().flat_map(|(port, antichain)| {
-                    antichain.elements().iter().map(move |s| (port, s.clone()))
+        let source_summaries = build_nested_vecs(source_sum.into_iter().map(|ports| {
+            ports.into_iter().map(|port_conn| {
+                port_conn.into_iter().flat_map(|(port, antichain)| {
+                    antichain.into_iter().map(move |s| (port, s))
                 })
             })
         }));

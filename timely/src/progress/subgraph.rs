@@ -566,9 +566,9 @@ where
         // with each element containing `self.outputs()` antichains regardless
         // of how long `self.scope_summary` is
         let mut internal_summary = vec![PortConnectivityBuilder::default(); self.inputs()];
-        for (input_idx, input) in self.scope_summary.iter().enumerate() {
-            for (output_idx, output) in input.iter_ports() {
-                for outer in output.elements().iter().cloned().map(TInner::summarize) {
+        for (input_idx, input) in std::mem::take(&mut self.scope_summary).into_iter().enumerate() {
+            for (output_idx, output) in input {
+                for outer in output.into_iter().map(TInner::summarize) {
                     internal_summary[input_idx].insert(output_idx, outer);
                 }
             }
