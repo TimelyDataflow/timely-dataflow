@@ -238,6 +238,9 @@ impl<T> Antichain<T> {
     ///```
     pub fn clear(&mut self) { self.elements.clear() }
 
+    /// Drains the elements, leaving the allocation for reuse.
+    pub fn drain(&mut self) -> smallvec::Drain<'_, [T; 1]> { self.elements.drain(..) }
+
     /// Sorts the elements so that comparisons between antichains can be made.
     pub fn sort(&mut self) where T: Ord { self.elements.sort() }
 

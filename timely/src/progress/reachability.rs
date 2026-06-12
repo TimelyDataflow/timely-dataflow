@@ -944,15 +944,16 @@ fn summarize_outputs<T: Timestamp>(
         // the accumulated antichain (in an order-independent sense) seed the next round.
         proposals.sort_unstable_by(|x, y| x.0.cmp(&y.0));
         let mut fresh: Vec<((Location, usize), Antichain<T::Summary>)> = Vec::new();
+        let mut batch: Antichain<T::Summary> = Antichain::new();
         let mut iter = proposals.drain(..).peekable();
         while let Some(((location, output), summary)) = iter.next() {
             // Collapse this round's proposals for the key into one antichain.
-            let mut batch = Antichain::from_elem(summary);
+            batch.insert(summary);
             while iter.peek().map(|(key, _)| *key == (location, output)).unwrap_or(false) {
                 batch.insert(iter.next().unwrap().1);
             }
             if let Some(antichain) = accumulated.get_mut(&(location, output)) {
-                for summary in batch {
+                for summary in batch.drain() {
                     if antichain.insert_ref(&summary) {
                         todo.push((location, output, summary));
                     }
@@ -960,7 +961,7 @@ fn summarize_outputs<T: Timestamp>(
             }
             else {
                 todo.extend(batch.elements().iter().map(|summary| (location, output, summary.clone())));
-                fresh.push(((location, output), batch));
+                fresh.push(((location, output), std::mem::take(&mut batch)));
             }
         }
 
