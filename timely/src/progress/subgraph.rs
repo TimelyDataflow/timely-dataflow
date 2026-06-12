@@ -762,14 +762,18 @@ impl<T: Timestamp> PerOperatorState<T> {
         for (output, internal) in shared_progress.internals.iter_mut().enumerate() {
             let source = Location::new_source(self.index, output);
             for (time, delta) in internal.drain() {
-                pointstamps.update((source, time.clone()), delta);
+                pointstamps.update((source, time), delta);
             }
         }
         for (output, produced) in shared_progress.produceds.iter_mut().enumerate() {
             for (time, delta) in produced.drain() {
-                for target in &self.edges[output] {
-                    pointstamps.update((Location::from(*target), time.clone()), delta);
-                    temp_active.push(Reverse(target.node));
+                if let Some((last, rest)) = self.edges[output].split_last() {
+                    for target in rest {
+                        pointstamps.update((Location::from(*target), time.clone()), delta);
+                        temp_active.push(Reverse(target.node));
+                    }
+                    pointstamps.update((Location::from(*last), time), delta);
+                    temp_active.push(Reverse(last.node));
                 }
             }
         }
