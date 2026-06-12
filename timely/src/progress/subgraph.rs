@@ -574,6 +574,11 @@ where
             }
         }
 
+        // Establish the canonical form required of `initialize` output.
+        for ports in internal_summary.iter_mut() {
+            ports.consolidate();
+        }
+
         debug_assert_eq!(
             internal_summary.len(),
             self.inputs(),
@@ -659,7 +664,9 @@ impl<T: Timestamp> PerOperatorState<T> {
 
         let (mut internal_summary, shared_progress, operator) = scope.initialize();
 
-        // Restore canonical form for summaries built by out-of-order insertions.
+        // Defense in depth: `initialize` is required to produce canonical connectivity
+        // (see `Operate::initialize`); consolidating here guards against foreign
+        // implementations that have not upheld that obligation.
         for ports in internal_summary.iter_mut() {
             ports.consolidate();
         }

@@ -241,7 +241,13 @@ where
             .iter_mut()
             .for_each(|output| output.update(T::minimum(), self.shape.peers as i64));
 
-        (self.summary.clone(), Rc::clone(&self.shared_progress), self)
+        // Establish the canonical form required of `initialize` output.
+        let mut summary = self.summary.clone();
+        for ports in summary.iter_mut() {
+            ports.consolidate();
+        }
+
+        (summary, Rc::clone(&self.shared_progress), self)
     }
 
     fn notify_me(&self) -> &[FrontierInterest] { &self.shape.notify }

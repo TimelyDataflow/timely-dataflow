@@ -53,6 +53,12 @@ pub trait Operate<T: Timestamp> {
     /// Importantly, it also indicates the initial internal capabilities for all of its outputs.
     /// This must happen at this moment, as it is the only moment where an operator is allowed to
     /// safely "create" capabilities without basing them on other, prior capabilities.
+    ///
+    /// The returned connectivity must be in canonical form: each `PortConnectivity` consolidated,
+    /// with ports sorted and distinct and antichains non-empty. This invariant is introduced here
+    /// and relied upon by all downstream consumers of the connectivity; implementations that
+    /// accumulate summaries out of port order should call `PortConnectivity::consolidate` before
+    /// returning.
     fn initialize(self: Box<Self>) -> (Connectivity<T::Summary>, Rc<RefCell<SharedProgress<T>>>, Box<dyn Schedule>);
 
     /// Indicates for each input whether the operator should be invoked when that input's frontier changes.
@@ -102,6 +108,8 @@ impl<TS> Default for PortConnectivity<TS> {
 
 impl<TS> PortConnectivity<TS> {
     /// Inserts a summary element for `index`, merging with any existing antichain at `index`.
+    ///
+    /// Equivalent to `add_port` with a single-element antichain.
     pub fn insert(&mut self, index: usize, element: TS) where TS : crate::PartialOrder {
         if !self.dirty {
             match self.entries.last_mut() {
@@ -112,16 +120,19 @@ impl<TS> PortConnectivity<TS> {
         }
         self.entries.push((index, Antichain::from_elem(element)));
     }
-    /// Introduces a summary for `port`, which must not already have one.
+    /// Introduces a summary for `port`, merging with any summary already present.
     ///
-    /// Panics if a summary already exists for `port`, when this can be cheaply detected
-    /// (ports added in non-decreasing order); otherwise duplicate additions are merged
-    /// by antichain insertion at the next `consolidate`.
-    pub fn add_port(&mut self, port: usize, summary: Antichain<TS>) {
+    /// Summaries for the same port are merged by antichain insertion, and describe the
+    /// union of the claimed paths. It is the builder's responsibility to introduce
+    /// multiple summaries for a port only when multiple paths exist.
+    pub fn add_port(&mut self, port: usize, summary: Antichain<TS>) where TS : crate::PartialOrder {
         if summary.is_empty() { return; }
         if !self.dirty {
-            match self.entries.last() {
-                Some((last, _)) if *last == port => { panic!("add_port: summary already exists for port {}", port); }
+            match self.entries.last_mut() {
+                Some((last, antichain)) if *last == port => {
+                    for element in summary { antichain.insert(element); }
+                    return;
+                }
                 Some((last, _)) if *last > port => { self.dirty = true; }
                 _ => { }
             }
