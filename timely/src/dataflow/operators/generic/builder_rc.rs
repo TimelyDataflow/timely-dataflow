@@ -29,9 +29,10 @@ pub struct OperatorBuilder<'scope, T: Timestamp> {
     frontier: Vec<MutableAntichain<T>>,
     consumed: Vec<Rc<RefCell<ChangeBatch<T>>>>,
     internal: Rc<RefCell<Vec<Rc<RefCell<ChangeBatch<T>>>>>>,
-    /// For each input, summaries to each output: a builder accumulating the
-    /// summaries during construction, and a shared cell that `build` freezes
-    /// them into for runtime readers (input handles and capabilities).
+    /// For each input, a shared cell from which input handles and capabilities
+    /// read the summaries to each output at runtime, and the builder in which
+    /// the summaries accumulate during construction. The cell is set once, from
+    /// the builder, when the operator is built.
     summaries: Vec<(Rc<OnceCell<PortConnectivity<<T as Timestamp>::Summary>>>, PortConnectivityBuilder<<T as Timestamp>::Summary>)>,
     produced: Vec<Rc<RefCell<ChangeBatch<T>>>>,
 }
@@ -177,9 +178,7 @@ impl<'scope, T: Timestamp> OperatorBuilder<'scope, T> {
     {
         // Freeze the per-input connectivity, now complete, for runtime readers.
         for (cell, builder) in std::mem::take(&mut self.summaries) {
-            if cell.set(builder.freeze()).is_err() {
-                unreachable!("connectivity frozen before build");
-            }
+            cell.set(builder.freeze()).expect("connectivity already frozen");
         }
 
         let mut logic = constructor(self.mint_capabilities());

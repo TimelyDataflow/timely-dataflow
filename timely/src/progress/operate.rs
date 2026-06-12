@@ -165,10 +165,6 @@ impl<TS> PortConnectivity<TS> {
             .ok()
             .map(|position| &self.entries[position].1)
     }
-    /// Recovers a builder, for further accumulation.
-    pub fn into_builder(self) -> PortConnectivityBuilder<TS> {
-        PortConnectivityBuilder { entries: self.entries }
-    }
 }
 
 impl<TS: crate::PartialOrder> FromIterator<(usize, Antichain<TS>)> for PortConnectivity<TS> {
