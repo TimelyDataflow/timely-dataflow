@@ -793,6 +793,77 @@ impl<T:Timestamp> Tracker<T> {
     }
 }
 
+/// A sorted map maintained as a single vector of power-of-two sorted runs.
+///
+/// The vector's length always reveals the run structure: the binary
+/// representation of the length, read from the high bit down, gives the
+/// sizes of the sorted runs in order. Adjacent runs may in fact be parts
+/// of larger sorted runs, but we make no attempt to claim those wins.
+///
+/// Keys are distinct across all runs. Batches of novel keys are introduced
+/// by merging trailing runs as in binary addition, which makes introduction
+/// amortized logarithmic per element, and lookups visit at most
+/// logarithmically many runs.
+struct BinaryRuns<K, V> { entries: Vec<(K, V)> }
+
+impl<K: Ord, V> Default for BinaryRuns<K, V> {
+    fn default() -> Self { Self { entries: Vec::new() } }
+}
+
+impl<K: Ord, V> BinaryRuns<K, V> {
+    /// A mutable reference to the value at `key`, if present.
+    fn get_mut(&mut self, key: &K) -> Option<&mut V> {
+        let mut position = None;
+        let mut offset = 0;
+        for bit in (0..usize::BITS).rev() {
+            let size = 1usize << bit;
+            if self.entries.len() & size != 0 {
+                let run = &self.entries[offset .. offset + size];
+                if let Ok(index) = run.binary_search_by(|(k, _)| k.cmp(key)) {
+                    position = Some(offset + index);
+                    break;
+                }
+                offset += size;
+            }
+        }
+        position.map(|index| &mut self.entries[index].1)
+    }
+
+    /// Introduces a sorted batch of keys distinct from each other and from those present.
+    fn insert_batch(&mut self, batch: Vec<(K, V)>) {
+        debug_assert!(batch.windows(2).all(|w| w[0].0 < w[1].0));
+        if batch.is_empty() { return; }
+        let total = self.entries.len() + batch.len();
+        // Runs at the common leading bits of the old and new lengths are unaffected.
+        let mut keep = 0;
+        for bit in (0..usize::BITS).rev() {
+            let size = 1usize << bit;
+            if (self.entries.len() & size) != (total & size) { break; }
+            keep += total & size;
+        }
+        // The remaining runs absorb the batch as in binary addition: the smallest
+        // run is always the lowest set bit of the current length.
+        let mut merged = batch;
+        while self.entries.len() > keep {
+            let size = 1usize << self.entries.len().trailing_zeros();
+            let run = self.entries.split_off(self.entries.len() - size);
+            merged = merge_disjoint(run, merged);
+        }
+        self.entries.append(&mut merged);
+    }
+
+    /// Merges all runs into one sorted vector.
+    fn into_sorted(mut self) -> Vec<(K, V)> {
+        let mut merged = Vec::new();
+        while !self.entries.is_empty() {
+            let size = 1usize << self.entries.len().trailing_zeros();
+            let run = self.entries.split_off(self.entries.len() - size);
+            merged = merge_disjoint(run, merged);
+        }
+        merged
+    }
+}
+
 /// Merges two sorted lists with disjoint keys into one sorted list.
 fn merge_disjoint<K: Ord, V>(a: Vec<(K, V)>, b: Vec<(K, V)>) -> Vec<(K, V)> {
     let mut result = Vec::with_capacity(a.len() + b.len());
@@ -847,12 +918,8 @@ fn summarize_outputs<T: Timestamp>(
     }
     reverse_internal.sort_unstable_by(|x, y| (x.0, x.1).cmp(&(y.0, y.1)));
 
-    // Accumulated summaries to scope outputs, as a sequence of sorted lists keyed by
-    // `(location, output)`. The lists hold disjoint keys and geometrically increasing
-    // sizes (towards the front): novel keys are introduced as a new list, and lists of
-    // comparable sizes are merged. This keeps key introduction amortized logarithmic
-    // and lookups `O(log^2 n)`, without ever rebuilding one large map per round.
-    let mut levels: Vec<Vec<((Location, usize), Antichain<T::Summary>)>> = Vec::new();
+    // Accumulated summaries to scope outputs, keyed by `(location, output)`.
+    let mut accumulated: BinaryRuns<(Location, usize), Antichain<T::Summary>> = BinaryRuns::default();
 
     // Round-based (semi-naive) fixed point. Each round walks reverse edges and reverse
     // internal summaries from the triples that changed last round, and the proposals
@@ -913,12 +980,7 @@ fn summarize_outputs<T: Timestamp>(
                 fresh.last_mut().map(|(_, antichain)| antichain)
             }
             else {
-                levels.iter_mut().find_map(|level| {
-                    match level.binary_search_by_key(&(location, output), |(key, _)| *key) {
-                        Ok(index) => Some(&mut level[index].1),
-                        Err(_) => None,
-                    }
-                })
+                accumulated.get_mut(&(location, output))
             };
             if let Some(antichain) = existing {
                 if antichain.insert_ref(&summary) {
@@ -931,22 +993,12 @@ fn summarize_outputs<T: Timestamp>(
             }
         }
 
-        // Introduce novel keys as a new level, restoring geometric level sizes.
-        if !fresh.is_empty() {
-            levels.push(fresh);
-            while levels.len() > 1 && levels[levels.len()-2].len() <= 2 * levels[levels.len()-1].len() {
-                let upper = levels.pop().unwrap();
-                let lower = levels.pop().unwrap();
-                levels.push(merge_disjoint(lower, upper));
-            }
-        }
+        // Introduce the novel keys.
+        accumulated.insert_batch(fresh);
     }
 
-    // Merge all levels into one sorted list, and group it by location.
-    let mut merged = levels.pop().unwrap_or_default();
-    while let Some(level) = levels.pop() {
-        merged = merge_disjoint(level, merged);
-    }
+    // Merge all runs into one sorted list, and group it by location.
+    let merged = accumulated.into_sorted();
 
     let mut results: Vec<(Location, PortConnectivityBuilder<T::Summary>)> = Vec::new();
     for ((location, output), antichain) in merged {
