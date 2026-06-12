@@ -798,17 +798,12 @@ fn merge_disjoint<K: Ord, V>(a: Vec<(K, V)>, b: Vec<(K, V)>) -> Vec<(K, V)> {
     let mut result = Vec::with_capacity(a.len() + b.len());
     let mut a = a.into_iter().peekable();
     let mut b = b.into_iter().peekable();
-    loop {
-        match (a.peek(), b.peek()) {
-            (Some(x), Some(y)) => {
-                if x.0 < y.0 { result.push(a.next().unwrap()); }
-                else { result.push(b.next().unwrap()); }
-            }
-            (Some(_), None) => { result.push(a.next().unwrap()); }
-            (None, Some(_)) => { result.push(b.next().unwrap()); }
-            (None, None) => { break; }
-        }
+    while let (Some(x), Some(y)) = (a.peek(), b.peek()) {
+        if x.0 < y.0 { result.push(a.next().unwrap()); }
+        else { result.push(b.next().unwrap()); }
     }
+    result.extend(a);
+    result.extend(b);
     result
 }
 
@@ -861,9 +856,9 @@ fn summarize_outputs<T: Timestamp>(
 
     // Round-based (semi-naive) fixed point. Each round walks reverse edges and reverse
     // internal summaries from the triples that changed last round, and the proposals
-    // that improve the accumulated antichains form the next round's frontier.
+    // that improve the accumulated antichains form the next round's work.
     // The scope may have no outputs, in which case we can do no work.
-    let mut frontier: Vec<(Location, usize, T::Summary)> =
+    let mut todo: Vec<(Location, usize, T::Summary)> =
     edges
         .iter()
         .flat_map(|x| x.iter())
@@ -875,10 +870,10 @@ fn summarize_outputs<T: Timestamp>(
     let mut proposals: Vec<((Location, usize), T::Summary)> = Vec::new();
 
     // Loop until we stop discovering novel reachability paths.
-    while !frontier.is_empty() {
+    while !todo.is_empty() {
 
         // Collect proposed summaries from the triples changed last round.
-        for (location, output, summary) in frontier.drain(..) {
+        for (location, output, summary) in todo.drain(..) {
             match location.port {
 
                 // This is an output port of an operator, or a scope input.
@@ -927,11 +922,11 @@ fn summarize_outputs<T: Timestamp>(
             };
             if let Some(antichain) = existing {
                 if antichain.insert_ref(&summary) {
-                    frontier.push((location, output, summary));
+                    todo.push((location, output, summary));
                 }
             }
             else {
-                frontier.push((location, output, summary.clone()));
+                todo.push((location, output, summary.clone()));
                 fresh.push(((location, output), Antichain::from_elem(summary)));
             }
         }
