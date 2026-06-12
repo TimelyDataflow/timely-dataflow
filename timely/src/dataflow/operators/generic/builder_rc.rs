@@ -183,6 +183,15 @@ impl<'scope, T: Timestamp> OperatorBuilder<'scope, T> {
 
         let mut logic = constructor(self.mint_capabilities());
 
+        // These vectors grew by `push` from empty, reserving capacity four; ports
+        // are few and the vectors live as long as the operator, so trim the excess.
+        // The trade is one reallocation per vector at build time for memory
+        // proportional to ports, rather than capacity, thereafter.
+        self.frontier.shrink_to_fit();
+        self.consumed.shrink_to_fit();
+        self.produced.shrink_to_fit();
+        self.internal.borrow_mut().shrink_to_fit();
+
         let mut bookkeeping = ProgressBookkeeping {
             frontier: self.frontier,
             consumed: self.consumed,
