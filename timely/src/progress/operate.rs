@@ -54,10 +54,7 @@ pub trait Operate<T: Timestamp> {
     /// This must happen at this moment, as it is the only moment where an operator is allowed to
     /// safely "create" capabilities without basing them on other, prior capabilities.
     ///
-    /// The returned connectivity must satisfy `Consolidate::is_consolidated`. This invariant is
-    /// introduced here and relied upon by all downstream consumers of the connectivity;
-    /// implementations that accumulate summaries out of port order should call
-    /// `Consolidate::consolidate` before returning.
+    /// The returned connectivity must satisfy `Consolidate::is_consolidated`.
     fn initialize(self: Box<Self>) -> (Connectivity<T::Summary>, Rc<RefCell<SharedProgress<T>>>, Box<dyn Schedule>);
 
     /// Indicates for each input whether the operator should be invoked when that input's frontier changes.
@@ -106,14 +103,8 @@ impl<TS: crate::PartialOrder> Consolidate for Connectivity<TS> {
 }
 /// Internal connectivity from one port to any number of opposing ports.
 ///
-/// Represented as a list of `(port, antichain)` pairs. When `dirty` is unset the
-/// list is sorted by port, ports are distinct, and no antichain is empty; reads
-/// (`get`, `iter_ports`) require this canonical form. Mutations (`insert`,
-/// `add_port`) append, and keep the canonical form when ports arrive in
-/// non-decreasing order (the common case at all build sites); out-of-order
-/// mutations set `dirty`, and a call to `consolidate` restores the canonical
-/// form by sorting and merging duplicate ports (robustly `O(n log n)` for any
-/// insertion order).
+/// Read methods (`get`, `iter_ports`) require a consolidated representation,
+/// which the `consolidate` method ensures.
 #[derive(serde::Serialize, serde::Deserialize, columnar::Columnar, Debug, Clone, Eq, PartialEq)]
 pub struct PortConnectivity<TS> {
     /// Pairs of port and path summary antichain.
@@ -133,20 +124,12 @@ impl<TS> PortConnectivity<TS> {
     ///
     /// Equivalent to `add_port` with a single-element antichain.
     pub fn insert(&mut self, index: usize, element: TS) where TS : crate::PartialOrder {
-        if !self.dirty {
-            match self.entries.last_mut() {
-                Some((port, antichain)) if *port == index => { antichain.insert(element); return; }
-                Some((port, _)) if *port > index => { self.dirty = true; }
-                _ => { }
-            }
-        }
-        self.entries.push((index, Antichain::from_elem(element)));
+        self.add_port(index, Antichain::from_elem(element));
     }
     /// Introduces a summary for `port`, merging with any summary already present.
     ///
     /// Summaries for the same port are merged by antichain insertion, and describe the
-    /// union of the claimed paths. It is the builder's responsibility to introduce
-    /// multiple summaries for a port only when multiple paths exist.
+    /// union of the claimed paths.
     pub fn add_port(&mut self, port: usize, summary: Antichain<TS>) where TS : crate::PartialOrder {
         if summary.is_empty() { return; }
         if !self.dirty {
