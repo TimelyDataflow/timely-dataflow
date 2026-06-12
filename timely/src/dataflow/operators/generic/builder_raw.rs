@@ -230,7 +230,7 @@ where
     fn outputs(&self) -> usize { self.shape.outputs }
 
     // announce internal topology as fully connected, and hold all default capabilities.
-    fn initialize(self: Box<Self>) -> (Connectivity<T::Summary>, Rc<RefCell<SharedProgress<T>>>, Box<dyn Schedule>) {
+    fn initialize(mut self: Box<Self>) -> (Connectivity<T::Summary>, Rc<RefCell<SharedProgress<T>>>, Box<dyn Schedule>) {
 
         // Request the operator to be scheduled at least once.
         self.activations.borrow_mut().activate(&self.address[..]);
@@ -242,7 +242,8 @@ where
             .iter_mut()
             .for_each(|output| output.update(T::minimum(), self.shape.peers as i64));
 
-        (self.summary.clone(), Rc::clone(&self.shared_progress), self)
+        // The summary is not read again; move it out rather than clone it.
+        (::std::mem::take(&mut self.summary), Rc::clone(&self.shared_progress), self)
     }
 
     fn notify_me(&self) -> &[FrontierInterest] { &self.shape.notify }
