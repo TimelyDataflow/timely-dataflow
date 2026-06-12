@@ -83,7 +83,7 @@ use crate::progress::Timestamp;
 use crate::progress::{Source, Target};
 use crate::progress::ChangeBatch;
 use crate::progress::{Location, Port};
-use crate::progress::operate::{Connectivity, PortConnectivity};
+use crate::progress::operate::{Connectivity, Consolidate, PortConnectivity};
 use crate::progress::frontier::{Antichain, MutableAntichain};
 use crate::progress::timestamp::PathSummary;
 
@@ -176,9 +176,9 @@ impl<T: Timestamp> Builder<T> {
     pub fn add_node(&mut self, index: usize, inputs: usize, outputs: usize, mut summary: Connectivity<T::Summary>) {
 
         // Restore canonical form for summaries built by out-of-order insertions.
-        for ports in summary.iter_mut() {
-            ports.consolidate();
-        }
+        // (`add_node` is a construction-time entry point, so unlike `initialize`
+        // it accepts unconsolidated input and canonicalizes it here.)
+        summary.consolidate();
 
         // Assert that all summaries exist.
         debug_assert_eq!(inputs, summary.len());

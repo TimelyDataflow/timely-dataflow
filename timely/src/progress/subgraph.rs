@@ -19,7 +19,7 @@ use crate::scheduling::activate::Activations;
 use crate::progress::frontier::{MutableAntichain, MutableAntichainFilter};
 use crate::progress::{Timestamp, Operate, operate::SharedProgress};
 use crate::progress::{Location, Port, Source, Target};
-use crate::progress::operate::{FrontierInterest, Connectivity, PortConnectivity};
+use crate::progress::operate::{FrontierInterest, Connectivity, Consolidate, PortConnectivity};
 use crate::progress::ChangeBatch;
 use crate::progress::broadcast::Progcaster;
 use crate::progress::reachability;
@@ -575,9 +575,7 @@ where
         }
 
         // Establish the canonical form required of `initialize` output.
-        for ports in internal_summary.iter_mut() {
-            ports.consolidate();
-        }
+        internal_summary.consolidate();
 
         debug_assert_eq!(
             internal_summary.len(),
@@ -667,9 +665,8 @@ impl<T: Timestamp> PerOperatorState<T> {
         // Defense in depth: `initialize` is required to produce canonical connectivity
         // (see `Operate::initialize`); consolidating here guards against foreign
         // implementations that have not upheld that obligation.
-        for ports in internal_summary.iter_mut() {
-            ports.consolidate();
-        }
+        debug_assert!(internal_summary.is_consolidated(), "`initialize` returned unconsolidated connectivity");
+        internal_summary.consolidate();
 
         if let Some(l) = summary_logging {
             l.log(crate::logging::OperatesSummaryEvent {

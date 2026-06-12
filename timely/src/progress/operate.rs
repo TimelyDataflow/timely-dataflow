@@ -54,11 +54,10 @@ pub trait Operate<T: Timestamp> {
     /// This must happen at this moment, as it is the only moment where an operator is allowed to
     /// safely "create" capabilities without basing them on other, prior capabilities.
     ///
-    /// The returned connectivity must be in canonical form: each `PortConnectivity` consolidated,
-    /// with ports sorted and distinct and antichains non-empty. This invariant is introduced here
-    /// and relied upon by all downstream consumers of the connectivity; implementations that
-    /// accumulate summaries out of port order should call `PortConnectivity::consolidate` before
-    /// returning.
+    /// The returned connectivity must satisfy `Consolidate::is_consolidated`. This invariant is
+    /// introduced here and relied upon by all downstream consumers of the connectivity;
+    /// implementations that accumulate summaries out of port order should call
+    /// `Consolidate::consolidate` before returning.
     fn initialize(self: Box<Self>) -> (Connectivity<T::Summary>, Rc<RefCell<SharedProgress<T>>>, Box<dyn Schedule>);
 
     /// Indicates for each input whether the operator should be invoked when that input's frontier changes.
@@ -82,6 +81,29 @@ pub enum FrontierInterest {
 
 /// Operator internal connectivity, from inputs to outputs.
 pub type Connectivity<TS> = Vec<PortConnectivity<TS>>;
+
+/// Canonical-form maintenance for connectivity.
+///
+/// `Connectivity` is an alias for `Vec<PortConnectivity<TS>>`, and this trait extends it
+/// with the per-port `consolidate`/`is_consolidated` verbs so that boundaries which require
+/// the canonical form (e.g. `Operate::initialize`) can state and establish it directly.
+pub trait Consolidate {
+    /// Restores the canonical form (see `PortConnectivity::consolidate`).
+    fn consolidate(&mut self);
+    /// True when in canonical form (see `PortConnectivity::is_consolidated`).
+    fn is_consolidated(&self) -> bool;
+}
+
+impl<TS: crate::PartialOrder> Consolidate for Connectivity<TS> {
+    fn consolidate(&mut self) {
+        for ports in self.iter_mut() {
+            ports.consolidate();
+        }
+    }
+    fn is_consolidated(&self) -> bool {
+        self.iter().all(|ports| ports.is_consolidated())
+    }
+}
 /// Internal connectivity from one port to any number of opposing ports.
 ///
 /// Represented as a list of `(port, antichain)` pairs. When `dirty` is unset the
@@ -138,6 +160,12 @@ impl<TS> PortConnectivity<TS> {
             }
         }
         self.entries.push((port, summary));
+    }
+    /// True when in canonical form: ports sorted and distinct, antichains non-empty.
+    ///
+    /// Reads (`get`, `iter_ports`) require this; `consolidate` restores it.
+    pub fn is_consolidated(&self) -> bool {
+        !self.dirty
     }
     /// Restores the canonical (sorted, distinct, non-empty) form after out-of-order mutations.
     ///

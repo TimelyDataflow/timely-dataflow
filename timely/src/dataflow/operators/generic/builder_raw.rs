@@ -12,7 +12,7 @@ use crate::scheduling::{Schedule, Activations};
 
 use crate::progress::{Source, Target};
 use crate::progress::{Timestamp, Operate, operate::SharedProgress, Antichain};
-use crate::progress::operate::{FrontierInterest, Connectivity, PortConnectivity};
+use crate::progress::operate::{FrontierInterest, Connectivity, Consolidate, PortConnectivity};
 use crate::Container;
 use crate::dataflow::{Stream, Scope, OperatorSlot};
 use crate::dataflow::channels::pushers::Tee;
@@ -242,12 +242,10 @@ where
             .for_each(|output| output.update(T::minimum(), self.shape.peers as i64));
 
         // Establish the canonical form required of `initialize` output.
-        let mut summary = self.summary.clone();
-        for ports in summary.iter_mut() {
-            ports.consolidate();
-        }
+        let mut this = self;
+        this.summary.consolidate();
 
-        (summary, Rc::clone(&self.shared_progress), self)
+        (this.summary.clone(), Rc::clone(&this.shared_progress), this)
     }
 
     fn notify_me(&self) -> &[FrontierInterest] { &self.shape.notify }
