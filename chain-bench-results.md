@@ -65,17 +65,100 @@ fast-path penalty overstates the real cost, and one real mitigation:
   rate, not update rate.
 - MPSC's advantage shrinks as payloads grow (it clones per peer; the chain
   writes once).
-- If contention still bites: **key-sharded chains** — K chains with shard =
-  hash(update key) % K. Cancellation pairs share their key by construction
-  (`(t,+1)` cancels `(t,-1)`), so sharding by key splits contention K ways
-  while preserving in-transit cancellation exactly. This is the
-  mimalloc-style sharding that fits this workload, unlike per-writer
-  sharding (Mesh), which destroys cancellation.
+- If contention still bites, the contention-relief options that *preserve
+  atomicity* are an aggregation tree (groups of workers share a leaf
+  structure, a representative folds each leaf into the parent — cancellation
+  compounds per level) or a writer-local stash with try-lock (delay a send,
+  never split it). Note: **key-sharding does not work here** — a single send
+  is a multi-key batch, and sharding by key would split one transmission
+  across shards, violating the "never break up a send" rule; sharding by
+  batch (per-writer, the Mesh) destroys cross-writer cancellation instead.
 
-Suggested next step: wire a `Progcaster` variant on the chain behind a
-config flag and measure on real workloads (event_driven at -w 4/8), where
-send cadence and payload shapes are honest; revisit sharding only if the
-head mutex shows up there.
+The real-workload and allocating-key follow-ups below were run after this
+synthetic pass. Their short version: on this 10-core machine the chain
+loses the throughput race but owns laggard work and backlog memory;
+allocating timestamps narrow the throughput gap in the predicted direction
+but do not close it here.
+
+## Real-workload measurements (experimental Progcaster on the chain)
+
+These numbers come from an **experimental `Progcaster` wiring not included in
+this branch** (a crude `TIMELY_PROGRESS_CHAIN=1` flag with a type-erased
+registry, kept out of the draft as too invasive to reveal — preserved
+separately for anyone who wants to reproduce). They are recorded here because
+the w=8 diagnosis is the most important finding. Flag off = the existing
+channel broadcast. Apple Silicon, 10 cores, release.
+
+**event_driven 1000×1000 (progress-heavy), rounds/sec:**
+
+| workers | off | on (chain) | ratio |
+|---|---|---|---|
+| 1 | 1.064M | 1.135M | +7% (chain) |
+| 2 | 565k | 272k → 336k* | −1.7× |
+| 4 | 220k | 62k → 74k* | −3.0× |
+| 8 | 86k | 13k | −6.6× |
+
+\* with the lock-free idle-recv fast path (commit fd7e5e6d); it helps the
+mid-range but not w=8.
+
+**pagerank 2M nodes / 10M edges (data-heavy), wall seconds:** flag off vs on
+is a wash — w=1/2 within noise, w=4 +2%, w=8 +3.4%. Progress is not the
+bottleneck here, as expected.
+
+**Why w=8 loses, diagnosed not guessed.** Three experiments: profiles show an
+*identical* function mix off vs on (no hot chain frame); an invocation-counter
+experiment shows *identical per-round counts* of schedule/send/recv (no
+activation amplification — the dirty-list dedup works); which leaves
+per-operation cost. The chain trades MPSC's pairwise-private contention
+(each queue cacheline shared by one writer + one reader) for globally shared
+cachelines (~12 shared-cacheline ops per recv vs MPSC's ~1). The 6× is the
+cost of having any shared meeting point, on a single socket, with no work
+between sends.
+
+## Allocating keys (modeling DD/MZ Pointstamp timestamps)
+
+`Box<[u64;3]>` keys: every clone allocates, every drop frees, possibly on a
+foreign thread — the cross-thread free traffic that motivated the chain at
+ETHZ scale years ago. Ledger excluded (its O(live-state) recv is too slow).
+
+**Scenario A throughput (sends/sec), N=8, 100% cancellation:**
+
+| structure | u64 | alloc | drop |
+|---|---|---|---|
+| mpsc | 1.45M | 0.77M | −47% |
+| mesh | 1.32M | 0.74M | −44% |
+| cells | 1.05M | 0.75M | −29% |
+| chain | 0.46M | 0.33M | −28% |
+
+The mechanism reproduces: clone-per-reader structures (mpsc, mesh) take ~1.5×
+the relative hit of write-once structures (chain, cells). MPSC's lead over the
+chain compresses 3.16× → 2.31× at N=8 (and 3.02× → 2.69× at N=4) — the gap
+shrinks with both worker count and allocation, pointing toward a crossover we
+cannot reach on 10 cores.
+
+**Scenario B laggard work (mean entries folded / recv), N=8 alloc:** chain
+2,179 (flat in N and key type); mesh 2,817; mpsc 13,845 (max 139k, latency to
+141 ms); cells 12,337. Allocation widens the chain's laggard moat.
+
+**Scenario C backlog (retained entries), N=8 alloc:** chain 266, cells 64,
+mesh 800k, mpsc 6.4M. Orders of magnitude, unchanged by key type.
+
+## Bottom line
+
+The chain is a tool for the laggard-and-memory regime, not a throughput win on
+a single socket. Its design goals are met decisively (bounded laggard work flat
+in N; backlog state orders of magnitude below channels), allocation only
+strengthens those and narrows the throughput loss, but the regime where it
+would *also* win throughput — many cores, NUMA, allocating timestamps — is the
+ETHZ setting this machine cannot reproduce. Recommended disposition: retain as
+a flagged, unmerged experiment; the decisive next test is the same matrix on a
+many-core Linux box.
+
+A surprise worth recording: **per-reader cells** (one accumulator cell per
+reader, all writers merge in place) match MPSC throughput, give the *best*
+backlog state (64 entries), but have MPSC-level laggard work — because the cell
+only consolidates on read, so it grows by raw appends between a laggard's rare
+reads. "MPSC that cancels at rest but not in flight."
 
 ## Full results
 
