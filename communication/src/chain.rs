@@ -197,6 +197,14 @@ struct ChainInner<T> {
     ///
     /// Invariant: every reader is pinned at or after `oldest`.
     oldest: Mutex<Arc<Node<T>>>,
+    /// A counter incremented by every send, for cheap change detection.
+    ///
+    /// Pollers comparing [`Chain::version`] against a remembered value can tell
+    /// "something may have been sent" without touching any chain lock. The counter
+    /// is a hint: a poller observing a stale value must have another occasion to
+    /// poll again (e.g. a bounded park), but a changed value reliably indicates
+    /// new content.
+    version: AtomicUsize,
 }
 
 impl<T: Chainable> ChainInner<T> {
@@ -302,6 +310,7 @@ impl<T: Chainable> Chain<T> {
         let inner = Arc::new(ChainInner {
             newest: Mutex::new(Arc::clone(&sentinel)),
             oldest: Mutex::new(sentinel),
+            version: AtomicUsize::new(0),
         });
         Chain { inner }
     }
@@ -334,6 +343,11 @@ impl<T: Chainable> Chain<T> {
             drop(payload);
             *newest = appended;
         }
+        // Bump the version only after the atom is committed (locks released or about
+        // to be): a poller observing the new version must be able to read the atom.
+        // Bumping before the commit invites a lost wakeup: the poller sees the new
+        // version, finds nothing on its walk, and latches the version anyway.
+        self.inner.version.fetch_add(1, Ordering::SeqCst);
     }
 
     /// Creates a new reader, which will observe exactly the atoms sent after this call.
@@ -343,14 +357,23 @@ impl<T: Chainable> Chain<T> {
         let newest = self.inner.newest.lock().expect("lock poisoned");
         newest.holders.fetch_add(1, Ordering::SeqCst);
         let pin = Held::pinned(Arc::clone(&newest));
+        // Latch the version before releasing the lock: sends after our pin bump
+        // the version past this value, so the reader's fast path cannot miss them.
+        let seen_version = self.inner.version.load(Ordering::SeqCst);
         drop(newest);
-        Reader { inner: Arc::clone(&self.inner), pin: Some(pin) }
+        Reader { inner: Arc::clone(&self.inner), pin: Some(pin), seen_version }
     }
 
     /// The number of nodes currently retained by the chain.
     ///
     /// A diagnostic; `O(length)`, and approximate under concurrent activity.
     pub fn live_len(&self) -> usize { self.inner.live_len() }
+
+    /// A counter incremented by every send: a lock-free change-detection hint.
+    ///
+    /// A changed value (relative to one remembered by the caller) reliably indicates
+    /// that atoms have been sent since; an unchanged value may be momentarily stale.
+    pub fn version(&self) -> usize { self.inner.version.load(Ordering::SeqCst) }
 }
 
 /// A reading endpoint of a [`Chain`].
@@ -360,6 +383,8 @@ impl<T: Chainable> Chain<T> {
 ///
 /// The `T: Chainable` bound on the type itself allows `Drop` to compact the chain.
 pub struct Reader<T: Chainable> {
+    /// The chain version this reader had folded everything up to (fast path).
+    seen_version: usize,
     inner: Arc<ChainInner<T>>,
     /// The reader's pin; `Some` except transiently during drop.
     pin: Option<Held<T>>,
@@ -377,9 +402,12 @@ impl<T: Chainable> Reader<T> {
     /// `logic` is invoked while a chain lock is held, and must not call back into
     /// this chain.
     pub fn recv_with(&mut self, mut logic: impl FnMut(&T)) {
-        // Compact the whole chain first: this is what keeps live state bounded,
-        // even when this reader is the laggard everyone else has moved past.
-        self.inner.sweep();
+        // Fast path: if no atom has been committed since we last caught up, there
+        // is nothing to fold and no pin will move, so no compaction can be due.
+        // A lock-free version compare keeps idle polling off the chain's locks.
+        let version = self.inner.version.load(Ordering::SeqCst);
+        if version == self.seen_version { return; }
+        let mut folded = false;
         // Walk forward from our pin, hand-over-hand: pin and fold each successor
         // before unpinning its predecessor, so compaction (which skips pinned nodes
         // and successors of pinned nodes) can never outrun our fold frontier.
@@ -387,7 +415,7 @@ impl<T: Chainable> Reader<T> {
             let pinned = &self.pin.as_ref().expect("pin present outside of drop").node;
             let next = pinned.payload.read().expect("lock poisoned").next.clone();
             // A node has no successor iff it is the chain's newest: we are caught up.
-            let Some(node) = next else { return };
+            let Some(node) = next else { break };
             {
                 // Pin and fold under the payload read lock: writers re-check
                 // `holders` under the payload write lock before merging in place,
@@ -402,6 +430,16 @@ impl<T: Chainable> Reader<T> {
             }
             // Re-pin at the folded node; dropping the old pin decrements its count.
             self.pin = Some(Held::pinned(node));
+            folded = true;
+        }
+        // Latch the version read at entry: atoms committed during the walk that we
+        // happened to fold are folded; any we missed left version past our latch.
+        self.seen_version = version;
+        // Compact only after a productive walk: our pin moved, which is the event
+        // that creates merge opportunities, and this is what keeps live state
+        // bounded even when this reader is the laggard everyone else moved past.
+        if folded {
+            self.inner.sweep();
         }
     }
 
