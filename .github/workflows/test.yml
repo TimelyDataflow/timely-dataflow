@@ -12,7 +12,7 @@ jobs:
     outputs:
       msrv: ${{ steps.msrv.outputs.msrv }}
     steps:
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@v7
       - id: msrv
         run: echo "msrv=$(grep '^rust-version' Cargo.toml | sed 's/.*"\(.*\)"/\1/')" >> "$GITHUB_OUTPUT"
 
@@ -30,7 +30,7 @@ jobs:
     name: cargo test on ${{ matrix.os }}, rust ${{ matrix.toolchain }}
     runs-on: ${{ matrix.os }}-latest
     steps:
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@v7
       - uses: actions-rust-lang/setup-rust-toolchain@v1
         with:
           toolchain: ${{ matrix.toolchain }}
@@ -44,7 +44,7 @@ jobs:
     name: Cargo clippy
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@v7
       - uses: actions-rust-lang/setup-rust-toolchain@v1
         with:
           components: clippy
@@ -64,7 +64,7 @@ jobs:
     name: Cargo check (wasm32-unknown-unknown)
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@v7
       - uses: actions-rust-lang/setup-rust-toolchain@v1
         with:
           target: wasm32-unknown-unknown
