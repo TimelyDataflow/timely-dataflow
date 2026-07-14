@@ -9,12 +9,28 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [0.31.0](https://github.com/TimelyDataflow/timely-dataflow/compare/timely-v0.30.0...timely-v0.31.0) - 2026-07-14
 
+This release continues excising monomorphization sprawl from the progress subsystem: `PortConnectivity`'s map becomes a sorted `Vec`, removing the last `BTreeMap` and `HashMap` from progress tracking (9.1% fewer LLVM lines on the `bfs` example), alongside clone and allocation trimming on hot paths.
+
+### Breaking changes
+
+- **`PortConnectivity` splits into a builder and a frozen reader**, and `Operate::initialize` now returns the frozen form. This type is largely internal; the surface change is below. ([#802](https://github.com/TimelyDataflow/timely-dataflow/pull/802), [#804](https://github.com/TimelyDataflow/timely-dataflow/pull/804))
+
+| 0.30 | 0.31 |
+| --- | --- |
+| `PortConnectivity::insert(i, e) -> bool` | `PortConnectivityBuilder::insert(i, e)` (no return) |
+| `PortConnectivity::insert_ref(i, &e) -> bool` | removed; build an `Antichain` and use `add_port` |
+| `PortConnectivity::add_port` (panics on duplicate port) | `PortConnectivityBuilder::add_port` (merges duplicate) |
+| `tree: BTreeMap<usize, Antichain>` field | gone; construct via `PortConnectivityBuilder::freeze()` |
+| `impl FromIterator for PortConnectivity` | `impl FromIterator for PortConnectivityBuilder` |
+| `get`, `iter_ports` | unchanged, on the frozen `PortConnectivity` |
+| — | `impl IntoIterator for PortConnectivity` (new, consuming) |
+
 ### Other
 
-- trim bookkeeping vector capacities at build ([#806](https://github.com/TimelyDataflow/timely-dataflow/pull/806))
-- Several instances of `.clone()` removed. ([#805](https://github.com/TimelyDataflow/timely-dataflow/pull/805))
-- Add a consuming iterator for PortConnectivity; move summaries rather than clone ([#804](https://github.com/TimelyDataflow/timely-dataflow/pull/804))
-- Replace `BTreeMap` in `PortConnectivity` with a sorted `Vec`; semi-naive iteration replacing in-place updates ([#802](https://github.com/TimelyDataflow/timely-dataflow/pull/802))
+- Removed all `BTreeMap` and `HashMap` from the progress subsystem: `is_acyclic` uses dense per-location in-degree counts, and `summarize_outputs` iterates semi-naively over binary-sized sorted runs. `bfs` example: 254,560 → 231,310 LLVM lines. ([#802](https://github.com/TimelyDataflow/timely-dataflow/pull/802))
+- Move rather than clone summaries in `Tracker::allocate_from` and `Subgraph::initialize`. ([#804](https://github.com/TimelyDataflow/timely-dataflow/pull/804))
+- Removed several clones on progress hot paths: `Capability::drop`, `FrontierNotificator` delivery, capture, `Progcaster::recv`, `builder_raw`. ([#805](https://github.com/TimelyDataflow/timely-dataflow/pull/805))
+- `builder_rc` trims the frontier/consumed/internal/produced bookkeeping vector capacities at build. ([#806](https://github.com/TimelyDataflow/timely-dataflow/pull/806))
 
 ## [0.30.0](https://github.com/TimelyDataflow/timely-dataflow/compare/timely-v0.29.0...timely-v0.30.0) - 2026-05-28
 
