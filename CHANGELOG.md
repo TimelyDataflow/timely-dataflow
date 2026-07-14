@@ -7,6 +7,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.31.0](https://github.com/TimelyDataflow/timely-dataflow/compare/timely-v0.30.0...timely-v0.31.0) - 2026-07-14
+
+### Other
+
+- trim bookkeeping vector capacities at build ([#806](https://github.com/TimelyDataflow/timely-dataflow/pull/806))
+- Several instances of `.clone()` removed. ([#805](https://github.com/TimelyDataflow/timely-dataflow/pull/805))
+- Add a consuming iterator for PortConnectivity; move summaries rather than clone ([#804](https://github.com/TimelyDataflow/timely-dataflow/pull/804))
+- Replace `BTreeMap` in `PortConnectivity` with a sorted `Vec`; semi-naive iteration replacing in-place updates ([#802](https://github.com/TimelyDataflow/timely-dataflow/pull/802))
+
 ## [0.30.0](https://github.com/TimelyDataflow/timely-dataflow/compare/timely-v0.29.0...timely-v0.30.0) - 2026-05-28
 
 This release adds opt-in spill-to-disk support for the zero-copy network allocator, makes `Bytes` `Sync` (a soundness fix), and continues trimming compile-time monomorphization sprawl.
