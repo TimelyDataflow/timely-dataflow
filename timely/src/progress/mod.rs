@@ -7,8 +7,10 @@ pub use self::subgraph::{Subgraph, SubgraphBuilder};
 pub use self::timestamp::{Timestamp, PathSummary};
 pub use self::change_batch::ChangeBatch;
 pub use self::frontier::Antichain;
+pub use self::stamp::Stamp;
 
 pub mod change_batch;
+pub mod stamp;
 pub mod frontier;
 pub mod timestamp;
 pub mod operate;

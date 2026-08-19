@@ -28,27 +28,32 @@ use std::fmt::{self, Debug};
 
 use crate::order::PartialOrder;
 use crate::progress::Timestamp;
-use crate::progress::ChangeBatch;
+use crate::progress::{ChangeBatch, Stamp};
 use crate::progress::operate::PortConnectivity;
 use crate::scheduling::Activations;
 use crate::dataflow::channels::pullers::counter::ConsumedGuard;
 
-/// An internal trait expressing the capability to send messages with a given timestamp.
+/// An internal trait expressing the capability to send messages with given timestamps.
 pub trait CapabilityTrait<T: Timestamp> {
-    /// The timestamp associated with the capability.
-    fn time(&self) -> &T;
+    /// The stamp of timestamps to attach to messages sent with this capability.
+    ///
+    /// Messages may only result in downstream work at times greater or equal to
+    /// some element of the stamp. An empty stamp makes no progress claims, and
+    /// such messages may be delivered after downstream frontiers have advanced
+    /// past all times in their contents.
+    fn stamp(&self) -> Stamp<T>;
     /// Validates that the capability is valid for a specific internal buffer and output port.
     fn valid_for_output(&self, query_buffer: &Rc<RefCell<ChangeBatch<T>>>, port: usize) -> bool;
 }
 
 impl<T: Timestamp, C: CapabilityTrait<T>> CapabilityTrait<T> for &C {
-    fn time(&self) -> &T { (**self).time() }
+    fn stamp(&self) -> Stamp<T> { (**self).stamp() }
     fn valid_for_output(&self, query_buffer: &Rc<RefCell<ChangeBatch<T>>>, port: usize) -> bool {
         (**self).valid_for_output(query_buffer, port)
     }
 }
 impl<T: Timestamp, C: CapabilityTrait<T>> CapabilityTrait<T> for &mut C {
-    fn time(&self) -> &T { (**self).time() }
+    fn stamp(&self) -> Stamp<T> { (**self).stamp() }
     fn valid_for_output(&self, query_buffer: &Rc<RefCell<ChangeBatch<T>>>, port: usize) -> bool {
         (**self).valid_for_output(query_buffer, port)
     }
@@ -66,7 +71,7 @@ pub struct Capability<T: Timestamp> {
 }
 
 impl<T: Timestamp> CapabilityTrait<T> for Capability<T> {
-    fn time(&self) -> &T { &self.time }
+    fn stamp(&self) -> Stamp<T> { Stamp::from_elem(self.time.clone()) }
     fn valid_for_output(&self, query_buffer: &Rc<RefCell<ChangeBatch<T>>>, _port: usize) -> bool {
         Rc::ptr_eq(&self.internal, query_buffer)
     }
@@ -246,7 +251,7 @@ pub struct InputCapability<T: Timestamp> {
 }
 
 impl<T: Timestamp> CapabilityTrait<T> for InputCapability<T> {
-    fn time(&self) -> &T { self.time() }
+    fn stamp(&self) -> Stamp<T> { self.stamp().clone() }
     fn valid_for_output(&self, query_buffer: &Rc<RefCell<ChangeBatch<T>>>, port: usize) -> bool {
         let summaries_borrow = self.summaries.get().expect("connectivity frozen at operator build");
         let internal_borrow = self.internal.borrow();
@@ -267,25 +272,35 @@ impl<T: Timestamp> InputCapability<T> {
         }
     }
 
+    /// The stamp of timestamps associated with the received message.
+    #[inline]
+    pub fn stamp(&self) -> &Stamp<T> {
+        self.consumed_guard.stamp()
+    }
+
     /// The timestamp associated with this capability.
+    ///
+    /// This method panics if the message's stamp is not a singleton, as is the case
+    /// when an upstream operator sends messages stamped by multiple timestamps, or by
+    /// none at all. Such messages must be accessed through [`InputCapability::stamp`].
     #[inline]
     pub fn time(&self) -> &T {
-        self.consumed_guard.time()
+        self.stamp().expect_singleton()
     }
 
     /// Delays capability for a specific output port.
     ///
-    /// Makes a new capability for a timestamp `new_time` greater or equal to the timestamp of
-    /// the source capability (`self`).
+    /// Makes a new capability for a timestamp `new_time` greater or equal to some element
+    /// of the stamp of the source capability (`self`).
     ///
-    /// This method panics if `self.time` is not less or equal to `new_time`.
+    /// This method panics if no element of `self.stamp()` is less or equal to `new_time`.
     pub fn delayed(&self, new_time: &T, output_port: usize) -> Capability<T> {
         use crate::progress::timestamp::PathSummary;
         if let Some(path) = self.summaries.get().expect("connectivity frozen at operator build").get(output_port) {
-            if path.iter().flat_map(|summary| summary.results_in(self.time())).any(|time| time.less_equal(new_time)) {
+            if self.stamp().iter().flat_map(|elem| path.iter().flat_map(move |summary| summary.results_in(elem))).any(|time| time.less_equal(new_time)) {
                 Capability::new(new_time.clone(), Rc::clone(&self.internal.borrow()[output_port]))
             } else {
-                panic!("Attempted to delay to a time ({:?}) not greater or equal to the operators input-output summary ({:?}) applied to the capabilities time ({:?})", new_time, path, self.time());
+                panic!("Attempted to delay to a time ({:?}) not greater or equal to the operators input-output summary ({:?}) applied to any element of the capability's stamp ({:?})", new_time, path, self.stamp());
             }
         }
         else {
@@ -299,11 +314,14 @@ impl<T: Timestamp> InputCapability<T> {
     /// capability. Users should take care that these capabilities are only stored for
     /// as long as they are required, as failing to drop them may result in livelock.
     ///
-    /// This method panics if the timestamp summary to `output_port` strictly advances the time.
+    /// This method panics if the message's stamp is not a singleton, or if the timestamp
+    /// summary to `output_port` strictly advances the time. Stamps with zero or multiple
+    /// elements must be retained with [`InputCapability::retain_stamp`].
     #[inline]
     pub fn retain(&self, output_port: usize) -> Capability<T> {
         self.delayed(self.time(), output_port)
     }
+
 }
 
 impl<T: Timestamp> Deref for InputCapability<T> {
@@ -332,7 +350,7 @@ pub struct ActivateCapability<T: Timestamp> {
 }
 
 impl<T: Timestamp> CapabilityTrait<T> for ActivateCapability<T> {
-    fn time(&self) -> &T { self.capability.time() }
+    fn stamp(&self) -> Stamp<T> { self.capability.stamp() }
     fn valid_for_output(&self, query_buffer: &Rc<RefCell<ChangeBatch<T>>>, port: usize) -> bool {
         self.capability.valid_for_output(query_buffer, port)
     }

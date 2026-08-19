@@ -125,7 +125,7 @@ impl<T: Timestamp, C: Container> Probe<T, C> for Stream<'_, T, C> {
                 }
 
                 while let Some(message) = input.next() {
-                    Message::push_at(&mut message.data, message.time.clone(), &mut output);
+                    Message::push_at(&mut message.data, message.stamp.clone(), &mut output);
                 }
                 use timely_communication::Push;
                 output.done();

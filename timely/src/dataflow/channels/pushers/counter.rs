@@ -19,7 +19,10 @@ impl<T: Clone+Ord, C: Accountable, P> Push<Message<T, C>> for Counter<T, P> wher
     #[inline]
     fn push(&mut self, message: &mut Option<Message<T, C>>) {
         if let Some(message) = message {
-            self.produced.borrow_mut().update(message.time.clone(), message.data.record_count());
+            let mut produced = self.produced.borrow_mut();
+            for time in message.stamp.iter() {
+                produced.update(time.clone(), message.data.record_count());
+            }
         }
 
         // only propagate `None` if dirty (indicates flush)

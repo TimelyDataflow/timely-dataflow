@@ -138,10 +138,10 @@ impl<T: Timestamp, C: Container> Capture<T, C> for Stream<'_, T, C> {
 
                 // turn each received message into an event.
                 while let Some(message) = input.next() {
-                    let time = &message.time;
+                    let stamp = &message.stamp;
                     let data = &mut message.data;
                     let vector = std::mem::take(data);
-                    event_pusher.push(Event::Messages(time.clone(), vector));
+                    event_pusher.push(Event::Messages(stamp.clone(), vector));
                 }
                 input.consumed().borrow_mut().drain_into(&mut progress.consumeds[0]);
                 false

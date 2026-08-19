@@ -10,11 +10,16 @@ pub mod pullers;
 /// Parallelization contracts, describing how data must be exchanged between operators.
 pub mod pact;
 
+pub use crate::progress::Stamp;
+
 /// A serializable representation of timestamped data.
 #[derive(Clone)]
 pub struct Message<T, C> {
-    /// The timestamp associated with the message.
-    pub time: T,
+    /// The multiset of timestamps affixed to the message.
+    ///
+    /// The message may only result in downstream work at times greater or equal
+    /// to some element of the stamp. An empty stamp makes no progress claims.
+    pub stamp: Stamp<T>,
     /// The data in the message.
     pub data: C,
     /// The source worker.
@@ -35,17 +40,17 @@ impl<T, C> Message<T, C> {
     /// Creates a new message instance from arguments.
     ///
     /// Zero values are installed for `from` and `seq`, and are meant to be populated by `LogPusher`.
-    pub fn new(time: T, data: C) -> Self {
-        Message { time, data, from: 0, seq: 0 }
+    pub fn new(stamp: Stamp<T>, data: C) -> Self {
+        Message { stamp, data, from: 0, seq: 0 }
     }
 
     /// Forms a message from borrowed parts, and replaces `buffer` with what is left by the `push` call.
     /// If the pusher returns nothing, then `buffer` is set to the default for the container.
     #[inline]
-    pub fn push_at<P: Push<Message<T, C>>>(buffer: &mut C, time: T, pusher: &mut P) where C: Default {
+    pub fn push_at<P: Push<Message<T, C>>>(buffer: &mut C, stamp: Stamp<T>, pusher: &mut P) where C: Default {
 
         let data = ::std::mem::take(buffer);
-        let message = Message::new(time, data);
+        let message = Message::new(stamp, data);
         let mut bundle = Some(message);
 
         pusher.push(&mut bundle);
@@ -70,17 +75,17 @@ where
         let mut slice = &bytes[..];
         let from: usize = slice.read_u64::<byteorder::LittleEndian>().unwrap().try_into().unwrap();
         let seq: usize = slice.read_u64::<byteorder::LittleEndian>().unwrap().try_into().unwrap();
-        let time: T = ::bincode::deserialize_from(&mut slice).expect("bincode::deserialize() failed");
-        let time_size = ::bincode::serialized_size(&time).expect("bincode::serialized_size() failed") as usize;
+        let stamp: Stamp<T> = ::bincode::deserialize_from(&mut slice).expect("bincode::deserialize() failed");
+        let time_size = ::bincode::serialized_size(&stamp).expect("bincode::serialized_size() failed") as usize;
         // We expect to find the `data` payload at `8 + 8 + round_up(time_size)`;
         let bytes_read = 8 + 8 + ((time_size + 7) & !7);
         bytes.extract_to(bytes_read);
         let data: C = ContainerBytes::from_bytes(bytes);
-        Self { time, data, from, seq }
+        Self { stamp, data, from, seq }
     }
 
     fn length_in_bytes(&self) -> usize {
-        let time_size = ::bincode::serialized_size(&self.time).expect("bincode::serialized_size() failed") as usize;
+        let time_size = ::bincode::serialized_size(&self.stamp).expect("bincode::serialized_size() failed") as usize;
         // 16 comes from the two `u64` fields: `from` and `seq`.
         16 + ((time_size + 7) & !7) + self.data.length_in_bytes()
     }
@@ -89,8 +94,8 @@ where
         use byteorder::WriteBytesExt;
         writer.write_u64::<byteorder::LittleEndian>(self.from.try_into().unwrap()).unwrap();
         writer.write_u64::<byteorder::LittleEndian>(self.seq.try_into().unwrap()).unwrap();
-        ::bincode::serialize_into(&mut *writer, &self.time).expect("bincode::serialize_into() failed");
-        let time_size = ::bincode::serialized_size(&self.time).expect("bincode::serialized_size() failed") as usize;
+        ::bincode::serialize_into(&mut *writer, &self.stamp).expect("bincode::serialize_into() failed");
+        let time_size = ::bincode::serialized_size(&self.stamp).expect("bincode::serialized_size() failed") as usize;
         let time_slop = ((time_size + 7) & !7) - time_size;
         writer.write_all(&[0u8; 8][..time_slop]).unwrap();
         self.data.into_bytes(&mut *writer);

@@ -58,11 +58,11 @@ impl<T: Timestamp, C: Accountable, P: Pull<Message<T, C>>> InputHandleCore<T, C,
             let data = std::mem::take(data);
             self.staging.push_back((cap, data));
         }
-        self.staging.make_contiguous().sort_unstable_by(|x,y| x.0.time().cmp(&y.0.time()));
+        self.staging.make_contiguous().sort_unstable_by(|x,y| x.0.stamp().cmp(y.0.stamp()));
 
         while let Some((cap, data)) = self.staging.pop_front() {
             self.staged.push(data);
-            let more = self.staging.iter().take_while(|(c,_)| c.time() == cap.time()).count();
+            let more = self.staging.iter().take_while(|(c,_)| c.stamp() == cap.stamp()).count();
             self.staged.extend(self.staging.drain(..more).map(|(_,d)| d));
             logic(cap, self.staged.iter_mut());
             // Could return these back to the input ..

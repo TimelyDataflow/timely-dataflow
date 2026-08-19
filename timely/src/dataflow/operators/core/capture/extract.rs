@@ -57,8 +57,9 @@ where
     fn extract(self) -> Vec<(T, C)> {
         let mut staged = std::collections::BTreeMap::new();
         for event in self {
-            if let Event::Messages(time, data) = event {
-                staged.entry(time)
+            if let Event::Messages(stamp, data) = event {
+                // This testing convenience insists on singleton stamps.
+                staged.entry({ let mut elements = stamp.into_elements(); assert!(elements.len() == 1, "Extract insists on singleton stamps"); elements.pop().unwrap() })
                       .or_insert_with(Vec::new)
                       .push(data);
             }

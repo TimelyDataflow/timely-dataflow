@@ -4,6 +4,7 @@ use crate::ContainerBuilder;
 use crate::communication::Push;
 use crate::container::{DrainContainer, PushInto};
 use crate::dataflow::channels::Message;
+use crate::progress::Stamp;
 
 /// Distribute containers to several pushers.
 ///
@@ -15,10 +16,10 @@ use crate::dataflow::channels::Message;
 /// must be preserved across the output containers, from the first call to `partition` until the
 /// call to `flush` for a specific time stamp.
 pub trait Distributor<C> {
-    /// Partition the contents of `container` at `time` into the `pushers`.
-    fn partition<T: Clone, P: Push<Message<T, C>>>(&mut self, container: &mut C, time: &T, pushers: &mut [P]);
-    /// Flush any remaining contents into the `pushers` at time `time`.
-    fn flush<T: Clone, P: Push<Message<T, C>>>(&mut self, time: &T, pushers: &mut [P]);
+    /// Partition the contents of `container` at `stamp` into the `pushers`.
+    fn partition<T: Clone, P: Push<Message<T, C>>>(&mut self, container: &mut C, stamp: &Stamp<T>, pushers: &mut [P]);
+    /// Flush any remaining contents into the `pushers` at stamp `stamp`.
+    fn flush<T: Clone, P: Push<Message<T, C>>>(&mut self, stamp: &Stamp<T>, pushers: &mut [P]);
     /// Optionally release resources, such as memory.
     fn relax(&mut self) { }
 }
@@ -46,7 +47,7 @@ where
     CB: ContainerBuilder<Container: DrainContainer> + for<'a> PushInto<<CB::Container as DrainContainer>::Item<'a>>,
     for<'a> H: FnMut(&<CB::Container as DrainContainer>::Item<'a>) -> u64,
 {
-    fn partition<T: Clone, P: Push<Message<T, CB::Container>>>(&mut self, container: &mut CB::Container, time: &T, pushers: &mut [P]) {
+    fn partition<T: Clone, P: Push<Message<T, CB::Container>>>(&mut self, container: &mut CB::Container, stamp: &Stamp<T>, pushers: &mut [P]) {
         debug_assert_eq!(self.builders.len(), pushers.len());
         if pushers.len().is_power_of_two() {
             let mask = (pushers.len() - 1) as u64;
@@ -54,7 +55,7 @@ where
                 let index = ((self.hash_func)(&datum) & mask) as usize;
                 self.builders[index].push_into(datum);
                 while let Some(produced) = self.builders[index].extract() {
-                    Message::push_at(produced, time.clone(), &mut pushers[index]);
+                    Message::push_at(produced, stamp.clone(), &mut pushers[index]);
                 }
             }
         }
@@ -64,16 +65,16 @@ where
                 let index = ((self.hash_func)(&datum) % num_pushers) as usize;
                 self.builders[index].push_into(datum);
                 while let Some(produced) = self.builders[index].extract() {
-                    Message::push_at(produced, time.clone(), &mut pushers[index]);
+                    Message::push_at(produced, stamp.clone(), &mut pushers[index]);
                 }
             }
         }
     }
 
-    fn flush<T: Clone, P: Push<Message<T, CB::Container>>>(&mut self, time: &T, pushers: &mut [P]) {
+    fn flush<T: Clone, P: Push<Message<T, CB::Container>>>(&mut self, stamp: &Stamp<T>, pushers: &mut [P]) {
         for (builder, pusher) in self.builders.iter_mut().zip(pushers.iter_mut()) {
             while let Some(container) = builder.finish() {
-                Message::push_at(container, time.clone(), pusher);
+                Message::push_at(container, stamp.clone(), pusher);
             }
         }
     }
@@ -89,7 +90,7 @@ where
 /// Distributes records among target pushees according to a distributor.
 pub struct Exchange<T, P, D> {
     pushers: Vec<P>,
-    current: Option<T>,
+    current: Option<Stamp<T>>,
     distributor: D,
 }
 
@@ -117,28 +118,28 @@ where
         }
         else if let Some(message) = message {
 
-            let time = &message.time;
+            let stamp = &message.stamp;
             let data = &mut message.data;
 
-            // if the time isn't right, flush everything.
+            // if the stamp isn't right, flush everything.
             match self.current.as_ref() {
-                // We have a current time, and it is different from the new time.
-                Some(current_time) if current_time != time => {
-                    self.distributor.flush(current_time, &mut self.pushers);
-                    self.current = Some(time.clone());
+                // We have a current stamp, and it is different from the new stamp.
+                Some(current_stamp) if current_stamp != stamp => {
+                    self.distributor.flush(current_stamp, &mut self.pushers);
+                    self.current = Some(stamp.clone());
                 }
-                // We had no time before, or flushed.
-                None => self.current = Some(time.clone()),
-                // Time didn't change since last call.
+                // We had no stamp before, or flushed.
+                None => self.current = Some(stamp.clone()),
+                // Stamp didn't change since last call.
                 _ => {}
             }
 
-            self.distributor.partition(data, time, &mut self.pushers);
+            self.distributor.partition(data, stamp, &mut self.pushers);
         }
         else {
             // flush
-            if let Some(time) = self.current.take() {
-                self.distributor.flush(&time, &mut self.pushers);
+            if let Some(stamp) = self.current.take() {
+                self.distributor.flush(&stamp, &mut self.pushers);
             }
             self.distributor.relax();
             for index in 0..self.pushers.len() {

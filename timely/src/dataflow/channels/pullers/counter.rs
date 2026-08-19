@@ -4,7 +4,7 @@ use std::rc::Rc;
 use std::cell::RefCell;
 
 use crate::dataflow::channels::Message;
-use crate::progress::ChangeBatch;
+use crate::progress::{ChangeBatch, Stamp};
 use crate::communication::Pull;
 use crate::Accountable;
 
@@ -18,22 +18,25 @@ pub struct Counter<T, C, P> {
 /// A guard type that updates the change batch counts on drop
 pub struct ConsumedGuard<T: Ord + Clone + 'static> {
     consumed: Rc<RefCell<ChangeBatch<T>>>,
-    time: Option<T>,
+    stamp: Option<Stamp<T>>,
     record_count: i64,
 }
 
 impl<T:Ord+Clone+'static> ConsumedGuard<T> {
     #[inline]
-    pub(crate) fn time(&self) -> &T {
-        self.time.as_ref().unwrap()
+    pub(crate) fn stamp(&self) -> &Stamp<T> {
+        self.stamp.as_ref().unwrap()
     }
 }
 
 impl<T:Ord+Clone+'static> Drop for ConsumedGuard<T> {
     fn drop(&mut self) {
         // SAFETY: we're in a Drop impl, so this runs at most once
-        let time = self.time.take().unwrap();
-        self.consumed.borrow_mut().update(time, self.record_count);
+        let stamp = self.stamp.take().unwrap();
+        let mut consumed = self.consumed.borrow_mut();
+        for time in stamp.iter() {
+            consumed.update(time.clone(), self.record_count);
+        }
     }
 }
 
@@ -49,7 +52,7 @@ impl<T:Ord+Clone+'static, C: Accountable, P: Pull<Message<T, C>>> Counter<T, C, 
         if let Some(message) = self.pullable.pull() {
             let guard = ConsumedGuard {
                 consumed: Rc::clone(&self.consumed),
-                time: Some(message.time.clone()),
+                stamp: Some(message.stamp.clone()),
                 record_count: message.data.record_count(),
             };
             Some((guard, message))

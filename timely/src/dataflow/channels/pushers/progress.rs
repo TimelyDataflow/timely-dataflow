@@ -23,7 +23,7 @@ impl<T: Timestamp, P> Progress<T, P> {
     /// On return, the container may hold undefined contents and should be cleared before it is reused.
     #[inline] pub fn give<C: Container, CT: CapabilityTrait<T>>(&mut self, capability: &CT, container: &mut C) where P: Push<Message<T, C>> {
         debug_assert!(self.valid(capability), "Attempted to open output session with invalid capability");
-        if !container.is_empty() { Message::push_at(container, capability.time().clone(), &mut self.pushee); }
+        if !container.is_empty() { Message::push_at(container, capability.stamp(), &mut self.pushee); }
     }
     /// Activates a `Progress` into a `ProgressSession` which will flush when dropped.
     pub fn activate<'a, C>(&'a mut self) -> ProgressSession<'a, T, C, P> where P: Push<Message<T, C>> {

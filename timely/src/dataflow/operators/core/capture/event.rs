@@ -7,13 +7,15 @@
 use columnar::Columnar;
 use serde::{Deserialize, Serialize};
 
+use crate::progress::Stamp;
+
 /// Data and progress events of the captured stream.
 #[derive(Debug, Clone, Hash, Ord, PartialOrd, Eq, PartialEq, Deserialize, Serialize, Columnar)]
 pub enum Event<T, C> {
     /// Progress received via `push_external_progress`.
     Progress(Vec<(T, i64)>),
-    /// Messages received via the data stream.
-    Messages(T, C),
+    /// Messages received via the data stream, stamped by an antichain of timestamps.
+    Messages(Stamp<T>, C),
 }
 
 /// Iterates over contained `Event<T, C>`.

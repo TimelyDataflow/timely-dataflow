@@ -390,10 +390,10 @@ impl<T: Timestamp, CB: ContainerBuilder<Container: Clone>> Handle<T, CB> {
         for index in 0 .. pushers.len() {
             if index < pushers.len() - 1 {
                 buffer.clone_from(container);
-                Message::push_at(buffer, now_at.clone(), &mut pushers[index]);
+                Message::push_at(buffer, crate::progress::Stamp::from_elem(now_at.clone()), &mut pushers[index]);
             }
             else {
-                Message::push_at(container, now_at.clone(), &mut pushers[index]);
+                Message::push_at(container, crate::progress::Stamp::from_elem(now_at.clone()), &mut pushers[index]);
             }
         }
     }

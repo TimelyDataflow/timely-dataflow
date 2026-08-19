@@ -43,7 +43,7 @@ impl<P, C> BatchLogger<P, C> where P: EventPusher<Duration, C>, C: Container {
     /// Publishes a batch of logged events and advances the capability.
     pub fn publish_batch(&mut self, &time: &Duration, data: &mut Option<C>) {
         if let Some(data) = data {
-            self.event_pusher.push(Event::Messages(self.time, std::mem::take(data)));
+            self.event_pusher.push(Event::Messages(crate::progress::Stamp::from_elem(self.time), std::mem::take(data)));
         }
         if self.time < time {
             let new_frontier = time;
