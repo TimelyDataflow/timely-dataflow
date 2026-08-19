@@ -122,9 +122,18 @@ impl<'scope, T: Timestamp, C: Container> ConnectLoop<'scope, T, C> for Stream<'s
         builder.build(move |_capability| move |_frontier| {
             let mut output = output.activate();
             input.for_each(|cap, data| {
-                if let Some(new_time) = summary.results_in(cap.time()) {
-                    let new_cap = cap.delayed(&new_time, output.output_index());
-                    output.give(&new_cap, data);
+                // Advance each stamp element by the summary, discarding elements that
+                // cannot traverse the feedback edge and restoring minimality. Contents
+                // at times supported only by discarded elements cannot be sent
+                // downstream, just as a message with a singleton stamp is discarded
+                // entirely when its element cannot traverse.
+                let new_caps = cap.stamp()
+                    .map_into(|time| summary.results_in(time))
+                    .iter()
+                    .map(|time| cap.delayed(time, output.output_index()))
+                    .collect::<crate::dataflow::operators::CapabilitySet<_>>();
+                if !new_caps.is_empty() || cap.stamp().is_empty() {
+                    output.give(&new_caps, data);
                 }
             });
         });

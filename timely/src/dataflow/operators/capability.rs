@@ -322,6 +322,18 @@ impl<T: Timestamp> InputCapability<T> {
         self.delayed(self.time(), output_port)
     }
 
+    /// Transforms to an owned capability set for a specific output port, with one
+    /// capability for each element of the message's stamp.
+    ///
+    /// An empty stamp produces an empty capability set. Data sent through a session
+    /// keyed by an empty capability set makes no progress claims, and may be delivered
+    /// after downstream frontiers have advanced past all times in its contents.
+    ///
+    /// This method panics if the timestamp summary to `output_port` strictly advances
+    /// any element of the stamp.
+    pub fn retain_stamp(&self, output_port: usize) -> CapabilitySet<T> {
+        self.stamp().iter().map(|time| self.delayed(time, output_port)).collect()
+    }
 }
 
 impl<T: Timestamp> Deref for InputCapability<T> {
@@ -532,6 +544,45 @@ impl<T: Timestamp> CapabilitySet<T> {
         self.elements.drain(..count);
 
         Ok(())
+    }
+}
+
+impl<T: Timestamp> CapabilityTrait<T> for CapabilitySet<T> {
+    /// The stamp of the set's timestamps.
+    ///
+    /// An empty set stamps messages with an empty stamp: such messages make no
+    /// progress claims, are invisible to progress tracking, and may be delivered
+    /// after downstream frontiers have advanced past all times in their contents.
+    fn stamp(&self) -> Stamp<T> {
+        self.elements.iter().map(|capability| capability.time().clone()).collect()
+    }
+    /// Valid iff every member capability is valid for the output.
+    ///
+    /// An empty set is vacuously valid for any output: constructing an empty set
+    /// and opening a session with it is the deliberate mechanism for sending
+    /// messages that make no progress claims.
+    fn valid_for_output(&self, query_buffer: &Rc<RefCell<ChangeBatch<T>>>, port: usize) -> bool {
+        self.elements.iter().all(|capability| capability.valid_for_output(query_buffer, port))
+    }
+}
+
+impl<T: Timestamp> CapabilitySet<T> {
+    /// Creates a new capability set to send data at each element of `stamp`.
+    ///
+    /// This method panics if any element of `stamp` is without a capability in
+    /// `self.elements` less or equal to it.
+    pub fn delayed_stamp(&self, stamp: &Stamp<T>) -> CapabilitySet<T> {
+        stamp.iter().map(|time| self.delayed(time)).collect()
+    }
+}
+
+impl<T: Timestamp> FromIterator<Capability<T>> for CapabilitySet<T> {
+    fn from_iter<I: IntoIterator<Item = Capability<T>>>(iter: I) -> Self {
+        let mut result = Self::new();
+        for capability in iter {
+            result.insert(capability);
+        }
+        result
     }
 }
 
