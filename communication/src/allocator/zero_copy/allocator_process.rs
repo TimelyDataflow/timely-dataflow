@@ -100,6 +100,7 @@ impl ProcessBuilder {
             sends,
             recvs,
             to_local: HashMap::new(),
+            recycler: Default::default(),
         }
     }
 }
@@ -130,6 +131,13 @@ pub struct ProcessAllocator {
     sends:      Vec<Rc<RefCell<SendEndpoint<MergeQueue>>>>, // sends[x] -> goes to thread x.
     recvs:      Vec<MergeQueue>,                            // recvs[x] <- from thread x.
     to_local:   HashMap<usize, Rc<RefCell<VecDeque<Bytes>>>>,          // to worker-local typed pullers.
+    recycler: crate::allocator::thread::RecyclerHandle,
+}
+
+impl ProcessAllocator {
+    pub(crate) fn recycler(&self) -> crate::allocator::thread::RecyclerHandle {
+        Rc::clone(&self.recycler)
+    }
 }
 
 impl Allocate for ProcessAllocator {

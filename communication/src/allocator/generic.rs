@@ -98,7 +98,16 @@ impl Allocator {
         (crate::allocator::thread::ThreadPusher<T>,
          crate::allocator::thread::ThreadPuller<T>)
     {
-        crate::allocator::thread::Thread::new_from(identifier, Rc::clone(self.events()))
+        let recycler = match self {
+            Allocator::Thread(t) => t.recycler(),
+            Allocator::Process(p) => p.recycler(),
+            Allocator::Tcp(z) => z.recycler(),
+        };
+        crate::allocator::thread::Thread::new_from_with_recycler(
+            identifier,
+            Rc::clone(self.events()),
+            recycler,
+        )
     }
 }
 

@@ -232,4 +232,10 @@ impl Process {
             Process::Bytes(pb) => pb.await_events(duration),
         }
     }
+    pub(crate) fn recycler(&self) -> thread::RecyclerHandle {
+        match self {
+            Process::Typed(p) => p.recycler(),
+            Process::Bytes(pb) => pb.recycler(),
+        }
+    }
 }

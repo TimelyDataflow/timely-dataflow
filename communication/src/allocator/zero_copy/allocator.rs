@@ -149,6 +149,12 @@ pub struct TcpAllocator {
     to_local:   HashMap<usize, Rc<RefCell<VecDeque<Bytes>>>>,   // to worker-local typed pullers.
 }
 
+impl TcpAllocator {
+    pub(crate) fn recycler(&self) -> crate::allocator::thread::RecyclerHandle {
+        self.inner.recycler()
+    }
+}
+
 impl Allocate for TcpAllocator {
     fn index(&self) -> usize { self.index }
     fn peers(&self) -> usize { self.peers }

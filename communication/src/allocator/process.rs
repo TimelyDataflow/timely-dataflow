@@ -70,6 +70,10 @@ pub struct Process {
 impl Process {
     /// Access the wrapped inner allocator.
     pub fn inner(&mut self) -> &mut Thread { &mut self.inner }
+
+    pub(crate) fn recycler(&self) -> crate::allocator::thread::RecyclerHandle {
+        self.inner.recycler()
+    }
 }
 
 impl PeerBuilder for Process {
