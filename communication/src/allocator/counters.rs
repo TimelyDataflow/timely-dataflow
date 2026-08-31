@@ -34,6 +34,8 @@ impl<T, P: Push<T>> Push<T> for Pusher<T, P> {
         let done = element.is_none();
         self.pusher.push(element);
 
+        // An empty batch emits no event; a single message emits one prompt
+        // event; multi-message batches emit a second event when the batch ends.
         // Notify promptly for the first message, and once more at the end
         // if later messages may have arrived after the receiver drained.
         if done {
@@ -81,6 +83,8 @@ impl<T, P: Push<T>> Push<T> for ArcPusher<T, P> {
         let done = element.is_none();
         self.pusher.push(element);
 
+        // An empty batch emits no event; a single message emits one prompt
+        // event; multi-message batches emit a second event when the batch ends.
         // These three calls should happen in this order, to ensure that
         // we first enqueue data, second enqueue interest in the channel,
         // and finally awaken the thread. Other orders are defective when
