@@ -368,9 +368,14 @@ impl<T: Timestamp, CB: ContainerBuilder<Container: Clone>> Handle<T, CB> {
         }
     }
 
-    /// Flush all contents and distribute to downstream operators.
+    /// Flush all contents, distribute them downstream, and close the current batch.
     #[inline]
     pub fn flush(&mut self) {
+        self.flush_builder();
+        self.flush_pushers();
+    }
+
+    fn flush_builder(&mut self) {
         while let Some(container) = self.builder.finish() {
             Self::send_container(container, &mut self.buffer, &mut self.pushers, &self.now_at);
         }
@@ -402,9 +407,6 @@ impl<T: Timestamp, CB: ContainerBuilder<Container: Clone>> Handle<T, CB> {
     // TODO: Find a better name for this function.
     fn close_epoch(&mut self) {
         self.flush();
-        for pusher in self.pushers.iter_mut() {
-            pusher.done();
-        }
         for progress in self.progress.iter() {
             progress.borrow_mut().update(self.now_at.clone(), -1);
         }
@@ -416,7 +418,8 @@ impl<T: Timestamp, CB: ContainerBuilder<Container: Clone>> Handle<T, CB> {
 
     /// Sends a batch of records into the corresponding timely dataflow [Stream], at the current epoch.
     ///
-    /// This method flushes single elements previously sent with `send`, to keep the insertion order.
+    /// This method flushes single elements previously sent with `send`, to keep the insertion order,
+    /// and closes the batch after sending it.
     ///
     /// # Examples
     /// ```
@@ -445,8 +448,15 @@ impl<T: Timestamp, CB: ContainerBuilder<Container: Clone>> Handle<T, CB> {
     pub fn send_batch(&mut self, buffer: &mut CB::Container) {
         if !buffer.is_empty() {
             // flush buffered elements to ensure local fifo.
-            self.flush();
+            self.flush_builder();
             Self::send_container(buffer, &mut self.buffer, &mut self.pushers, &self.now_at);
+            self.flush_pushers();
+        }
+    }
+
+    fn flush_pushers(&mut self) {
+        for pusher in self.pushers.iter_mut() {
+            pusher.done();
         }
     }
 

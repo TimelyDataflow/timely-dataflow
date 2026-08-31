@@ -129,7 +129,8 @@ pub trait Bytesable {
 ///
 /// Conventionally, a sequence of calls to `push()` should conclude with
 /// a call of `push(&mut None)` or `done()` to signal to implementors that
-/// another call to `push()` may not be coming.
+/// another call to `push()` may not be coming. Implementors may coalesce
+/// notifications for subsequent messages until they observe this boundary.
 pub trait Push<T> {
     /// Pushes `element` with the opportunity to take ownership.
     fn push(&mut self, element: &mut Option<T>);
