@@ -14,7 +14,8 @@ use crate::allocator::{AllocateBuilder, Exchangeable, PeerBuilder};
 use crate::allocator::canary::Canary;
 use crate::allocator::zero_copy::bytes_slab::BytesRefill;
 use crate::allocator::zero_copy::spill::SpillPolicyFn;
-use super::bytes_exchange::{BytesPull, SendEndpoint, MergeQueue};
+use super::bytes_exchange::{SendEndpoint, MergeQueue};
+use super::gate::Gate;
 
 use super::push_pull::{Pusher, Puller};
 
@@ -31,6 +32,7 @@ pub struct ProcessBuilder {
     pullers: Vec<Sender<MergeQueue>>,   // for pulling bytes from other workers.
     refill: BytesRefill,
     spill: Option<SpillPolicyFn>,       // optional spill factory for recv queues.
+    holding: bool,                      // whether the receive gate holds messages.
 }
 
 impl PeerBuilder for ProcessBuilder {
@@ -55,6 +57,7 @@ impl PeerBuilder for ProcessBuilder {
                     pullers,
                     refill: refill.clone(),
                     spill: spill.clone(),
+                    holding: false,
                 }
             )
             .collect()
@@ -62,12 +65,36 @@ impl PeerBuilder for ProcessBuilder {
 }
 
 impl ProcessBuilder {
-    /// Builds a `ProcessAllocator`, instantiating `Rc<RefCell<_>>` elements.
-    pub fn build(self) -> ProcessAllocator {
+    /// Sets whether the built allocator's receive gate holds messages until released.
+    pub fn holding(mut self, holding: bool) -> Self {
+        self.holding = holding;
+        self
+    }
 
-        // Fulfill puller obligations.
+    /// Builds a `ProcessAllocator`, instantiating `Rc<RefCell<_>>` elements.
+    ///
+    /// Each builder must be built on its own thread, or all together with
+    /// [`build_all`](Self::build_all): `build` blocks until every peer has
+    /// fulfilled its obligations, which a peer does only when it is itself built.
+    pub fn build(mut self) -> ProcessAllocator {
+        let recvs = self.fulfill();
+        self.complete(recvs)
+    }
+
+    /// Builds a vector of peers on the calling thread.
+    ///
+    /// All obligations are fulfilled before any allocator is completed, so no
+    /// builder blocks waiting on a peer that has not yet been built.
+    pub fn build_all(mut builders: Vec<Self>) -> Vec<ProcessAllocator> {
+        let recvs: Vec<_> = builders.iter_mut().map(|builder| builder.fulfill()).collect();
+        builders.into_iter().zip(recvs).map(|(builder, recvs)| builder.complete(recvs)).collect()
+    }
+
+    /// Fulfills puller obligations: creates this allocator's receive queues on the
+    /// calling thread, sending the writer halves to peers and returning the readers.
+    fn fulfill(&mut self) -> Vec<MergeQueue> {
         let mut recvs = Vec::with_capacity(self.peers);
-        for puller in self.pullers.into_iter() {
+        for puller in std::mem::take(&mut self.pullers) {
             let buzzer = crate::buzzer::Buzzer::default();
             let (writer, reader) = match self.spill.as_ref() {
                 Some(build_fn) => {
@@ -81,8 +108,11 @@ impl ProcessBuilder {
             recvs.push(reader);
             puller.send(writer).expect("Failed to send MergeQueue");
         }
+        recvs
+    }
 
-        // Extract pusher commitments.
+    /// Extracts pusher commitments, blocking until each peer has fulfilled them.
+    fn complete(self, recvs: Vec<MergeQueue>) -> ProcessAllocator {
         let mut sends = Vec::with_capacity(self.peers);
         for pusher in self.pushers.into_iter() {
             let queue = pusher.recv().expect("Failed to receive MergeQueue");
@@ -98,7 +128,7 @@ impl ProcessBuilder {
             channel_id_bound: None,
             staged: Vec::new(),
             sends,
-            recvs,
+            gate: Rc::new(RefCell::new(Gate::new(self.index, self.peers, recvs, self.holding))),
             to_local: HashMap::new(),
         }
     }
@@ -128,8 +158,15 @@ pub struct ProcessAllocator {
     // sending, receiving, and responding to binary buffers.
     staged:     Vec<Bytes>,
     sends:      Vec<Rc<RefCell<SendEndpoint<MergeQueue>>>>, // sends[x] -> goes to thread x.
-    recvs:      Vec<MergeQueue>,                            // recvs[x] <- from thread x.
+    gate:       Rc<RefCell<Gate>>,                          // receives from all threads.
     to_local:   HashMap<usize, Rc<RefCell<VecDeque<Bytes>>>>,          // to worker-local typed pullers.
+}
+
+impl ProcessAllocator {
+    /// The gate through which this allocator receives messages from its peers.
+    ///
+    /// A gate built holding lets a driver control message delivery, for deterministic simulation.
+    pub fn gate(&self) -> Rc<RefCell<Gate>> { Rc::clone(&self.gate) }
 }
 
 impl Allocate for ProcessAllocator {
@@ -191,9 +228,7 @@ impl Allocate for ProcessAllocator {
 
         let mut events = self.events.borrow_mut();
 
-        for recv in self.recvs.iter_mut() {
-            recv.drain_into(&mut self.staged);
-        }
+        self.gate.borrow_mut().receive(&mut self.staged);
 
         for mut bytes in self.staged.drain(..) {
 

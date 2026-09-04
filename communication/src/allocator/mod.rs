@@ -151,6 +151,33 @@ impl ProcessBuilder {
         }
     }
 
+    /// Sets whether the built allocator's receive gate holds messages until released.
+    ///
+    /// Only `Bytes` allocators have a gate; the setting is ignored for `Typed` allocators.
+    pub fn holding(self, holding: bool) -> Self {
+        match self {
+            ProcessBuilder::Typed(t) => ProcessBuilder::Typed(t),
+            ProcessBuilder::Bytes(b) => ProcessBuilder::Bytes(b.holding(holding)),
+        }
+    }
+
+    /// Builds a vector of peers on the calling thread.
+    ///
+    /// `Bytes` builders block in `build` until their peers are built, and so must be
+    /// built together when they share a thread; `Typed` builders build independently.
+    pub fn build_all(builders: Vec<Self>) -> Vec<Process> {
+        if builders.iter().all(|builder| matches!(builder, ProcessBuilder::Bytes(_))) {
+            let bytes = builders.into_iter().map(|builder| match builder {
+                ProcessBuilder::Bytes(b) => b,
+                ProcessBuilder::Typed(_) => unreachable!("checked above"),
+            }).collect();
+            BytesProcessBuilder::build_all(bytes).into_iter().map(Process::Bytes).collect()
+        }
+        else {
+            builders.into_iter().map(|builder| builder.build()).collect()
+        }
+    }
+
     /// Constructs a vector of regular (mpsc-based, "Typed") intra-process builders.
     pub fn new_typed_vector(peers: usize, refill: BytesRefill, spill: Option<SpillPolicyFn>) -> Vec<Self> {
         <TypedProcess as PeerBuilder>::new_vector(peers, refill, spill)

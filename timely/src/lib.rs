@@ -92,6 +92,7 @@ pub mod dataflow;
 pub mod synchronization;
 pub mod execute;
 pub mod order;
+pub mod simulate;
 
 pub mod logging;
 // pub mod log_events;

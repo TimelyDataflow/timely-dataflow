@@ -13,7 +13,8 @@ use crate::allocator::{Process, ProcessBuilder, Exchangeable};
 use crate::allocator::canary::Canary;
 use crate::allocator::zero_copy::bytes_slab::BytesRefill;
 use crate::allocator::zero_copy::spill::SpillPolicyFn;
-use super::bytes_exchange::{BytesPull, SendEndpoint, MergeQueue};
+use super::bytes_exchange::{SendEndpoint, MergeQueue};
+use super::gate::Gate;
 use super::push_pull::{Pusher, PullerInner};
 
 /// Builds an instance of a TcpAllocator.
@@ -124,7 +125,7 @@ impl TcpBuilder {
             channel_id_bound: None,
             staged: Vec::new(),
             sends,
-            recvs,
+            gate: Rc::new(RefCell::new(Gate::new(self.index, self.peers, recvs, false))),
             to_local: HashMap::new(),
         }
     }
@@ -145,8 +146,15 @@ pub struct TcpAllocator {
 
     // sending, receiving, and responding to binary buffers.
     sends:      Vec<Rc<RefCell<SendEndpoint<MergeQueue>>>>,     // sends[x] -> goes to process x.
-    recvs:      Vec<MergeQueue>,                                // recvs[x] <- from process x.
+    gate:       Rc<RefCell<Gate>>,                              // receives from all processes.
     to_local:   HashMap<usize, Rc<RefCell<VecDeque<Bytes>>>>,   // to worker-local typed pullers.
+}
+
+impl TcpAllocator {
+    /// The gate through which this allocator receives messages from other processes.
+    ///
+    /// Messages from workers in the same process pass through the inner allocator instead.
+    pub fn gate(&self) -> Rc<RefCell<Gate>> { Rc::clone(&self.gate) }
 }
 
 impl Allocate for TcpAllocator {
@@ -264,9 +272,7 @@ impl Allocate for TcpAllocator {
 
         self.inner.receive();
 
-        for recv in self.recvs.iter_mut() {
-            recv.drain_into(&mut self.staged);
-        }
+        self.gate.borrow_mut().receive(&mut self.staged);
 
         let mut events = self.inner.events().borrow_mut();
 

@@ -10,6 +10,7 @@
 
 pub mod bytes_slab;
 pub mod bytes_exchange;
+pub mod gate;
 pub mod spill;
 pub mod tcp;
 pub mod allocator;
