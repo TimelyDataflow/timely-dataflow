@@ -78,15 +78,42 @@ impl FromStr for ProgressMode {
 }
 
 /// Worker configuration.
-#[derive(Debug, Default, Clone)]
+#[derive(Debug, Clone)]
 pub struct Config {
     /// The progress mode to use.
     pub(crate) progress_mode: ProgressMode,
+    /// How long an idle worker polls for new events before parking its thread.
+    ///
+    /// Parking a thread and waking it again costs several microseconds, which
+    /// dominates the cost of fine-grained coordination among workers (for
+    /// example, a barrier per iteration of a loop). A worker with nothing to do
+    /// first polls its channels for this long, and parks only if nothing arrives.
+    /// The polling occupies a core, so the duration bounds the CPU an idle worker
+    /// burns each time it goes idle.
+    pub(crate) idle_spin: Duration,
     /// A map from parameter name to typed parameter values.
     registry: HashMap<String, Arc<dyn Any + Send + Sync>>,
 }
 
+impl Default for Config {
+    fn default() -> Self {
+        Config {
+            progress_mode: ProgressMode::default(),
+            idle_spin: Duration::from_micros(Self::DEFAULT_IDLE_SPIN_MICROS),
+            registry: HashMap::new(),
+        }
+    }
+}
+
 impl Config {
+    /// The default `idle_spin`, in microseconds.
+    ///
+    /// Parking and unparking a thread costs a few microseconds on common
+    /// platforms, so a worker that polls for this long before parking avoids
+    /// that cost for the short waits typical of tightly coupled workers, at
+    /// the expense of at most this much CPU each time it goes idle.
+    pub const DEFAULT_IDLE_SPIN_MICROS: u64 = 10;
+
     /// Installs options into a [getopts::Options] struct that correspond
     /// to the parameters in the configuration.
     ///
@@ -99,6 +126,7 @@ impl Config {
     #[cfg(feature = "getopts")]
     pub fn install_options(opts: &mut getopts::Options) {
         opts.optopt("", "progress-mode", "progress tracking mode (eager or demand)", "MODE");
+        opts.optopt("", "idle-spin", "microseconds an idle worker polls before parking", "MICROS");
     }
 
     /// Instantiates a configuration based upon the parsed options in `matches`.
@@ -113,12 +141,22 @@ impl Config {
     pub fn from_matches(matches: &getopts::Matches) -> Result<Config, String> {
         let progress_mode = matches
             .opt_get_default("progress-mode", ProgressMode::Demand)?;
-        Ok(Config::default().progress_mode(progress_mode))
+        let mut config = Config::default().progress_mode(progress_mode);
+        if let Some(micros) = matches.opt_get::<u64>("idle-spin").map_err(|e| e.to_string())? {
+            config = config.idle_spin(Duration::from_micros(micros));
+        }
+        Ok(config)
     }
 
     /// Sets the progress mode to `progress_mode`.
     pub fn progress_mode(mut self, progress_mode: ProgressMode) -> Self {
         self.progress_mode = progress_mode;
+        self
+    }
+
+    /// Sets how long an idle worker polls for events before parking.
+    pub fn idle_spin(mut self, idle_spin: Duration) -> Self {
+        self.idle_spin = idle_spin;
         self
     }
 
@@ -266,40 +304,29 @@ impl Worker {
     /// ```
     pub fn step_or_park(&mut self, duration: Option<Duration>) -> bool {
 
-        {   // Process channel events. Activate responders.
-            let mut allocator = self.allocator.borrow_mut();
-            allocator.receive();
-            let events = allocator.events();
-            let mut borrow = events.borrow_mut();
-            let paths = self.paths.borrow();
-            borrow.sort_unstable();
-            borrow.dedup();
-            for channel in borrow.drain(..) {
-                // Consider tracking whether a channel
-                // in non-empty, and only activating
-                // on the basis of non-empty channels.
-                // TODO: This is a sloppy way to deal
-                // with channels that may not be alloc'd.
-                if let Some(path) = paths.get(&channel) {
-                    self.activations
-                        .borrow_mut()
-                        .activate(&path[..]);
+        // Determine the minimum park duration, where `None` are an absence of a constraint.
+        let mut delay = self.poll_events(duration);
+
+        // An idle worker polls for a while before parking, as parking and
+        // unparking a thread costs more than a short wait usually lasts.
+        if delay != Some(Duration::new(0,0)) {
+            let budget = match delay {
+                Some(delay) => std::cmp::min(delay, self.config.idle_spin),
+                None => self.config.idle_spin,
+            };
+            if budget > Duration::new(0,0) {
+                let start = Instant::now();
+                let mut polls = 0u32;
+                loop {
+                    std::hint::spin_loop();
+                    delay = self.poll_events(duration);
+                    if delay == Some(Duration::new(0,0)) { break; }
+                    // Consult the clock only occasionally, as it is not free.
+                    polls = polls.wrapping_add(1);
+                    if polls % 16 == 0 && start.elapsed() >= budget { break; }
                 }
             }
         }
-
-        // Organize activations.
-        self.activations
-            .borrow_mut()
-            .advance();
-
-        // Consider parking only if we have no pending events, some dataflows, and a non-zero duration.
-        let empty_for = self.activations.borrow().empty_for();
-        // Determine the minimum park duration, where `None` are an absence of a constraint.
-        let delay = match (duration, empty_for) {
-            (Some(x), Some(y)) => Some(std::cmp::min(x,y)),
-            (x, y) => x.or(y),
-        };
 
         if delay != Some(Duration::new(0,0)) {
 
@@ -344,6 +371,48 @@ impl Worker {
         self.logging.as_ref().map(|l| l.borrow_mut().flush());
         self.allocator.borrow_mut().release();
         !self.dataflows.borrow().is_empty()
+    }
+
+    /// Surfaces channel events as activations, and reports how long the worker may idle.
+    ///
+    /// Returns the minimum of `duration` and the time until the next scheduled
+    /// activation, where `None` is an absence of any constraint, and `Some(0)`
+    /// means there is work to do now.
+    fn poll_events(&self, duration: Option<Duration>) -> Option<Duration> {
+
+        {   // Process channel events. Activate responders.
+            let mut allocator = self.allocator.borrow_mut();
+            allocator.receive();
+            let events = allocator.events();
+            let mut borrow = events.borrow_mut();
+            let paths = self.paths.borrow();
+            borrow.sort_unstable();
+            borrow.dedup();
+            for channel in borrow.drain(..) {
+                // Consider tracking whether a channel
+                // in non-empty, and only activating
+                // on the basis of non-empty channels.
+                // TODO: This is a sloppy way to deal
+                // with channels that may not be alloc'd.
+                if let Some(path) = paths.get(&channel) {
+                    self.activations
+                        .borrow_mut()
+                        .activate(&path[..]);
+                }
+            }
+        }
+
+        // Organize activations.
+        self.activations
+            .borrow_mut()
+            .advance();
+
+        // Consider parking only if we have no pending events, some dataflows, and a non-zero duration.
+        let empty_for = self.activations.borrow().empty_for();
+        match (duration, empty_for) {
+            (Some(x), Some(y)) => Some(std::cmp::min(x,y)),
+            (x, y) => x.or(y),
+        }
     }
 
     /// Calls `self.step()` as long as `func` evaluates to `true`.
