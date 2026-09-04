@@ -227,6 +227,14 @@ impl<P: BytesPush> SendEndpoint<P> {
     pub fn publish(&mut self) {
         self.send_buffer();
     }
+    /// Sends already-formed bytes, after anything staged so far.
+    ///
+    /// Staged bytes are sent first, so that the order of messages toward
+    /// the destination is the order in which they were pushed.
+    pub fn push_bytes(&mut self, bytes: Bytes) {
+        self.send_buffer();
+        self.send.extend(Some(bytes));
+    }
 }
 
 impl<P: BytesPush> Drop for SendEndpoint<P> {

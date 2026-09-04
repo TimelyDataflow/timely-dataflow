@@ -10,13 +10,14 @@ use timely_bytes::arc::Bytes;
 use crate::networking::MessageHeader;
 
 use crate::{Allocate, Push, Pull};
-use crate::allocator::{AllocateBuilder, Exchangeable, PeerBuilder};
+use crate::allocator::{AllocateBuilder, Exchangeable, PeerBuilder, Thread};
+use crate::allocator::thread::ThreadPusher;
 use crate::allocator::canary::Canary;
 use crate::allocator::zero_copy::bytes_slab::BytesRefill;
 use crate::allocator::zero_copy::spill::SpillPolicyFn;
-use super::bytes_exchange::{BytesPull, SendEndpoint, MergeQueue};
+use super::bytes_exchange::{BytesPush, BytesPull, SendEndpoint, MergeQueue};
 
-use super::push_pull::{Pusher, Puller};
+use super::push_pull::{Pusher, Puller, PullerInner};
 
 /// Builds an instance of a ProcessAllocator.
 ///
@@ -100,6 +101,7 @@ impl ProcessBuilder {
             sends,
             recvs,
             to_local: HashMap::new(),
+            refill: self.refill,
         }
     }
 }
@@ -130,6 +132,58 @@ pub struct ProcessAllocator {
     sends:      Vec<Rc<RefCell<SendEndpoint<MergeQueue>>>>, // sends[x] -> goes to thread x.
     recvs:      Vec<MergeQueue>,                            // recvs[x] <- from thread x.
     to_local:   HashMap<usize, Rc<RefCell<VecDeque<Bytes>>>>,          // to worker-local typed pullers.
+    refill:     BytesRefill,                                // for staging buffers allocated after construction.
+}
+
+/// Delivers each pushed `Bytes` to several destinations, sharing the allocation.
+///
+/// Each destination receives a clone of the handle, a reference count rather
+/// than a copy, through its own endpoint so that ordering and any spill policy
+/// toward that destination are unaffected.
+struct Fanout {
+    targets: Vec<Rc<RefCell<SendEndpoint<MergeQueue>>>>,
+}
+
+impl BytesPush for Fanout {
+    fn extend<I: IntoIterator<Item=Bytes>>(&mut self, iterator: I) {
+        for bytes in iterator {
+            for target in self.targets.iter() {
+                target.borrow_mut().push_bytes(bytes.clone());
+            }
+        }
+    }
+}
+
+/// A pusher that serializes once for all other workers, and hands the element itself to this worker.
+struct BroadcastPusher<T: Exchangeable> {
+    local: ThreadPusher<T>,
+    remote: Option<Pusher<T, Fanout>>,
+}
+
+impl<T: Exchangeable> Push<T> for BroadcastPusher<T> {
+    fn push(&mut self, element: &mut Option<T>) {
+        // The serializing pusher reads the element and leaves it in place.
+        if let Some(remote) = self.remote.as_mut() { remote.push(element); }
+        self.local.push(element);
+    }
+}
+
+impl ProcessAllocator {
+    /// A thread-local queue for messages to this worker, and the puller that
+    /// drains it ahead of the bytes other workers send.
+    ///
+    /// Used for progress broadcasts, whose messages are small and never worth
+    /// paging out. Data channels keep the shared byte queue for self-sends, so
+    /// that a spill policy can apply to them.
+    fn local_channel<T: Exchangeable>(&mut self, identifier: usize) -> (ThreadPusher<T>, Box<dyn Pull<T>>) {
+        let (local_send, local_recv) = Thread::new_from(identifier, Rc::clone(&self.events));
+        let channel = Rc::clone(self.to_local.entry(identifier).or_default());
+        use crate::allocator::counters::Puller as CountPuller;
+        let canary = Canary::new(identifier, Rc::clone(&self.canaries));
+        let puller = PullerInner::new(Box::new(local_recv), channel, canary);
+        let puller = Box::new(CountPuller::new(puller, identifier, Rc::clone(&self.events)));
+        (local_send, puller)
+    }
 }
 
 impl Allocate for ProcessAllocator {
@@ -168,6 +222,34 @@ impl Allocate for ProcessAllocator {
         let puller = Box::new(CountPuller::new(Puller::new(channel, canary), identifier, Rc::clone(self.events())));
 
         (pushes, puller)
+    }
+
+    fn broadcast<T: Exchangeable + Clone>(&mut self, identifier: usize) -> (Box<dyn Push<T>>, Box<dyn Pull<T>>) {
+
+        // Assume and enforce in-order identifier allocation.
+        if let Some(bound) = self.channel_id_bound {
+            assert!(bound < identifier);
+        }
+        self.channel_id_bound = Some(identifier);
+
+        let (local, puller) = self.local_channel::<T>(identifier);
+
+        // Serialize once, and hand every other worker a reference to the bytes.
+        let targets: Vec<_> = (0 .. self.peers).filter(|&target| target != self.index).map(|target| Rc::clone(&self.sends[target])).collect();
+        let remote = if targets.is_empty() { None } else {
+            let header = MessageHeader {
+                channel:        identifier,
+                source:         self.index,
+                target_lower:   0,
+                target_upper:   self.peers,
+                length:         0,
+                seqno:          0,
+            };
+            let endpoint = SendEndpoint::new(Fanout { targets }, self.refill.clone());
+            Some(Pusher::new(header, Rc::new(RefCell::new(endpoint))))
+        };
+
+        (Box::new(BroadcastPusher { local, remote }), puller)
     }
 
     // Perform preparatory work, most likely reading binary buffers from self.recv.
