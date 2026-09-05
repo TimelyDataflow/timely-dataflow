@@ -8,7 +8,7 @@ use std::time::Duration;
 use std::collections::{HashMap};
 use std::sync::mpsc::{Sender, Receiver};
 
-use crate::allocator::thread::{ThreadBuilder};
+use crate::allocator::thread::{ThreadBuilder, ThreadPuller};
 use crate::allocator::{Allocate, AllocateBuilder, PeerBuilder, Thread};
 use crate::{Push, Pull};
 use crate::buzzer::Buzzer;
@@ -170,16 +170,30 @@ impl Allocate for Process {
         use crate::allocator::counters::ArcPusher as CountPusher;
         use crate::allocator::counters::Puller as CountPuller;
 
+        // Messages a worker sends to itself take a thread-local queue rather
+        // than the shared channel, which would cost two cross-thread sends,
+        // a self-unpark, and two cross-thread receives, all for no reason.
+        let (local_send, local_recv) = Thread::new_from(identifier, Rc::clone(self.inner.events()));
+        let mut local_send = Some(local_send);
+
         let sends =
         sends.into_iter()
              .zip(self.counters_send.iter())
-             .map(|((s,b), sender)| CountPusher::new(s, identifier, sender.clone(), b))
-             .map(|s| Box::new(s) as Box<dyn Push<T>>)
+             .enumerate()
+             .map(|(target, ((s,b), sender))| {
+                if target == self.index {
+                    Box::new(local_send.take().expect("self pusher used twice")) as Box<dyn Push<T>>
+                }
+                else {
+                    Box::new(CountPusher::new(s, identifier, sender.clone(), b)) as Box<dyn Push<T>>
+                }
+             })
              .collect::<Vec<_>>();
 
-        let recv = Box::new(CountPuller::new(recv, identifier, Rc::clone(self.inner.events()))) as Box<dyn Pull<T>>;
+        let remote = CountPuller::new(recv, identifier, Rc::clone(self.inner.events()));
+        let puller = Box::new(LocalFirst { local: local_recv, remote }) as Box<dyn Pull<T>>;
 
-        (sends, recv)
+        (sends, puller)
     }
 
     fn events(&self) -> &Rc<RefCell<Vec<usize>>> {
@@ -225,6 +239,20 @@ impl<T> Push<T> for Pusher<T> {
 struct Puller<T> {
     current: Option<T>,
     source: Receiver<T>,
+}
+
+/// A puller that drains the worker's own pushes before those of other workers.
+struct LocalFirst<T> {
+    local: ThreadPuller<T>,
+    remote: crate::allocator::counters::Puller<T, Puller<T>>,
+}
+
+impl<T> Pull<T> for LocalFirst<T> {
+    #[inline]
+    fn pull(&mut self) -> &mut Option<T> {
+        let local = self.local.pull();
+        if local.is_some() { local } else { self.remote.pull() }
+    }
 }
 
 impl<T> Pull<T> for Puller<T> {

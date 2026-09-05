@@ -145,8 +145,11 @@ mod encoding {
     impl<T: Data> Bytesable for Bincode<T> {
         fn from_bytes(bytes: Bytes) -> Self {
             let typed = ::bincode::deserialize(&bytes[..]).expect("bincode::deserialize() failed");
-            let typed_size = ::bincode::serialized_size(&typed).expect("bincode::serialized_size() failed") as usize;
-            assert_eq!(bytes.len(), (typed_size + 7) & !7);
+            // Measuring the payload again costs a second traversal of it, on every receive.
+            #[cfg(debug_assertions)] {
+                let typed_size = ::bincode::serialized_size(&typed).expect("bincode::serialized_size() failed") as usize;
+                assert_eq!(bytes.len(), (typed_size + 7) & !7);
+            }
             Bincode { payload: typed }
         }
 

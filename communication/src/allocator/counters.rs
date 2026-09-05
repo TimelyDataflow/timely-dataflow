@@ -44,9 +44,13 @@ impl<T, P: Push<T>> Push<T> for Pusher<T, P> {
         // }
         // TODO: Version above is less chatty, but can be a bit late in
         //       moving information along. Better, but needs cooperation.
-        self.events
-            .borrow_mut()
-            .push(self.index);
+        // A `None` is a flush, and the wrapped pusher is unbuffered: nothing
+        // is enqueued, and so there is nothing to announce.
+        if element.is_some() {
+            self.events
+                .borrow_mut()
+                .push(self.index);
+        }
 
         self.pusher.push(element)
     }
@@ -90,6 +94,10 @@ impl<T, P: Push<T>> Push<T> for ArcPusher<T, P> {
         // else {
         //     self.count += 1;
         // }
+
+        // A `None` is a flush, and the wrapped pusher is unbuffered: nothing
+        // is enqueued, and so there is nothing to announce or to awaken for.
+        if element.is_none() { return; }
 
         // These three calls should happen in this order, to ensure that
         // we first enqueue data, second enqueue interest in the channel,
