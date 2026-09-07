@@ -95,6 +95,7 @@
 #![forbid(missing_docs)]
 
 pub mod allocator;
+pub mod chain;
 pub mod networking;
 pub mod initialize;
 pub mod logging;
