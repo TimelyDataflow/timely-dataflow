@@ -8,3 +8,11 @@ rust-version.workspace = true
 
 [lints]
 workspace = true
+
+[features]
+default = ["columnar"]
+columnar = ["dep:columnar", "dep:timely_bytes"]
+
+[dependencies]
+columnar = { workspace = true, optional = true }
+timely_bytes = { path = "../bytes", version = "0.31", optional = true }

@@ -122,6 +122,22 @@ mod implementations {
     use serde::{Serialize, Deserialize};
     use crate::dataflow::channels::ContainerBytes;
 
+    impl<C: columnar::ContainerBytes> ContainerBytes
+        for crate::container::columnar::ColumnarContainer<C>
+    {
+        fn from_bytes(bytes: crate::bytes::arc::Bytes) -> Self {
+            Self::from_bytes(bytes)
+        }
+
+        fn length_in_bytes(&self) -> usize {
+            self.length_in_bytes()
+        }
+
+        fn into_bytes<W: Write>(&self, writer: &mut W) {
+            self.write_bytes(writer).expect("columnar container write failed")
+        }
+    }
+
     impl<T: Serialize + for<'a> Deserialize<'a>> ContainerBytes for Vec<T> {
         fn from_bytes(bytes: crate::bytes::arc::Bytes) -> Self {
             ::bincode::deserialize(&bytes[..]).expect("bincode::deserialize() failed")

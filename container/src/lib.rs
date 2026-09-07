@@ -4,6 +4,10 @@
 
 use std::collections::VecDeque;
 
+/// Allocation-conscious columnar containers and builders.
+#[cfg(feature = "columnar")]
+pub mod columnar;
+
 /// A type containing a number of records accounted for by progress tracking.
 ///
 /// The object stores a number of updates and thus is able to describe it count
