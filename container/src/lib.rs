@@ -4,6 +4,9 @@
 
 use std::collections::VecDeque;
 
+pub mod columnar;
+pub use columnar::{Column, ColumnBuilder, ColumnOf, COLUMN_CAPACITY_BYTES};
+
 /// A type containing a number of records accounted for by progress tracking.
 ///
 /// The object stores a number of updates and thus is able to describe it count
