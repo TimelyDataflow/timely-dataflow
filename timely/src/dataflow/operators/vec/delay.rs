@@ -31,8 +31,8 @@ pub trait Delay<T: Timestamp, D: 'static> {
     ///     (0..10).to_stream(scope)
     ///            .delay(|data, time| *data)
     ///            .sink(Pipeline, "example", |(input, frontier)| {
-    ///                input.for_each_time(|time, data| {
-    ///                    println!("data at time: {:?}", time);
+    ///                input.for_each_stamp(|cap, data| {
+    ///                    println!("data at time: {:?}", cap);
     ///                });
     ///            });
     /// });
@@ -59,8 +59,8 @@ pub trait Delay<T: Timestamp, D: 'static> {
     ///     (0..10).to_stream(scope)
     ///            .delay(|data, time| *data)
     ///            .sink(Pipeline, "example", |(input, frontier)| {
-    ///                input.for_each_time(|time, data| {
-    ///                    println!("data at time: {:?}", time);
+    ///                input.for_each_stamp(|cap, data| {
+    ///                    println!("data at time: {:?}", cap);
     ///                });
     ///            });
     /// });
@@ -88,8 +88,8 @@ pub trait Delay<T: Timestamp, D: 'static> {
     ///     (0..10).to_stream(scope)
     ///            .delay_batch(|time| time + 1)
     ///            .sink(Pipeline, "example", |(input, frontier)| {
-    ///                input.for_each_time(|time, data| {
-    ///                    println!("data at time: {:?}", time);
+    ///                input.for_each_stamp(|cap, data| {
+    ///                    println!("data at time: {:?}", cap);
     ///                });
     ///            });
     /// });
@@ -101,23 +101,23 @@ impl<T: Timestamp + TotalOrder + ::std::hash::Hash, D: 'static> Delay<T, D> for 
     fn delay<L: FnMut(&D, &T)->T+'static>(self, mut func: L) -> Self {
         let mut elements = HashMap::new();
         self.unary_notify(Pipeline, "Delay", vec![], move |input, output, notificator| {
-            input.for_each_time(|time, data| {
+            input.for_each_stamp(|cap, data| {
                 // A message with no time makes no progress claims, and has no time to delay from.
-                if let Some(old_time) = time.time() {
+                if let Some(old_time) = cap.least() {
                     for datum in data.flat_map(|d| d.drain(..)) {
                         let new_time = func(&datum, old_time);
                         assert!(old_time.less_equal(&new_time));
                         elements.entry(new_time.clone())
-                                .or_insert_with(|| { notificator.notify_at(time.delayed(&new_time, output.output_index())); Vec::new() })
+                                .or_insert_with(|| { notificator.notify_at(cap.delayed(&new_time, output.output_index())); Vec::new() })
                                 .push(datum);
                     }
                 }
             });
 
             // for each available notification, send corresponding set
-            notificator.for_each(|time,_,_| {
-                if let Some(mut data) = elements.remove(&time) {
-                    output.session(&time).give_iterator(data.drain(..));
+            notificator.for_each(|cap,_,_| {
+                if let Some(mut data) = elements.remove(cap.time()) {
+                    output.session(&cap).give_iterator(data.drain(..));
                 }
             });
         })
@@ -132,21 +132,21 @@ impl<T: Timestamp + TotalOrder + ::std::hash::Hash, D: 'static> Delay<T, D> for 
     fn delay_batch<L: FnMut(&T)->T+'static>(self, mut func: L) -> Self {
         let mut elements = HashMap::new();
         self.unary_notify(Pipeline, "Delay", vec![], move |input, output, notificator| {
-            input.for_each_time(|time, data| {
-                if let Some(old_time) = time.time() {
+            input.for_each_stamp(|cap, data| {
+                if let Some(old_time) = cap.least() {
                     let new_time = func(old_time);
                     assert!(old_time.less_equal(&new_time));
                     elements.entry(new_time.clone())
-                            .or_insert_with(|| { notificator.notify_at(time.delayed(&new_time, output.output_index())); Vec::new() })
+                            .or_insert_with(|| { notificator.notify_at(cap.delayed(&new_time, output.output_index())); Vec::new() })
                             .extend(data.map(std::mem::take));
                 }
             });
 
             // for each available notification, send corresponding set
-            notificator.for_each(|time,_,_| {
-                if let Some(mut datas) = elements.remove(&time) {
+            notificator.for_each(|cap,_,_| {
+                if let Some(mut datas) = elements.remove(cap.time()) {
                     for mut data in datas.drain(..) {
-                        output.session(&time).give_container(&mut data);
+                        output.session(&cap).give_container(&mut data);
                     }
                 }
             });

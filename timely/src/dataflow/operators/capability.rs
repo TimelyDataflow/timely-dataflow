@@ -286,12 +286,12 @@ impl<T: Timestamp> InputCapability<T> {
     /// have no such element; operators over them must read the whole
     /// [`InputCapability::stamp`] and forward each of its elements.
     ///
-    /// Messages sent under no capabilities have an empty stamp and no time to report. An
-    /// operator that needs a time should `if let Some(time) = cap.time()` and drop such
+    /// Messages sent under no capabilities have an empty stamp and no least element. An
+    /// operator that needs a time should `if let Some(time) = cap.least()` and drop such
     /// messages otherwise; they make no progress claims, and may arrive after the frontier
     /// has passed every time in their contents.
     #[inline]
-    pub fn time(&self) -> Option<&T> where T: TotalOrder {
+    pub fn least(&self) -> Option<&T> where T: TotalOrder {
         self.stamp().least()
     }
 
@@ -328,8 +328,8 @@ impl<T: Timestamp> InputCapability<T> {
     ///
     /// This method panics if the timestamp summary to `output_port` strictly advances the time.
     #[inline]
-    pub fn retain(&self, output_port: usize) -> Option<Capability<T>> where T: TotalOrder {
-        self.time().map(|time| self.delayed(time, output_port))
+    pub fn retain_least(&self, output_port: usize) -> Option<Capability<T>> where T: TotalOrder {
+        self.least().map(|time| self.delayed(time, output_port))
     }
 
     /// Transforms to an owned capability set for a specific output port, with one
@@ -445,7 +445,7 @@ impl<T: Timestamp> CapabilitySet<T> {
     ///             let mut cap = CapabilitySet::from_elem(default_cap);
     ///             move |(input, frontier), output| {
     ///                 cap.downgrade(&frontier.frontier());
-    ///                 input.for_each_time(|time, data| {});
+    ///                 input.for_each_stamp(|cap, data| {});
     ///                 let a_cap = cap.first();
     ///                 if let Some(a_cap) = a_cap.as_ref() {
     ///                     output.session(a_cap).give(());

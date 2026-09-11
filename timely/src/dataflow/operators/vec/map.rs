@@ -54,8 +54,8 @@ pub trait Map<'scope, T: Timestamp, D: 'static> : Sized {
 impl<'scope, T: Timestamp, D: 'static> Map<'scope, T, D> for StreamVec<'scope, T, D> {
     fn map_in_place<L: FnMut(&mut D)+'static>(self, mut logic: L) -> StreamVec<'scope, T, D> {
         self.unary(Pipeline, "MapInPlace", move |_,_| move |input, output| {
-            input.for_each_time(|time, data| {
-                let mut session = output.session(&time);
+            input.for_each_stamp(|cap, data| {
+                let mut session = output.session(&cap);
                 for data in data {
                     for datum in data.iter_mut() { logic(datum); }
                     session.give_container(data);

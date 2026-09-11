@@ -71,9 +71,9 @@ impl<'scope, T: Timestamp + TotalOrder, K: ExchangeData+Hash+Eq+Clone, V: Exchan
         self.unary_notify(Exchange::new(move |(k, _)| hash(k)), "StateMachine", vec![], move |input, output, notificator| {
 
             // go through each time with data, process each (key, val) pair.
-            notificator.for_each(|time,_,_| {
-                if let Some(pend) = pending.remove(time.time()) {
-                    let mut session = output.session(&time);
+            notificator.for_each(|cap,_,_| {
+                if let Some(pend) = pending.remove(cap.time()) {
+                    let mut session = output.session(&cap);
                     for (key, val) in pend {
                         let (remove, output) = {
                             let state = states.entry(key.clone()).or_insert_with(Default::default);
@@ -86,9 +86,9 @@ impl<'scope, T: Timestamp + TotalOrder, K: ExchangeData+Hash+Eq+Clone, V: Exchan
             });
 
             // stash each input and request a notification when ready
-            input.for_each_time(|time, data| {
+            input.for_each_stamp(|cap, data| {
                 // A message with no time makes no progress claims, and has no place in time order.
-                if let Some(cap) = time.retain(output.output_index()) {
+                if let Some(cap) = cap.retain_least(output.output_index()) {
                     // stash if not time yet
                     if notificator.frontier(0).less_than(cap.time()) {
                         for data in data { pending.entry(cap.time().clone()).or_insert_with(Vec::new).append(data); }

@@ -18,13 +18,13 @@ fn main() {
             scope.input_from(&mut input)
                 .unary(Exchange::new(|x| *x), "Distinct", move |_, _|
                     move |input, output| {
-                        input.for_each_time(|time, data| {
-                            if let Some(&t) = time.time() {
+                        input.for_each_stamp(|cap, data| {
+                            if let Some(&t) = cap.least() {
                                 let counts =
                                 counts_by_time
                                     .entry(t)
                                     .or_insert(HashMap::new());
-                                let mut session = output.session(&time);
+                                let mut session = output.session(&cap);
                                 for data in data {
                                     for &datum in data.iter() {
                                         let count = counts.entry(datum).or_insert(0);

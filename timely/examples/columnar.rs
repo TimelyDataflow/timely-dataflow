@@ -44,8 +44,8 @@ fn main() {
                     "Split",
                     |_cap, _info| {
                         move |input, output| {
-                            input.for_each_time(|time, data| {
-                                let mut session = output.session(&time);
+                            input.for_each_stamp(|cap, data| {
+                                let mut session = output.session(&cap);
                                 for data in data {
                                     for wordcount in data.borrow().into_index_iter().flat_map(|wordcount| {
                                         wordcount.text.split(|b| b.is_ascii_whitespace()).filter(|s| !s.is_empty()).map(move |text| WordCountReference { text, diff: wordcount.diff })
@@ -66,8 +66,8 @@ fn main() {
                         let mut counts = HashMap::new();
 
                         move |(input, frontier), output| {
-                            input.for_each_time(|time, data| {
-                                if let Some(cap) = time.retain(output.output_index()) {
+                            input.for_each_stamp(|cap, data| {
+                                if let Some(cap) = cap.retain_least(output.output_index()) {
                                     queues
                                         .entry(cap)
                                         .or_insert(Vec::new())

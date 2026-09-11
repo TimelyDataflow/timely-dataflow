@@ -125,10 +125,10 @@ where
 {
     fn inspect_stamp(self, mut func: impl FnMut(&Stamp<T>, &C)+'static) -> Self {
         self.unary(Pipeline, "Inspect", move |_,_| move |input, output| {
-            input.for_each_time(|time, data| {
-                let mut session = output.session(&time);
+            input.for_each_stamp(|cap, data| {
+                let mut session = output.session(&cap);
                 for data in data {
-                    func(time.stamp(), &*data);
+                    func(cap.stamp(), &*data);
                     session.give_container(data);
                 }
             });
@@ -177,11 +177,11 @@ impl<T: Timestamp, C: Container> InspectCore<T, C> for Stream<'_, T, C> {
                 frontier.extend(chain.frontier().iter().cloned());
                 func(Err(frontier.elements()));
             }
-            input.for_each_time(|time, data| {
-                let mut session = output.session(&time);
+            input.for_each_stamp(|cap, data| {
+                let mut session = output.session(&cap);
                 for data in data {
                     // A message with no time is forwarded unobserved; there is no time to report.
-                    if let Some(t) = time.time() { func(Ok((t, &*data))); }
+                    if let Some(t) = cap.least() { func(Ok((t, &*data))); }
                     session.give_container(data);
                 }
             });

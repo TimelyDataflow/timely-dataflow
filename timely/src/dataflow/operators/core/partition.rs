@@ -60,7 +60,7 @@ impl<'scope, T: Timestamp, C: Container + DrainContainer> Partition<'scope, T, C
             move |_frontiers| {
                 let mut handles = outputs.iter_mut().map(|o| o.activate()).collect::<Vec<_>>();
                 let mut targets = BTreeMap::<u64,Vec<_>>::default();
-                input.for_each_time(|time, data| {
+                input.for_each_stamp(|cap, data| {
                     // Sort data by intended output.
                     for datum in data.flat_map(|d| d.drain()) {
                         let (part, datum) = route(datum);
@@ -71,11 +71,11 @@ impl<'scope, T: Timestamp, C: Container + DrainContainer> Partition<'scope, T, C
                         for datum in data.into_iter() {
                             c_build.push_into(datum);
                             while let Some(container) = c_build.extract() {
-                                handles[part as usize].give(&time, container);
+                                handles[part as usize].give(&cap, container);
                             }
                         }
                         while let Some(container) = c_build.finish() {
-                            handles[part as usize].give(&time, container);
+                            handles[part as usize].give(&cap, container);
                         }
                     }
                 });

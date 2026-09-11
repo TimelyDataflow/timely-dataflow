@@ -54,9 +54,9 @@ impl<'scope, T: Timestamp + TotalOrder + ::std::hash::Hash, D: 'static> Accumula
 
         let mut accums = HashMap::new();
         self.unary_notify(Pipeline, "Accumulate", vec![], move |input, output, notificator| {
-            input.for_each_time(|time, data| {
+            input.for_each_stamp(|cap, data| {
                 // A message with no time makes no progress claims, and has no time to accumulate at.
-                if let Some(cap) = time.retain(output.output_index()) {
+                if let Some(cap) = cap.retain_least(output.output_index()) {
                     for data in data {
                         logic(accums.entry(cap.time().clone()).or_insert_with(|| default.clone()), data);
                     }
@@ -64,9 +64,9 @@ impl<'scope, T: Timestamp + TotalOrder + ::std::hash::Hash, D: 'static> Accumula
                 }
             });
 
-            notificator.for_each(|time,_,_| {
-                if let Some(accum) = accums.remove(&time) {
-                    output.session(&time).give(accum);
+            notificator.for_each(|cap,_,_| {
+                if let Some(accum) = accums.remove(cap.time()) {
+                    output.session(&cap).give(accum);
                 }
             });
         })

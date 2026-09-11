@@ -51,11 +51,11 @@ impl<'scope, T: Timestamp + TotalOrder, D: 'static> Branch<T, D> for StreamVec<'
                 let mut output1_handle = output1.activate();
                 let mut output2_handle = output2.activate();
 
-                input.for_each_time(|time, data| {
+                input.for_each_stamp(|cap, data| {
                     // A message with no time makes no progress claims, and cannot be routed by time.
-                    if let Some(t) = time.time() {
-                        let mut out1 = output1_handle.session(&time);
-                        let mut out2 = output2_handle.session(&time);
+                    if let Some(t) = cap.least() {
+                        let mut out1 = output1_handle.session(&cap);
+                        let mut out2 = output2_handle.session(&cap);
                         for datum in data.flat_map(|d| d.drain(..)) {
                             if condition(t, &datum) {
                                 out2.give(datum);
@@ -120,12 +120,12 @@ impl<'scope, T: Timestamp + TotalOrder, C: Container> BranchWhen<T> for Stream<'
                 let mut output1_handle = output1.activate();
                 let mut output2_handle = output2.activate();
 
-                input.for_each_time(|time, data| {
-                    if let Some(t) = time.time() {
+                input.for_each_stamp(|cap, data| {
+                    if let Some(t) = cap.least() {
                         let mut out = if condition(t) {
-                            output2_handle.session(&time)
+                            output2_handle.session(&cap)
                         } else {
-                            output1_handle.session(&time)
+                            output1_handle.session(&cap)
                         };
                         out.give_containers(data);
                     }

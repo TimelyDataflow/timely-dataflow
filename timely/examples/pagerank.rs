@@ -43,16 +43,16 @@ fn main() {
                     move |(input1, frontier1), (input2, frontier2), output| {
 
                         // hold on to edge changes until it is time.
-                        input1.for_each_time(|time, data| {
-                            if let Some(cap) = time.retain(output.output_index()) {
+                        input1.for_each_stamp(|cap, data| {
+                            if let Some(cap) = cap.retain_least(output.output_index()) {
                                 let entry = edge_stash.entry(cap).or_default();
                                 data.for_each(|data| entry.append(data));
                             }
                         });
 
                         // hold on to rank changes until it is time.
-                        input2.for_each_time(|time, data| {
-                            if let Some(cap) = time.retain(output.output_index()) {
+                        input2.for_each_stamp(|cap, data| {
+                            if let Some(cap) = cap.retain_least(output.output_index()) {
                                 let entry = rank_stash.entry(cap).or_default();
                                 data.for_each(|data| entry.append(data));
                             }

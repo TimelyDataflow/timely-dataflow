@@ -38,8 +38,8 @@ fn main() {
                     move |input1, input2, output| {
 
                         // Drain first input, check second map, update first map.
-                        input1.for_each_time(|time, data| {
-                            let mut session = output.session(&time);
+                        input1.for_each_stamp(|cap, data| {
+                            let mut session = output.session(&cap);
                             for (key, val1) in data.flat_map(|d| d.drain(..)) {
                                 if let Some(values) = map2.get(&key) {
                                     for val2 in values.iter() {
@@ -52,8 +52,8 @@ fn main() {
                         });
 
                         // Drain second input, check first map, update second map.
-                        input2.for_each_time(|time, data| {
-                            let mut session = output.session(&time);
+                        input2.for_each_stamp(|cap, data| {
+                            let mut session = output.session(&cap);
                             for (key, val2) in data.flat_map(|d| d.drain(..)) {
                                 if let Some(values) = map1.get(&key) {
                                     for val1 in values.iter() {

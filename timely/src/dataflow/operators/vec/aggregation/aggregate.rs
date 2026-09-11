@@ -82,9 +82,9 @@ impl<'scope, T: Timestamp + TotalOrder + Hash, K: ExchangeData+Clone+Hash+Eq, V:
         self.unary_notify(Exchange::new(move |(k, _)| hash(k)), "Aggregate", vec![], move |input, output, notificator| {
 
             // read each input, fold into aggregates
-            input.for_each_time(|time, data| {
+            input.for_each_stamp(|cap, data| {
                 // A message with no time makes no progress claims, and has no time to aggregate at.
-                if let Some(cap) = time.retain(output.output_index()) {
+                if let Some(cap) = cap.retain_least(output.output_index()) {
                     let agg_time = aggregates.entry(cap.time().clone()).or_insert_with(HashMap::new);
                     for (key, val) in data.flat_map(|d| d.drain(..)) {
                         let agg = agg_time.entry(key.clone()).or_insert_with(Default::default);
@@ -95,9 +95,9 @@ impl<'scope, T: Timestamp + TotalOrder + Hash, K: ExchangeData+Clone+Hash+Eq, V:
             });
 
             // pop completed aggregates, send along whatever
-            notificator.for_each(|time,_,_| {
-                if let Some(aggs) = aggregates.remove(time.time()) {
-                    let mut session = output.session(&time);
+            notificator.for_each(|cap,_,_| {
+                if let Some(aggs) = aggregates.remove(cap.time()) {
+                    let mut session = output.session(&cap);
                     for (key, agg) in aggs {
                         session.give(emit(key, agg));
                     }
