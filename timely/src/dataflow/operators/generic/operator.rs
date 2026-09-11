@@ -12,7 +12,6 @@ use crate::dataflow::{Scope, Stream};
 
 use super::builder_rc::OperatorBuilder;
 use crate::dataflow::operators::generic::OperatorInfo;
-use crate::dataflow::operators::generic::notificator::{Notificator, FrontierNotificator};
 use crate::{Container, ContainerBuilder};
 use crate::container::CapacityContainerBuilder;
 
@@ -25,7 +24,7 @@ pub trait Operator<'scope, T: Timestamp, C1> {
     /// # Examples
     /// ```
     /// use std::collections::HashMap;
-    /// use timely::dataflow::operators::{ToStream, FrontierNotificator};
+    /// use timely::dataflow::operators::ToStream;
     /// use timely::dataflow::operators::generic::Operator;
     /// use timely::dataflow::channels::pact::Pipeline;
     ///
@@ -35,22 +34,24 @@ pub trait Operator<'scope, T: Timestamp, C1> {
     ///         .container::<Vec<_>>()
     ///         .unary_frontier(Pipeline, "example", |default_cap, _info| {
     ///             let mut cap = Some(default_cap.delayed(&12));
-    ///             let mut notificator = FrontierNotificator::default();
     ///             let mut stash = HashMap::new();
     ///             move |(input, frontier), output| {
     ///                 if let Some(ref c) = cap.take() {
     ///                     output.session(&c).give(12);
     ///                 }
+    ///                 // Stash data under a capability for its least time.
     ///                 input.for_each_stamp(|cap, data| {
-    ///                     if let Some(t) = cap.least() {
-    ///                         stash.entry(t.clone())
+    ///                     if let Some(cap) = cap.retain_least(output.output_index()) {
+    ///                         stash.entry(cap)
     ///                              .or_insert(Vec::new())
     ///                              .extend(data.flat_map(|d| d.drain(..)));
     ///                     }
     ///                 });
-    ///                 notificator.for_each(&[frontier], |cap, _not| {
-    ///                     if let Some(mut vec) = stash.remove(cap.time()) {
-    ///                         output.session(&cap).give_iterator(vec.drain(..));
+    ///                 // Send stashed data whose time the input frontier has passed.
+    ///                 stash.retain(|cap, vec| {
+    ///                     if frontier.frontier().less_equal(cap.time()) { true } else {
+    ///                         output.session(cap).give_iterator(vec.drain(..));
+    ///                         false
     ///                     }
     ///                 });
     ///             }
@@ -66,40 +67,6 @@ pub trait Operator<'scope, T: Timestamp, C1> {
                  &mut OutputBuilderSession<'_, T, CB>)+'static,
         P: ParallelizationContract<T, C1>;
 
-    /// Creates a new dataflow operator that partitions its input stream by a parallelization strategy `pact`,
-    /// and repeatedly invokes the closure supplied as `logic`, which can read from the input stream, write to
-    /// the output stream, and inspect the frontier at the input.
-    ///
-    /// # Examples
-    /// ```
-    /// use std::collections::HashMap;
-    /// use timely::dataflow::operators::{ToStream, FrontierNotificator};
-    /// use timely::dataflow::operators::generic::Operator;
-    /// use timely::dataflow::channels::pact::Pipeline;
-    ///
-    /// timely::example(|scope| {
-    ///     (0u64..10)
-    ///         .to_stream(scope)
-    ///         .container::<Vec<_>>()
-    ///         .unary_notify(Pipeline, "example", None, move |input, output, notificator| {
-    ///             input.for_each_stamp(|cap, data| {
-    ///                 output.session(&cap).give_containers(data);
-    ///                 if let Some(cap) = cap.retain_least(output.output_index()) {
-    ///                     notificator.notify_at(cap);
-    ///                 }
-    ///             });
-    ///             notificator.for_each(|cap, _cnt, _not| {
-    ///                 println!("notified at {:?}", cap);
-    ///             });
-    ///         });
-    /// });
-    /// ```
-    fn unary_notify<CB: ContainerBuilder,
-            L: FnMut(&mut InputHandleCore<T, C1, P::Puller>,
-                     &mut OutputBuilderSession<'_, T, CB>,
-                     &mut Notificator<T>)+'static,
-             P: ParallelizationContract<T, C1>>
-             (self, pact: P, name: &str, init: impl IntoIterator<Item=T>, logic: L) -> Stream<'scope, T, CB::Container>;
 
     /// Creates a new dataflow operator that partitions its input stream by a parallelization
     /// strategy `pact`, and repeatedly invokes `logic`, the function returned by the function passed as `constructor`.
@@ -107,7 +74,7 @@ pub trait Operator<'scope, T: Timestamp, C1> {
     ///
     /// # Examples
     /// ```
-    /// use timely::dataflow::operators::{ToStream, FrontierNotificator};
+    /// use timely::dataflow::operators::ToStream;
     /// use timely::dataflow::operators::generic::operator::Operator;
     /// use timely::dataflow::channels::pact::Pipeline;
     /// use timely::dataflow::Scope;
@@ -144,7 +111,7 @@ pub trait Operator<'scope, T: Timestamp, C1> {
     /// # Examples
     /// ```
     /// use std::collections::HashMap;
-    /// use timely::dataflow::operators::{Input, Inspect, FrontierNotificator};
+    /// use timely::dataflow::operators::{Input, Inspect};
     /// use timely::dataflow::operators::generic::operator::Operator;
     /// use timely::dataflow::channels::pact::Pipeline;
     ///
@@ -153,24 +120,24 @@ pub trait Operator<'scope, T: Timestamp, C1> {
     ///        let (in1_handle, in1) = scope.new_input::<Vec<_>>();
     ///        let (in2_handle, in2) = scope.new_input::<Vec<_>>();
     ///        in1.binary_frontier(in2, Pipeline, Pipeline, "example", |mut _default_cap, _info| {
-    ///            let mut notificator = FrontierNotificator::default();
     ///            let mut stash = HashMap::new();
     ///            move |(input1, frontier1), (input2, frontier2), output| {
+    ///                // Stash data from either input under a capability for its least time.
     ///                input1.for_each_stamp(|cap, data| {
     ///                    if let Some(cap) = cap.retain_least(output.output_index()) {
-    ///                        stash.entry(cap.time().clone()).or_insert(Vec::new()).extend(data.flat_map(|d| d.drain(..)));
-    ///                        notificator.notify_at(cap);
+    ///                        stash.entry(cap).or_insert(Vec::new()).extend(data.flat_map(|d| d.drain(..)));
     ///                    }
     ///                });
     ///                input2.for_each_stamp(|cap, data| {
     ///                    if let Some(cap) = cap.retain_least(output.output_index()) {
-    ///                        stash.entry(cap.time().clone()).or_insert(Vec::new()).extend(data.flat_map(|d| d.drain(..)));
-    ///                        notificator.notify_at(cap);
+    ///                        stash.entry(cap).or_insert(Vec::new()).extend(data.flat_map(|d| d.drain(..)));
     ///                    }
     ///                });
-    ///                notificator.for_each(&[frontier1, frontier2], |cap, _not| {
-    ///                    if let Some(mut vec) = stash.remove(cap.time()) {
-    ///                        output.session(&cap).give_iterator(vec.drain(..));
+    ///                // Send stashed data whose time both input frontiers have passed.
+    ///                stash.retain(|cap, vec| {
+    ///                    if frontier1.frontier().less_equal(cap.time()) || frontier2.frontier().less_equal(cap.time()) { true } else {
+    ///                        output.session(cap).give_iterator(vec.drain(..));
+    ///                        false
     ///                    }
     ///                });
     ///            }
@@ -200,60 +167,6 @@ pub trait Operator<'scope, T: Timestamp, C1> {
         P1: ParallelizationContract<T, C1>,
         P2: ParallelizationContract<T, C2>;
 
-    /// Creates a new dataflow operator that partitions its input stream by a parallelization strategy `pact`,
-    /// and repeatedly invokes the closure supplied as `logic`, which can read from the input streams, write to
-    /// the output stream, and inspect the frontier at the inputs.
-    ///
-    /// # Examples
-    /// ```
-    /// use std::collections::HashMap;
-    /// use timely::dataflow::operators::{Input, Inspect, FrontierNotificator};
-    /// use timely::dataflow::operators::generic::operator::Operator;
-    /// use timely::dataflow::channels::pact::Pipeline;
-    ///
-    /// timely::execute(timely::Config::thread(), |worker| {
-    ///    let (mut in1, mut in2) = worker.dataflow::<usize,_,_>(|scope| {
-    ///        let (in1_handle, in1) = scope.new_input::<Vec<_>>();
-    ///        let (in2_handle, in2) = scope.new_input::<Vec<_>>();
-    ///
-    ///        in1.binary_notify(in2, Pipeline, Pipeline, "example", None, move |input1, input2, output, notificator| {
-    ///            input1.for_each_stamp(|cap, data| {
-    ///                output.session(&cap).give_containers(data);
-    ///                if let Some(cap) = cap.retain_least(output.output_index()) {
-    ///                    notificator.notify_at(cap);
-    ///                }
-    ///            });
-    ///            input2.for_each_stamp(|cap, data| {
-    ///                output.session(&cap).give_containers(data);
-    ///                if let Some(cap) = cap.retain_least(output.output_index()) {
-    ///                    notificator.notify_at(cap);
-    ///                }
-    ///            });
-    ///            notificator.for_each(|cap, _cnt, _not| {
-    ///                println!("notified at {:?}", cap);
-    ///            });
-    ///        });
-    ///
-    ///        (in1_handle, in2_handle)
-    ///    });
-    ///
-    ///    for i in 1..10 {
-    ///        in1.send(i - 1);
-    ///        in1.advance_to(i);
-    ///        in2.send(i - 1);
-    ///        in2.advance_to(i);
-    ///    }
-    /// }).unwrap();
-    /// ```
-    fn binary_notify<C2: Container,
-              CB: ContainerBuilder,
-              L: FnMut(&mut InputHandleCore<T, C1, P1::Puller>,
-                       &mut InputHandleCore<T, C2, P2::Puller>,
-                       &mut OutputBuilderSession<'_, T, CB>,
-                       &mut Notificator<T>)+'static,
-              P1: ParallelizationContract<T, C1>,
-              P2: ParallelizationContract<T, C2>>
-            (self, other: Stream<'scope, T, C2>, pact1: P1, pact2: P2, name: &str, init: impl IntoIterator<Item=T>, logic: L) -> Stream<'scope, T, CB::Container>;
 
     /// Creates a new dataflow operator that partitions its input streams by a parallelization
     /// strategy `pact`, and repeatedly invokes `logic`, the function returned by the function passed as `constructor`.
@@ -261,7 +174,7 @@ pub trait Operator<'scope, T: Timestamp, C1> {
     ///
     /// # Examples
     /// ```
-    /// use timely::dataflow::operators::{ToStream, Inspect, FrontierNotificator};
+    /// use timely::dataflow::operators::{ToStream, Inspect};
     /// use timely::dataflow::operators::generic::operator::Operator;
     /// use timely::dataflow::channels::pact::Pipeline;
     /// use timely::dataflow::Scope;
@@ -299,7 +212,7 @@ pub trait Operator<'scope, T: Timestamp, C1> {
     ///
     /// # Examples
     /// ```
-    /// use timely::dataflow::operators::{ToStream, FrontierNotificator};
+    /// use timely::dataflow::operators::ToStream;
     /// use timely::dataflow::operators::generic::operator::Operator;
     /// use timely::dataflow::channels::pact::Pipeline;
     /// use timely::dataflow::Scope;
@@ -353,26 +266,6 @@ impl<'scope, T: Timestamp, C1: Container> Operator<'scope, T, C1> for Stream<'sc
         stream
     }
 
-    fn unary_notify<CB: ContainerBuilder,
-            L: FnMut(&mut InputHandleCore<T, C1, P::Puller>,
-                     &mut OutputBuilderSession<'_, T, CB>,
-                     &mut Notificator<T>)+'static,
-             P: ParallelizationContract<T, C1>>
-             (self, pact: P, name: &str, init: impl IntoIterator<Item=T>, mut logic: L) -> Stream<'scope, T, CB::Container> {
-
-        self.unary_frontier(pact, name, move |capability, _info| {
-            let mut notificator = FrontierNotificator::default();
-            for time in init {
-                notificator.notify_at(capability.delayed(&time));
-            }
-
-            move |(input, frontier), output| {
-                let frontiers = &[frontier];
-                let notificator = &mut Notificator::new(frontiers, &mut notificator);
-                logic(input, output, notificator);
-            }
-        })
-    }
 
     fn unary<CB, B, L, P>(self, pact: P, name: &str, constructor: B) -> Stream<'scope, T, CB::Container>
     where
@@ -432,30 +325,6 @@ impl<'scope, T: Timestamp, C1: Container> Operator<'scope, T, C1> for Stream<'sc
         stream
     }
 
-    fn binary_notify<C2: Container,
-              CB: ContainerBuilder,
-              L: FnMut(&mut InputHandleCore<T, C1, P1::Puller>,
-                       &mut InputHandleCore<T, C2, P2::Puller>,
-                       &mut OutputBuilderSession<'_, T, CB>,
-                       &mut Notificator<T>)+'static,
-              P1: ParallelizationContract<T, C1>,
-              P2: ParallelizationContract<T, C2>>
-            (self, other: Stream<'scope, T, C2>, pact1: P1, pact2: P2, name: &str, init: impl IntoIterator<Item=T>, mut logic: L) -> Stream<'scope, T, CB::Container> {
-
-        self.binary_frontier(other, pact1, pact2, name, |capability, _info| {
-            let mut notificator = FrontierNotificator::default();
-            for time in init {
-                notificator.notify_at(capability.delayed(&time));
-            }
-
-            move |(input1, frontier1), (input2, frontier2), output| {
-                let frontiers = &[frontier1, frontier2];
-                let notificator = &mut Notificator::new(frontiers, &mut notificator);
-                logic(input1, input2, output, notificator);
-            }
-        })
-
-    }
 
 
     fn binary<C2, CB, B, L, P1, P2>(self, other: Stream<'scope, T, C2>, pact1: P1, pact2: P2, name: &str, constructor: B) -> Stream<'scope, T, CB::Container>
