@@ -25,7 +25,7 @@ pub use exchange::Exchange;
 pub use feedback::{Feedback, LoopVariable, ConnectLoop};
 pub use filter::Filter;
 pub use input::Input;
-pub use inspect::{Inspect, InspectCore};
+pub use inspect::Inspect;
 pub use map::Map;
 pub use ok_err::OkErr;
 pub use partition::Partition;

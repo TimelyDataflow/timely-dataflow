@@ -13,7 +13,7 @@ fn gh_523() {
                 .container::<Vec<_>>()
                 .unary(Pipeline, "Test", move |_, _| {
                     move |input, output| {
-                        input.for_each_time(|cap, data| {
+                        input.for_each_stamp(|cap, data| {
                             let mut session = output.session(&cap);
                             for data in data {
                                 session.give_container(&mut Vec::new());

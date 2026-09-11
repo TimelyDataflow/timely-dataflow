@@ -29,10 +29,12 @@ fn main() {
                     let mut counts = HashMap::new();
 
                     move |(input, frontier), output| {
-                        input.for_each_time(|time, data| {
-                            queues.entry(time.retain(output.output_index()))
-                                  .or_insert(Vec::new())
-                                  .extend(data.map(std::mem::take));
+                        input.for_each_stamp(|cap, data| {
+                            if let Some(cap) = cap.retain_least(output.output_index()) {
+                                queues.entry(cap)
+                                      .or_insert(Vec::new())
+                                      .extend(data.map(std::mem::take));
+                            }
                         });
 
                         for (key, val) in queues.iter_mut() {

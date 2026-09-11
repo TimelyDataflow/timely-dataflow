@@ -3,6 +3,7 @@ use std::hash::Hash;
 use std::collections::HashMap;
 
 use crate::ExchangeData;
+use crate::order::TotalOrder;
 use crate::progress::Timestamp;
 use crate::dataflow::StreamVec;
 use crate::dataflow::operators::generic::operator::Operator;
@@ -55,7 +56,7 @@ pub trait StateMachine<'scope, T: Timestamp, K: ExchangeData+Hash+Eq, V: Exchang
     >(self, fold: F, hash: H) -> StreamVec<'scope, T, R> where T : Hash+Eq ;
 }
 
-impl<'scope, T: Timestamp, K: ExchangeData+Hash+Eq+Clone, V: ExchangeData> StateMachine<'scope, T, K, V> for StreamVec<'scope, T, (K, V)> {
+impl<'scope, T: Timestamp + TotalOrder, K: ExchangeData+Hash+Eq+Clone, V: ExchangeData> StateMachine<'scope, T, K, V> for StreamVec<'scope, T, (K, V)> {
     fn state_machine<
             R: 'static,                                 // output type
             D: Default+'static,                         // per-key state (data)
@@ -70,9 +71,9 @@ impl<'scope, T: Timestamp, K: ExchangeData+Hash+Eq+Clone, V: ExchangeData> State
         self.unary_notify(Exchange::new(move |(k, _)| hash(k)), "StateMachine", vec![], move |input, output, notificator| {
 
             // go through each time with data, process each (key, val) pair.
-            notificator.for_each(|time,_,_| {
-                if let Some(pend) = pending.remove(time.time()) {
-                    let mut session = output.session(&time);
+            notificator.for_each(|cap,_,_| {
+                if let Some(pend) = pending.remove(cap.time()) {
+                    let mut session = output.session(&cap);
                     for (key, val) in pend {
                         let (remove, output) = {
                             let state = states.entry(key.clone()).or_insert_with(Default::default);
@@ -85,23 +86,25 @@ impl<'scope, T: Timestamp, K: ExchangeData+Hash+Eq+Clone, V: ExchangeData> State
             });
 
             // stash each input and request a notification when ready
-            input.for_each_time(|time, data| {
-
-                // stash if not time yet
-                if notificator.frontier(0).less_than(time.time()) {
-                    for data in data { pending.entry(time.time().clone()).or_insert_with(Vec::new).append(data); }
-                    notificator.notify_at(time.retain(output.output_index()));
-                }
-                else {
-                    // else we can process immediately
-                    let mut session = output.session(&time);
-                    for (key, val) in data.flat_map(|d| d.drain(..)) {
-                        let (remove, output) = {
-                            let state = states.entry(key.clone()).or_insert_with(Default::default);
-                            fold(&key, val, state)
-                        };
-                        if remove { states.remove(&key); }
-                        session.give_iterator(output.into_iter());
+            input.for_each_stamp(|cap, data| {
+                // A message with no time makes no progress claims, and has no place in time order.
+                if let Some(cap) = cap.retain_least(output.output_index()) {
+                    // stash if not time yet
+                    if notificator.frontier(0).less_than(cap.time()) {
+                        for data in data { pending.entry(cap.time().clone()).or_insert_with(Vec::new).append(data); }
+                        notificator.notify_at(cap);
+                    }
+                    else {
+                        // else we can process immediately
+                        let mut session = output.session(&cap);
+                        for (key, val) in data.flat_map(|d| d.drain(..)) {
+                            let (remove, output) = {
+                                let state = states.entry(key.clone()).or_insert_with(Default::default);
+                                fold(&key, val, state)
+                            };
+                            if remove { states.remove(&key); }
+                            session.give_iterator(output.into_iter());
+                        }
                     }
                 }
             });

@@ -30,8 +30,8 @@ where
 {
     fn filter<P: FnMut(&C::Item<'_>)->bool+'static>(self, mut predicate: P) -> Self {
         self.unary(Pipeline, "Filter", move |_,_| move |input, output| {
-            input.for_each_time(|time, data| {
-                output.session(&time)
+            input.for_each_stamp(|cap, data| {
+                output.session(&cap)
                       .give_iterator(data.flat_map(|d| d.drain()).filter(&mut predicate));
             });
         })

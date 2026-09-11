@@ -7,7 +7,7 @@ use timely::Accountable;
 use timely::container::CapacityContainerBuilder;
 use timely::dataflow::channels::pact::{ExchangeCore, Pipeline};
 use timely::dataflow::InputHandle;
-use timely::dataflow::operators::{InspectCore, Operator, Probe};
+use timely::dataflow::operators::{Inspect, Operator, Probe};
 use timely::dataflow::ProbeHandle;
 
 // Creates `WordCountContainer` and `WordCountReference` structs,
@@ -44,8 +44,8 @@ fn main() {
                     "Split",
                     |_cap, _info| {
                         move |input, output| {
-                            input.for_each_time(|time, data| {
-                                let mut session = output.session(&time);
+                            input.for_each_stamp(|cap, data| {
+                                let mut session = output.session(&cap);
                                 for data in data {
                                     for wordcount in data.borrow().into_index_iter().flat_map(|wordcount| {
                                         wordcount.text.split(|b| b.is_ascii_whitespace()).filter(|s| !s.is_empty()).map(move |text| WordCountReference { text, diff: wordcount.diff })
@@ -66,11 +66,13 @@ fn main() {
                         let mut counts = HashMap::new();
 
                         move |(input, frontier), output| {
-                            input.for_each_time(|time, data| {
-                                queues
-                                    .entry(time.retain(output.output_index()))
-                                    .or_insert(Vec::new())
-                                    .extend(data.map(std::mem::take));
+                            input.for_each_stamp(|cap, data| {
+                                if let Some(cap) = cap.retain_least(output.output_index()) {
+                                    queues
+                                        .entry(cap)
+                                        .or_insert(Vec::new())
+                                        .extend(data.map(std::mem::take));
+                                }
 
                             });
 
@@ -99,7 +101,7 @@ fn main() {
                     },
                 )
                 .container::<Container>()
-                .inspect_container(|x| {
+                .inspect_core(|x| {
                     match x {
                         Ok((time, data)) => {
                             println!("seen at: {:?}\t{:?} records", time, data.record_count());

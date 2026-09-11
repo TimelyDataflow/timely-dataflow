@@ -36,8 +36,8 @@ fn operator_scaling(scale: u64) {
                 move |_frontiers| {
                     for (input, output) in handles.iter_mut() {
                         let mut output = output.activate();
-                        input.for_each(|time, data| {
-                            output.give(&time, data);
+                        input.for_each(|cap, data| {
+                            output.give(&cap, data);
                         });
                     }
                 }

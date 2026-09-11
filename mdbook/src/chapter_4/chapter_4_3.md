@@ -82,10 +82,12 @@ fn main() {
                 move |(input1, frontier1), (input2, frontier2), output| {
 
                     // Stash received data.
-                    input1.for_each_time(|time, data| {
-                        stash.entry(time.retain(output.output_index()))
-                             .or_insert(Vec::new())
-                             .extend(data.flat_map(|d| d.drain(..)));
+                    input1.for_each_stamp(|cap, data| {
+                        if let Some(cap) = cap.retain_least(output.output_index()) {
+                            stash.entry(cap)
+                                 .or_insert(Vec::new())
+                                 .extend(data.flat_map(|d| d.drain(..)));
+                        }
                     });
 
                     // Consider sending stashed data.

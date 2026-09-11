@@ -19,8 +19,8 @@ fn main() {
             .container::<Vec<_>>()
             .unary(Pipeline, "increment", |capability, info| {
                 move |input, output| {
-                    input.for_each_time(|time, data| {
-                        let mut session = output.session(&time);
+                    input.for_each_stamp(|cap, data| {
+                        let mut session = output.session(&cap);
                         for datum in data.flat_map(|d| d.drain(..)) {
                             session.give(datum + 1);
                         }
@@ -38,7 +38,7 @@ Most of what is interesting lies in the closure, so let's first tidy up some loo
 
 The heart of the logic lies in the closure that binds `input` and `output`. These two are handles respectively to the operator's input (from which it can read records) and the operator's output (to which it can send records).
 
-The input handle `input` has one primary method, `for_each_time`, which is invoked for each distinct timestamp with a `CapabilityRef<Timestamp>` and a list of batches of data.
+The input handle `input` has one primary method, `for_each_stamp`, which is invoked for each distinct stamp (the set of timestamps under which a message travels, usually just one) with an `InputCapability<Timestamp>` and a list of batches of data.
 This method should be called each scheduling invocation, if nothing else to move the batches of data from the input to some operator-local storage.
 
 The output handle `output` has one primary method, `session`, which starts up an output session at the indicated time. The resulting session can be given data in various ways: (i) an element at a time with `give`, (ii) an iterator at a time with `give_iterator`, and (iii) a container at a time with `give_container`. Internally it is buffering up the output and flushing automatically when the session goes out of scope, which happens above when we go around the `while` loop.
@@ -145,8 +145,8 @@ fn main() {
                 let mut maximum = 0;    // define this here; use in the closure
 
                 move |input, output| {
-                    input.for_each_time(|time, data| {
-                        let mut session = output.session(&time);
+                    input.for_each_stamp(|cap, data| {
+                        let mut session = output.session(&cap);
                         for datum in data.flat_map(|d| d.drain(..)) {
                             if datum > maximum {
                                 session.give(datum + 1);
@@ -197,17 +197,21 @@ fn main() {
             let mut stash = HashMap::new();
 
             move |(input1, frontier1), (input2, frontier2), output| {
-                input1.for_each_time(|time, data| {
-                    stash.entry(time.time().clone())
-                         .or_insert(Vec::new())
-                         .extend(data.map(std::mem::take));
-                    notificator.notify_at(time.retain(output.output_index()));
+                input1.for_each_stamp(|cap, data| {
+                    if let Some(cap) = cap.retain_least(output.output_index()) {
+                        stash.entry(cap.time().clone())
+                             .or_insert(Vec::new())
+                             .extend(data.map(std::mem::take));
+                        notificator.notify_at(cap);
+                    }
                 });
-                input2.for_each_time(|time, data| {
-                    stash.entry(time.time().clone())
-                         .or_insert(Vec::new())
-                         .extend(data.map(std::mem::take));
-                    notificator.notify_at(time.retain(output.output_index()));
+                input2.for_each_stamp(|cap, data| {
+                    if let Some(cap) = cap.retain_least(output.output_index()) {
+                        stash.entry(cap.time().clone())
+                             .or_insert(Vec::new())
+                             .extend(data.map(std::mem::take));
+                        notificator.notify_at(cap);
+                    }
                 });
 
                 notificator.for_each(&[frontier1, frontier2], |time, notificator| {
@@ -248,15 +252,19 @@ fn main() {
 
             move |(input1, frontier1), (input2, frontier2), output| {
 
-                input1.for_each_time(|time, data| {
-                    stash.entry(time.retain(output.output_index()))
-                         .or_insert(Vec::new())
-                         .extend(data.map(std::mem::take));
+                input1.for_each_stamp(|cap, data| {
+                    if let Some(cap) = cap.retain_least(output.output_index()) {
+                        stash.entry(cap)
+                             .or_insert(Vec::new())
+                             .extend(data.map(std::mem::take));
+                    }
                 });
-                input2.for_each_time(|time, data| {
-                    stash.entry(time.retain(output.output_index()))
-                         .or_insert(Vec::new())
-                         .extend(data.map(std::mem::take));
+                input2.for_each_stamp(|cap, data| {
+                    if let Some(cap) = cap.retain_least(output.output_index()) {
+                        stash.entry(cap)
+                             .or_insert(Vec::new())
+                             .extend(data.map(std::mem::take));
+                    }
                 });
 
                 // consider sending everything in `stash`.

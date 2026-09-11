@@ -100,8 +100,8 @@ impl<'scope, T: Timestamp, C: Container + DrainContainer> Map<'scope, T, C> for 
         L: FnMut(C::Item<'_>)->I + 'static,
     {
         self.unary(Pipeline, "FlatMap", move |_,_| move |input, output| {
-            input.for_each_time(|time, data| {
-                output.session(&time)
+            input.for_each_stamp(|cap, data| {
+                output.session(&cap)
                       .give_iterator(data.flat_map(|d| d.drain()).flat_map(&mut logic));
             });
         })

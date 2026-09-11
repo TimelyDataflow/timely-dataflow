@@ -13,14 +13,14 @@ pub trait SharedStream<'scope, T: Timestamp, C> {
     ///
     /// # Examples
     /// ```
-    /// use timely::dataflow::operators::{ToStream, InspectCore};
+    /// use timely::dataflow::operators::{ToStream, Inspect};
     /// use timely::dataflow::operators::rc::SharedStream;
     ///
     /// timely::example(|scope| {
     ///     (0..10).to_stream(scope)
     ///            .container::<Vec<_>>()
     ///            .shared()
-    ///            .inspect_container(|x| println!("seen: {:?}", x));
+    ///            .inspect_core(|x| println!("seen: {:?}", x));
     /// });
     /// ```
     fn shared(self) -> Stream<'scope, T, Rc<C>>;
@@ -30,8 +30,8 @@ impl<'scope, T: Timestamp, C: Container> SharedStream<'scope, T, C> for Stream<'
     fn shared(self) -> Stream<'scope, T, Rc<C>> {
         self.unary(Pipeline, "Shared", move |_, _| {
             move |input, output| {
-                input.for_each_time(|time, data| {
-                    let mut session = output.session(&time);
+                input.for_each_stamp(|cap, data| {
+                    let mut session = output.session(&cap);
                     for data in data {
                         session.give_container(&mut Rc::new(std::mem::take(data)));
                     }
@@ -56,15 +56,15 @@ mod test {
                 .concatenate([
                     shared.clone().unary(Pipeline, "read shared 1", |_, _| {
                         move |input, output| {
-                            input.for_each_time(|time, data| {
-                                output.session(&time).give_iterator(data.map(|d| d.as_ptr() as usize));
+                            input.for_each_stamp(|cap, data| {
+                                output.session(&cap).give_iterator(data.map(|d| d.as_ptr() as usize));
                             });
                         }
                     }),
                     shared.unary(Pipeline, "read shared 2", |_, _| {
                         move |input, output| {
-                            input.for_each_time(|time, data| {
-                                output.session(&time).give_iterator(data.map(|d| d.as_ptr() as usize));
+                            input.for_each_stamp(|cap, data| {
+                                output.session(&cap).give_iterator(data.map(|d| d.as_ptr() as usize));
                             });
                         }
                     }),

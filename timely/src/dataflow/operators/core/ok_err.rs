@@ -67,9 +67,9 @@ impl<'scope, T: Timestamp, C: Container + DrainContainer> OkErr<'scope, T, C> fo
                 let mut output1_handle = output1.activate();
                 let mut output2_handle = output2.activate();
 
-                input.for_each_time(|time, data| {
-                    let mut out1 = output1_handle.session(&time);
-                    let mut out2 = output2_handle.session(&time);
+                input.for_each_stamp(|cap, data| {
+                    let mut out1 = output1_handle.session(&cap);
+                    let mut out2 = output2_handle.session(&cap);
                     for datum in data.flat_map(|d| d.drain()) {
                         match logic(datum) {
                             Ok(datum) => out1.give(datum),

@@ -174,9 +174,12 @@ impl<T: ExchangeData+Clone> Sequencer<T> {
                 move |(input, frontier)| {
 
                     // grab each command and queue it up
-                    input.for_each_time(|time, data| {
-                        for (worker, counter, element) in data.flat_map(|d| d.drain(..)) {
-                            recvd.push(((*time.time(), worker, counter), element));
+                    input.for_each_stamp(|cap, data| {
+                        // A message with no time makes no progress claims, and has no place in the sequence.
+                        if let Some(&time) = cap.least() {
+                            for (worker, counter, element) in data.flat_map(|d| d.drain(..)) {
+                                recvd.push(((time, worker, counter), element));
+                            }
                         }
                     });
 

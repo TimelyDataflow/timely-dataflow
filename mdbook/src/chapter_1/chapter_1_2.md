@@ -26,7 +26,7 @@ Let's change the program to print out the timestamp with each record. This shoul
 # }
 ```
 
-with a slightly more complicated operator, `inspect_batch`.
+with a slightly more complicated operator, `inspect_core`.
 
 ```rust
 # extern crate timely;
@@ -36,9 +36,11 @@ with a slightly more complicated operator, `inspect_batch`.
 #     let index = scope.index();
 #     (0..10u64).to_stream(scope)
 #         .container::<Vec<_>>()
-.inspect_batch(move |t,xs| {
-    for x in xs.iter() {
-        println!("worker {}:\thello {} @ {:?}", index, x, t)
+.inspect_core(move |event| {
+    if let Ok((stamp, xs)) = event {
+        for x in xs.iter() {
+            println!("worker {}:\thello {} @ {:?}", index, x, stamp.elements())
+        }
     }
 })
 # ;
@@ -46,7 +48,7 @@ with a slightly more complicated operator, `inspect_batch`.
 # }
 ```
 
-The `inspect_batch` operator gets lower-level access to data in timely dataflow, in particular access to batches of records with the same timestamp. It is intended for diagnosing system-level details, but we can also use it to see what timestamps accompany the data.
+The `inspect_core` operator gets lower-level access to data in timely dataflow, in particular access to batches of records that travel together, along with the stamp of timestamps that accompanies them (usually just one timestamp). It also reports changes to the frontier, which we ignore here. It is intended for diagnosing system-level details, but we can also use it to see what timestamps accompany the data.
 
 The output we get with two workers is now:
 
@@ -54,16 +56,16 @@ The output we get with two workers is now:
     Echidnatron% cargo run --example hello -- -w2
         Finished dev [unoptimized + debuginfo] target(s) in 0.0 secs
         Running `target/debug/examples/hello -w2`
-    worker 1:	hello 1 @ 1
-    worker 1:	hello 3 @ 3
-    worker 1:	hello 5 @ 5
-    worker 0:	hello 0 @ 0
-    worker 0:	hello 2 @ 2
-    worker 0:	hello 4 @ 4
-    worker 0:	hello 6 @ 6
-    worker 0:	hello 8 @ 8
-    worker 1:	hello 7 @ 7
-    worker 1:	hello 9 @ 9
+    worker 1:	hello 1 @ [1]
+    worker 1:	hello 3 @ [3]
+    worker 1:	hello 5 @ [5]
+    worker 0:	hello 0 @ [0]
+    worker 0:	hello 2 @ [2]
+    worker 0:	hello 4 @ [4]
+    worker 0:	hello 6 @ [6]
+    worker 0:	hello 8 @ [8]
+    worker 1:	hello 7 @ [7]
+    worker 1:	hello 9 @ [9]
     Echidnatron%
 ```
 

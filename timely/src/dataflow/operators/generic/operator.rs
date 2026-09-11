@@ -41,14 +41,16 @@ pub trait Operator<'scope, T: Timestamp, C1> {
     ///                 if let Some(ref c) = cap.take() {
     ///                     output.session(&c).give(12);
     ///                 }
-    ///                 input.for_each_time(|time, data| {
-    ///                     stash.entry(time.time().clone())
-    ///                          .or_insert(Vec::new())
-    ///                          .extend(data.flat_map(|d| d.drain(..)));
+    ///                 input.for_each_stamp(|cap, data| {
+    ///                     if let Some(t) = cap.least() {
+    ///                         stash.entry(t.clone())
+    ///                              .or_insert(Vec::new())
+    ///                              .extend(data.flat_map(|d| d.drain(..)));
+    ///                     }
     ///                 });
-    ///                 notificator.for_each(&[frontier], |time, _not| {
-    ///                     if let Some(mut vec) = stash.remove(time.time()) {
-    ///                         output.session(&time).give_iterator(vec.drain(..));
+    ///                 notificator.for_each(&[frontier], |cap, _not| {
+    ///                     if let Some(mut vec) = stash.remove(cap.time()) {
+    ///                         output.session(&cap).give_iterator(vec.drain(..));
     ///                     }
     ///                 });
     ///             }
@@ -80,12 +82,14 @@ pub trait Operator<'scope, T: Timestamp, C1> {
     ///         .to_stream(scope)
     ///         .container::<Vec<_>>()
     ///         .unary_notify(Pipeline, "example", None, move |input, output, notificator| {
-    ///             input.for_each_time(|time, data| {
-    ///                 output.session(&time).give_containers(data);
-    ///                 notificator.notify_at(time.retain(output.output_index()));
+    ///             input.for_each_stamp(|cap, data| {
+    ///                 output.session(&cap).give_containers(data);
+    ///                 if let Some(cap) = cap.retain_least(output.output_index()) {
+    ///                     notificator.notify_at(cap);
+    ///                 }
     ///             });
-    ///             notificator.for_each(|time, _cnt, _not| {
-    ///                 println!("notified at {:?}", time);
+    ///             notificator.for_each(|cap, _cnt, _not| {
+    ///                 println!("notified at {:?}", cap);
     ///             });
     ///         });
     /// });
@@ -118,8 +122,8 @@ pub trait Operator<'scope, T: Timestamp, C1> {
     ///                 if let Some(ref c) = cap.take() {
     ///                     output.session(&c).give(100);
     ///                 }
-    ///                 input.for_each_time(|time, data| {
-    ///                     output.session(&time).give_containers(data);
+    ///                 input.for_each_stamp(|cap, data| {
+    ///                     output.session(&cap).give_containers(data);
     ///                 });
     ///             }
     ///         });
@@ -152,23 +156,27 @@ pub trait Operator<'scope, T: Timestamp, C1> {
     ///            let mut notificator = FrontierNotificator::default();
     ///            let mut stash = HashMap::new();
     ///            move |(input1, frontier1), (input2, frontier2), output| {
-    ///                input1.for_each_time(|time, data| {
-    ///                    stash.entry(time.time().clone()).or_insert(Vec::new()).extend(data.flat_map(|d| d.drain(..)));
-    ///                    notificator.notify_at(time.retain(output.output_index()));
+    ///                input1.for_each_stamp(|cap, data| {
+    ///                    if let Some(cap) = cap.retain_least(output.output_index()) {
+    ///                        stash.entry(cap.time().clone()).or_insert(Vec::new()).extend(data.flat_map(|d| d.drain(..)));
+    ///                        notificator.notify_at(cap);
+    ///                    }
     ///                });
-    ///                input2.for_each_time(|time, data| {
-    ///                    stash.entry(time.time().clone()).or_insert(Vec::new()).extend(data.flat_map(|d| d.drain(..)));
-    ///                    notificator.notify_at(time.retain(output.output_index()));
+    ///                input2.for_each_stamp(|cap, data| {
+    ///                    if let Some(cap) = cap.retain_least(output.output_index()) {
+    ///                        stash.entry(cap.time().clone()).or_insert(Vec::new()).extend(data.flat_map(|d| d.drain(..)));
+    ///                        notificator.notify_at(cap);
+    ///                    }
     ///                });
-    ///                notificator.for_each(&[frontier1, frontier2], |time, _not| {
-    ///                    if let Some(mut vec) = stash.remove(time.time()) {
-    ///                        output.session(&time).give_iterator(vec.drain(..));
+    ///                notificator.for_each(&[frontier1, frontier2], |cap, _not| {
+    ///                    if let Some(mut vec) = stash.remove(cap.time()) {
+    ///                        output.session(&cap).give_iterator(vec.drain(..));
     ///                    }
     ///                });
     ///            }
     ///        })
     ///        .container::<Vec<_>>()
-    ///        .inspect_batch(|t, x| println!("{:?} -> {:?}", t, x));
+    ///        .inspect_core(|e| if let Ok((s, x)) = e { println!("{:?} -> {:?}", s, x) });
     ///
     ///        (in1_handle, in2_handle)
     ///    });
@@ -209,16 +217,20 @@ pub trait Operator<'scope, T: Timestamp, C1> {
     ///        let (in2_handle, in2) = scope.new_input::<Vec<_>>();
     ///
     ///        in1.binary_notify(in2, Pipeline, Pipeline, "example", None, move |input1, input2, output, notificator| {
-    ///            input1.for_each_time(|time, data| {
-    ///                output.session(&time).give_containers(data);
-    ///                notificator.notify_at(time.retain(output.output_index()));
+    ///            input1.for_each_stamp(|cap, data| {
+    ///                output.session(&cap).give_containers(data);
+    ///                if let Some(cap) = cap.retain_least(output.output_index()) {
+    ///                    notificator.notify_at(cap);
+    ///                }
     ///            });
-    ///            input2.for_each_time(|time, data| {
-    ///                output.session(&time).give_containers(data);
-    ///                notificator.notify_at(time.retain(output.output_index()));
+    ///            input2.for_each_stamp(|cap, data| {
+    ///                output.session(&cap).give_containers(data);
+    ///                if let Some(cap) = cap.retain_least(output.output_index()) {
+    ///                    notificator.notify_at(cap);
+    ///                }
     ///            });
-    ///            notificator.for_each(|time, _cnt, _not| {
-    ///                println!("notified at {:?}", time);
+    ///            notificator.for_each(|cap, _cnt, _not| {
+    ///                println!("notified at {:?}", cap);
     ///            });
     ///        });
     ///
@@ -264,8 +276,8 @@ pub trait Operator<'scope, T: Timestamp, C1> {
     ///                 if let Some(ref c) = cap.take() {
     ///                     output.session(&c).give(100);
     ///                 }
-    ///                 input1.for_each_time(|time, data| output.session(&time).give_containers(data));
-    ///                 input2.for_each_time(|time, data| output.session(&time).give_containers(data));
+    ///                 input1.for_each_stamp(|cap, data| output.session(&cap).give_containers(data));
+    ///                 input2.for_each_stamp(|cap, data| output.session(&cap).give_containers(data));
     ///             }
     ///         }).inspect(|x| println!("{:?}", x));
     /// });
@@ -297,9 +309,9 @@ pub trait Operator<'scope, T: Timestamp, C1> {
     ///         .to_stream(scope)
     ///         .container::<Vec<_>>()
     ///         .sink(Pipeline, "example", |(input, frontier)| {
-    ///             input.for_each_time(|time, data| {
+    ///             input.for_each_stamp(|cap, data| {
     ///                 for datum in data.flatten() {
-    ///                     println!("{:?}:\t{:?}", time, datum);
+    ///                     println!("{:?}:\t{:?}", cap, datum);
     ///                 }
     ///             });
     ///         });

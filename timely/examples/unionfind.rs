@@ -64,8 +64,8 @@ impl<'scope, T: Timestamp> UnionFind for StreamVec<'scope, T, (usize, usize)> {
 
             move |input, output| {
 
-                input.for_each_time(|time, data| {
-                    let mut session = output.session(&time);
+                input.for_each_stamp(|cap, data| {
+                    let mut session = output.session(&cap);
                     for &mut (mut x, mut y) in data.flatten() {
 
                         // grow arrays if required.

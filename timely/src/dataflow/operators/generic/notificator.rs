@@ -56,13 +56,14 @@ impl<'a, T: Timestamp> Notificator<'a, T> {
     ///     (0..10).to_stream(scope)
     ///            .container::<Vec<_>>()
     ///            .unary_notify(Pipeline, "example", Some(0), |input, output, notificator| {
-    ///                input.for_each_time(|cap, data| {
+    ///                input.for_each_stamp(|cap, data| {
     ///                    output.session(&cap).give_containers(data);
-    ///                    let time = cap.time().clone() + 1;
-    ///                    notificator.notify_at(cap.delayed(&time, output.output_index()));
+    ///                    if let Some(time) = cap.least().map(|t| t + 1) {
+    ///                        notificator.notify_at(cap.delayed(&time, output.output_index()));
+    ///                    }
     ///                });
     ///                notificator.for_each(|cap, count, _| {
-    ///                    println!("done with time: {:?}, requested {} times", cap.time(), count);
+    ///                    println!("done with cap: {:?}, requested {} times", cap.time(), count);
     ///                    assert!(*cap.time() == 0 && count == 2 || count == 1);
     ///                });
     ///            });
@@ -193,23 +194,27 @@ fn notificator_delivers_notifications_in_topo_order() {
 ///             let mut notificator = FrontierNotificator::default();
 ///             let mut stash = HashMap::new();
 ///             move |(input1, frontier1), (input2, frontier2), output| {
-///                 input1.for_each_time(|time, data| {
-///                     stash.entry(time.time().clone()).or_insert(Vec::new()).extend(data.flat_map(|d| d.drain(..)));
-///                     notificator.notify_at(time.retain(output.output_index()));
+///                 input1.for_each_stamp(|cap, data| {
+///                     if let Some(cap) = cap.retain_least(output.output_index()) {
+///                         stash.entry(cap.time().clone()).or_insert(Vec::new()).extend(data.flat_map(|d| d.drain(..)));
+///                         notificator.notify_at(cap);
+///                     }
 ///                 });
-///                 input2.for_each_time(|time, data| {
-///                     stash.entry(time.time().clone()).or_insert(Vec::new()).extend(data.flat_map(|d| d.drain(..)));
-///                     notificator.notify_at(time.retain(output.output_index()));
+///                 input2.for_each_stamp(|cap, data| {
+///                     if let Some(cap) = cap.retain_least(output.output_index()) {
+///                         stash.entry(cap.time().clone()).or_insert(Vec::new()).extend(data.flat_map(|d| d.drain(..)));
+///                         notificator.notify_at(cap);
+///                     }
 ///                 });
-///                 notificator.for_each(&[frontier1, frontier2], |time, _| {
-///                     if let Some(mut vec) = stash.remove(time.time()) {
-///                         output.session(&time).give_iterator(vec.drain(..));
+///                 notificator.for_each(&[frontier1, frontier2], |cap, _| {
+///                     if let Some(mut vec) = stash.remove(cap.time()) {
+///                         output.session(&cap).give_iterator(vec.drain(..));
 ///                     }
 ///                 });
 ///             }
 ///         })
 ///         .container::<Vec<_>>()
-///         .inspect_batch(|t, x| println!("{:?} -> {:?}", t, x));
+///         .inspect_core(|e| if let Ok((s, x)) = e { println!("{:?} -> {:?}", s, x) });
 ///
 ///         (in1_handle, in2_handle)
 ///     });
@@ -266,13 +271,14 @@ impl<T: Timestamp> FrontierNotificator<T> {
     ///            .unary_frontier(Pipeline, "example", |_, _| {
     ///                let mut notificator = FrontierNotificator::default();
     ///                move |(input, frontier), output| {
-    ///                    input.for_each_time(|cap, data| {
+    ///                    input.for_each_stamp(|cap, data| {
     ///                        output.session(&cap).give_containers(data);
-    ///                        let time = cap.time().clone() + 1;
-    ///                        notificator.notify_at(cap.delayed(&time, output.output_index()));
+    ///                        if let Some(time) = cap.least().map(|t| t + 1) {
+    ///                            notificator.notify_at(cap.delayed(&time, output.output_index()));
+    ///                        }
     ///                    });
     ///                    notificator.for_each(&[frontier], |cap, _| {
-    ///                        println!("done with time: {:?}", cap.time());
+    ///                        println!("done with cap: {:?}", cap.time());
     ///                    });
     ///                }
     ///            });
@@ -402,14 +408,15 @@ impl<T: Timestamp> FrontierNotificator<T> {
     ///            .unary_frontier(Pipeline, "example", |_, _| {
     ///                let mut notificator = FrontierNotificator::default();
     ///                move |(input, frontier), output| {
-    ///                    input.for_each_time(|cap, data| {
+    ///                    input.for_each_stamp(|cap, data| {
     ///                        output.session(&cap).give_containers(data);
-    ///                        let time = cap.time().clone() + 1;
-    ///                        notificator.notify_at(cap.delayed(&time, output.output_index()));
-    ///                        assert_eq!(notificator.pending().filter(|t| t.0.time() == &time).count(), 1);
+    ///                        if let Some(time) = cap.least().map(|t| t + 1) {
+    ///                            notificator.notify_at(cap.delayed(&time, output.output_index()));
+    ///                            assert_eq!(notificator.pending().filter(|t| t.0.time() == &time).count(), 1);
+    ///                        }
     ///                    });
     ///                    notificator.for_each(&[frontier], |cap, _| {
-    ///                        println!("done with time: {:?}", cap.time());
+    ///                        println!("done with cap: {:?}", cap.time());
     ///                    });
     ///                }
     ///            });

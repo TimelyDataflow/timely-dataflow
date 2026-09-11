@@ -26,7 +26,7 @@ fn main() {
                     }
                 },
                 probe_handle_2)
-            .inspect_time(|t, d| eprintln!("@ {:?}: {:?}", t, d))
+            .inspect(|d| eprintln!("{:?}", d))
             .probe_with(&probe_handle);
         });
     }).unwrap();

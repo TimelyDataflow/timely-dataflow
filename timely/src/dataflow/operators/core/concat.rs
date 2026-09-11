@@ -78,8 +78,8 @@ impl<'scope, T: Timestamp> Concatenate<'scope, T> for Scope<'scope, T> {
             move |_frontier| {
                 let mut output = output.activate();
                 for handle in handles.iter_mut() {
-                    handle.for_each(|time, data| {
-                        output.give(&time, data);
+                    handle.for_each(|cap, data| {
+                        output.give(&cap, data);
                     })
                 }
             }

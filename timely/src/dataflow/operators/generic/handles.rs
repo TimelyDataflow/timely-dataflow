@@ -35,7 +35,8 @@ pub struct InputHandleCore<T: Timestamp, C, P: Pull<Message<T, C>>> {
 
 impl<T: Timestamp, C: Accountable, P: Pull<Message<T, C>>> InputHandleCore<T, C, P> {
     /// Reads the next input buffer (at some timestamp `t`) and a corresponding capability for `t`.
-    /// The timestamp `t` of the input buffer can be retrieved by invoking `.time()` on the capability.
+    /// The stamp of the input buffer can be retrieved by invoking `.stamp()` on the capability, and
+    /// for totally ordered timestamps its least time by `.least()`.
     /// Returns `None` when there's no more data available.
     #[inline]
     fn next(&mut self) -> Option<(InputCapability<T>, &mut C)> {
@@ -47,13 +48,16 @@ impl<T: Timestamp, C: Accountable, P: Pull<Message<T, C>>> InputHandleCore<T, C,
     }
     /// Iterates through pairs of capability and container.
     ///
-    /// The `for_each_time` method is equivalent, but groups containers by capability and is preferred,
-    /// in that it often leads to grouping work by capability, including the creation of output sessions.
+    /// The `for_each_stamp` method is equivalent, but groups containers by stamp and is preferred,
+    /// in that it often leads to grouping work by stamp, including the creation of output sessions.
     pub fn for_each<F>(&mut self, mut logic: F) where F: FnMut(InputCapability<T>, &mut C) {
         while let Some((cap, data)) = self.next() { logic(cap, data); }
     }
-    /// Iterates through distinct capabilities and the lists of containers associated with each.
-    pub fn for_each_time<F>(&mut self, mut logic: F) where F: FnMut(InputCapability<T>, std::slice::IterMut::<C>), C: Default {
+    /// Iterates through distinct stamps, each with a capability and the containers received under it.
+    ///
+    /// Containers are grouped by the stamp of their message, the set of timestamps under which
+    /// it travels; the capability covers exactly that stamp.
+    pub fn for_each_stamp<F>(&mut self, mut logic: F) where F: FnMut(InputCapability<T>, std::slice::IterMut::<C>), C: Default {
         while let Some((cap, data)) = self.next() {
             let data = std::mem::take(data);
             self.staging.push_back((cap, data));
@@ -68,6 +72,11 @@ impl<T: Timestamp, C: Accountable, P: Pull<Message<T, C>>> InputHandleCore<T, C,
             // Could return these back to the input ..
             self.staged.clear();
         }
+    }
+    /// Iterates through distinct stamps; renamed to [`for_each_stamp`](Self::for_each_stamp).
+    #[deprecated(note = "renamed to `for_each_stamp`: containers are grouped by stamp, not by a time")]
+    pub fn for_each_time<F>(&mut self, logic: F) where F: FnMut(InputCapability<T>, std::slice::IterMut::<C>), C: Default {
+        self.for_each_stamp(logic)
     }
 }
 

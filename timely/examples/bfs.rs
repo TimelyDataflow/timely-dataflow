@@ -55,25 +55,29 @@ fn main() {
                 move |input1, input2, output, notify| {
 
                     // receive edges, start to sort them
-                    input1.for_each_time(|time, data| {
-                        notify.notify_at(time.retain(output.output_index()));
-                        edge_list.extend(data.map(std::mem::take));
+                    input1.for_each_stamp(|cap, data| {
+                        if let Some(cap) = cap.retain_least(output.output_index()) {
+                            notify.notify_at(cap);
+                            edge_list.extend(data.map(std::mem::take));
+                        }
                     });
 
                     // receive (node, worker) pairs, note any new ones.
-                    input2.for_each_time(|time, data| {
-                        node_lists.entry(*time.time())
-                                  .or_insert_with(|| {
-                                      notify.notify_at(time.retain(output.output_index()));
-                                      Vec::new()
-                                  })
-                                  .extend(data.map(std::mem::take));
+                    input2.for_each_stamp(|cap, data| {
+                        if let Some(cap) = cap.retain_least(output.output_index()) {
+                            node_lists.entry(*cap.time())
+                                      .or_insert_with(|| {
+                                          notify.notify_at(cap);
+                                          Vec::new()
+                                      })
+                                      .extend(data.map(std::mem::take));
+                        }
                     });
 
-                    notify.for_each(|time, _num, _notify| {
+                    notify.for_each(|cap, _num, _notify| {
 
                         // maybe process the graph
-                        if *time == 0 {
+                        if *cap.time() == 0 {
 
                             // print some diagnostic timing information
                             if index == 0 { println!("{:?}:\tsorting", start.elapsed()); }
@@ -107,10 +111,10 @@ fn main() {
                         }
 
                         // print some diagnostic timing information
-                        if index == 0 { println!("{:?}:\ttime: {:?}", start.elapsed(), time.time()); }
+                        if index == 0 { println!("{:?}:\ttime: {:?}", start.elapsed(), cap.time()); }
 
-                        if let Some(mut todo) = node_lists.remove(&time) {
-                            let mut session = output.session(&time);
+                        if let Some(mut todo) = node_lists.remove(cap.time()) {
+                            let mut session = output.session(&cap);
 
                             // we could sort these, or not (previously: radix sorted).
                             // todo.sort();
