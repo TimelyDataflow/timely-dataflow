@@ -35,7 +35,7 @@
             const path_to_root = "../";
             const default_light_theme = "light";
             const default_dark_theme = "navy";
-            window.path_to_searchindex_js = "../searchindex-765ef1fb.js";
+            window.path_to_searchindex_js = "../searchindex-bf6ab408.js";
         </script>
         <!-- Start loading toc.js asap -->
         <script src="../toc-3e2444f9.js"></script>
@@ -368,10 +368,12 @@ fn main() {
                     move |(input, frontier), output| {
 
                         // for each input batch, stash it at `time`.
-                        input.for_each_time(|time, data| {
-                            queues.entry(time.retain(output.output_index()))
-                                  .or_insert(Vec::new())
-                                  .extend(data.flat_map(|d| d.drain(..)));
+                        input.for_each_stamp(|cap, data| {
+                            if let Some(cap) = cap.retain_least(output.output_index()) {
+                                queues.entry(cap)
+                                      .or_insert(Vec::new())
+                                      .extend(data.flat_map(|d| d.drain(..)));
+                            }
                         });
 
                         // enable each stashed time if ready.
@@ -437,12 +439,14 @@ fn main() {
 <p>The closure that we end up returning is the <code>|input, output|</code> closure. It describes what the operator would do when presented with a handle to the input and a handle to the output. We’ve also named two hash maps and a vector we will need, and provided the <code>move</code> keyword to Rust so that it knows that the resulting closure <em>owns</em> these hash maps, rather than <em>borrows</em> them.</p>
 <p>Inside the closure, we do two things: (i) read inputs and (ii) update counts and send outputs. Let’s do the input reading first:</p>
 <pre><code class="language-rust ignore">        // for each input batch, stash it at `time`.
-        while let Some((time, data)) = input.next() {
-            queues.entry(time.retain(output.output_index()))
-                  .or_insert(Vec::new())
-                  .extend(std::mem::take(data));
-        }</code></pre>
-<p>The <code>input</code> handle has a <code>next</code> method, and it optionally returns a pair of <code>time</code> and <code>data</code>, representing a timely dataflow timestamp and a hunk of data bearing that timestamp, respectively. Our plan is to iterate through all available input (the <code>next()</code> method doesn’t block, it just returns <code>None</code> when it runs out of data), accepting it from the timely dataflow system and moving it into our <code>queue</code> hash map.</p>
+        input.for_each_stamp(|cap, data| {
+            if let Some(cap) = cap.retain_least(output.output_index()) {
+                queues.entry(cap)
+                      .or_insert(Vec::new())
+                      .extend(data.flat_map(|d| d.drain(..)));
+            }
+        });</code></pre>
+<p>The <code>input</code> handle has a <code>for_each_stamp</code> method, which calls our closure with a capability <code>cap</code> and the batches of <code>data</code> received under it, once for each distinct stamp (the set of timestamps under which a message travels, usually just one). Our plan is to accept all available input (the method doesn’t block; it just stops when it runs out of data) and move it into our <code>queue</code> hash map, keyed by a capability for the least time of the stamp. A message sent under no capabilities has no such time, and we let it go.</p>
 <p>Why do we do this? Because this is a streaming system, we could be getting data out of order. Our goal is to update the counts in time order, and to do this we’ll need to enqueue what we get until we also get word that the associated <code>time</code> is complete. That happens in the next few hunks of code</p>
 <p>First, we extract those times and their data that are ready to go:</p>
 <pre><code class="language-rust ignore">        // enable each stashed time if ready.

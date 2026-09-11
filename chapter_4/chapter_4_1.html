@@ -35,7 +35,7 @@
             const path_to_root = "../";
             const default_light_theme = "light";
             const default_dark_theme = "navy";
-            window.path_to_searchindex_js = "../searchindex-765ef1fb.js";
+            window.path_to_searchindex_js = "../searchindex-bf6ab408.js";
         </script>
         <!-- Start loading toc.js asap -->
         <script src="../toc-3e2444f9.js"></script>
@@ -222,7 +222,7 @@ fn main() {
         // Create a new scope with the same (u64) timestamp.
         let result = scope.scoped::&lt;u64,_,_&gt;("SubScope", |subscope| {
             stream.enter(subscope)
-                  .inspect_batch(|t, xs| println!("{:?}, {:?}", t, xs))
+                  .inspect_core(|event| if let Ok((stamp, xs)) = event { println!("{:?}, {:?}", stamp.elements(), xs) })
                   .leave(scope)
         });
 
@@ -247,7 +247,7 @@ fn main() {
         // Create a new scope with the same (u64) timestamp.
         let result = scope.region(|subscope| {
             stream.enter(subscope)
-                  .inspect_batch(|t, xs| println!("{:?}, {:?}", t, xs))
+                  .inspect_core(|event| if let Ok((stamp, xs)) = event { println!("{:?}, {:?}", stamp.elements(), xs) })
                   .leave(scope)
         });
 
@@ -271,7 +271,7 @@ fn main() {
         // Create a new scope with a (u64, u32) timestamp.
         let result = scope.iterative::&lt;u32,_,_&gt;(|subscope| {
             stream.enter(subscope)
-                  .inspect_batch(|t, xs| println!("{:?}, {:?}", t, xs))
+                  .inspect_core(|event| if let Ok((stamp, xs)) = event { println!("{:?}, {:?}", stamp.elements(), xs) })
                   .leave(scope)
         });
 

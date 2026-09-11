@@ -35,7 +35,7 @@
             const path_to_root = "../";
             const default_light_theme = "light";
             const default_dark_theme = "navy";
-            window.path_to_searchindex_js = "../searchindex-765ef1fb.js";
+            window.path_to_searchindex_js = "../searchindex-bf6ab408.js";
         </script>
         <!-- Start loading toc.js asap -->
         <script src="../toc-3e2444f9.js"></script>
@@ -193,7 +193,7 @@ fn main() {
 }</code></pre>
 <p>This simple example turns the sequence zero through nine into a stream and then prints the results to the screen.</p>
 <h2 id="inspecting-batches"><a class="header" href="#inspecting-batches">Inspecting Batches</a></h2>
-<p>The <code>inspect</code> operator has a big sibling, <code>inspect_batch</code>, whose closure gets access to whole batches of records at a time, just like the underlying operator. More precisely, <code>inspect_batch</code> takes a closure of two parameters: first, the timestamp of a batch, and second a reference to the batch itself. The <code>inspect_batch</code> operator can be especially helpful if you want to process the outputs more efficiently.</p>
+<p>The <code>inspect</code> operator has a big sibling, <code>inspect_core</code>, whose closure gets access to whole batches of records at a time, just like the underlying operator. More precisely, <code>inspect_core</code> takes a closure of one parameter, a <code>Result</code> that is either <code>Ok</code> with the stamp of a batch (the timestamps it travels under, usually just one) and a reference to the batch itself, or <code>Err</code> with a new frontier. The <code>inspect_core</code> operator can be especially helpful if you want to process the outputs more efficiently.</p>
 <pre class="playground"><code class="language-rust">extern crate timely;
 
 use timely::dataflow::operators::{ToStream, Inspect};
@@ -204,7 +204,7 @@ fn main() {
             (0 .. 10)
                 .to_stream(scope)
                 .container::&lt;Vec&lt;_&gt;&gt;()
-                .inspect_batch(|t, xs| println!("hello: {:?} @ {:?}", xs, t));
+                .inspect_core(|event| if let Ok((stamp, xs)) = event { println!("hello: {:?} @ {:?}", xs, stamp.elements()) });
         });
     }).unwrap();
 }</code></pre>
