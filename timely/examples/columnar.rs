@@ -7,7 +7,7 @@ use timely::Accountable;
 use timely::container::CapacityContainerBuilder;
 use timely::dataflow::channels::pact::{ExchangeCore, Pipeline};
 use timely::dataflow::InputHandle;
-use timely::dataflow::operators::{InspectCore, Operator, Probe};
+use timely::dataflow::operators::{Inspect, Operator, Probe};
 use timely::dataflow::ProbeHandle;
 
 // Creates `WordCountContainer` and `WordCountReference` structs,
@@ -101,7 +101,7 @@ fn main() {
                     },
                 )
                 .container::<Container>()
-                .inspect_container(|x| {
+                .inspect_core(|x| {
                     match x {
                         Ok((time, data)) => {
                             println!("seen at: {:?}\t{:?} records", time, data.record_count());

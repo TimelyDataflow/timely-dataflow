@@ -58,7 +58,7 @@ fn main() {
         // Create a new scope with the same (u64) timestamp.
         let result = scope.scoped::<u64,_,_>("SubScope", |subscope| {
             stream.enter(subscope)
-                  .inspect_batch(|t, xs| println!("{:?}, {:?}", t, xs))
+                  .inspect_core(|event| if let Ok((stamp, xs)) = event { println!("{:?}, {:?}", stamp.elements(), xs) })
                   .leave(scope)
         });
 
@@ -90,7 +90,7 @@ fn main() {
         // Create a new scope with the same (u64) timestamp.
         let result = scope.region(|subscope| {
             stream.enter(subscope)
-                  .inspect_batch(|t, xs| println!("{:?}, {:?}", t, xs))
+                  .inspect_core(|event| if let Ok((stamp, xs)) = event { println!("{:?}, {:?}", stamp.elements(), xs) })
                   .leave(scope)
         });
 
@@ -122,7 +122,7 @@ fn main() {
         // Create a new scope with a (u64, u32) timestamp.
         let result = scope.iterative::<u32,_,_>(|subscope| {
             stream.enter(subscope)
-                  .inspect_batch(|t, xs| println!("{:?}, {:?}", t, xs))
+                  .inspect_core(|event| if let Ok((stamp, xs)) = event { println!("{:?}, {:?}", stamp.elements(), xs) })
                   .leave(scope)
         });
 

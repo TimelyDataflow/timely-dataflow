@@ -25,7 +25,7 @@ This simple example turns the sequence zero through nine into a stream and then 
 
 ## Inspecting Batches
 
-The `inspect` operator has a big sibling, `inspect_batch`, whose closure gets access to whole batches of records at a time, just like the underlying operator. More precisely, `inspect_batch` takes a closure of two parameters: first, the timestamp of a batch, and second a reference to the batch itself. The `inspect_batch` operator can be especially helpful if you want to process the outputs more efficiently.
+The `inspect` operator has a big sibling, `inspect_core`, whose closure gets access to whole batches of records at a time, just like the underlying operator. More precisely, `inspect_core` takes a closure of one parameter, a `Result` that is either `Ok` with the stamp of a batch (the timestamps it travels under, usually just one) and a reference to the batch itself, or `Err` with a new frontier. The `inspect_core` operator can be especially helpful if you want to process the outputs more efficiently.
 
 ```rust
 extern crate timely;
@@ -38,7 +38,7 @@ fn main() {
             (0 .. 10)
                 .to_stream(scope)
                 .container::<Vec<_>>()
-                .inspect_batch(|t, xs| println!("hello: {:?} @ {:?}", xs, t));
+                .inspect_core(|event| if let Ok((stamp, xs)) = event { println!("hello: {:?} @ {:?}", xs, stamp.elements()) });
         });
     }).unwrap();
 }

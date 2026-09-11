@@ -13,14 +13,14 @@ pub trait SharedStream<'scope, T: Timestamp, C> {
     ///
     /// # Examples
     /// ```
-    /// use timely::dataflow::operators::{ToStream, InspectCore};
+    /// use timely::dataflow::operators::{ToStream, Inspect};
     /// use timely::dataflow::operators::rc::SharedStream;
     ///
     /// timely::example(|scope| {
     ///     (0..10).to_stream(scope)
     ///            .container::<Vec<_>>()
     ///            .shared()
-    ///            .inspect_container(|x| println!("seen: {:?}", x));
+    ///            .inspect_core(|x| println!("seen: {:?}", x));
     /// });
     /// ```
     fn shared(self) -> Stream<'scope, T, Rc<C>>;

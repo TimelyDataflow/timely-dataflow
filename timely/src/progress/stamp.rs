@@ -105,6 +105,9 @@ impl<T: TotalOrder> Stamp<T> {
     /// Only totally ordered stamps have a least element. A non-empty stamp over a
     /// total order has one however many elements it contains, and it is the time
     /// at which the message may first result in downstream work.
+    ///
+    /// Elements are stored in `Ord` order, but `TotalOrder` speaks only of `PartialOrder`
+    /// and need not agree with `Ord`, so this is a reduction rather than `first()`.
     #[inline]
     pub fn least(&self) -> Option<&T> {
         self.elements.iter().reduce(|a, b| if b.less_equal(a) { b } else { a })

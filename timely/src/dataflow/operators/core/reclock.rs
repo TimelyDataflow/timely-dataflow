@@ -56,10 +56,13 @@ impl<'scope, T: Timestamp, C: Container> Reclock<'scope, T> for Stream<'scope, T
 
         self.binary_notify(clock, Pipeline, Pipeline, "Reclock", vec![], move |input1, input2, output, notificator| {
 
-            // stash each data input with its stamp.
+            // stash each data input with its stamp; a message with no capabilities
+            // could never be released, and is discarded.
             input1.for_each_stamp(|cap, data| {
-                for data in data {
-                    stash.push((cap.stamp().clone(), std::mem::take(data)));
+                if !cap.stamp().is_empty() {
+                    for data in data {
+                        stash.push((cap.stamp().clone(), std::mem::take(data)));
+                    }
                 }
             });
 

@@ -5,7 +5,7 @@ fn main() {
     timely::execute(Config::thread(), |worker| {
         let (mut input, mut cap) = worker.dataflow::<usize,_,_>(|scope| {
             let (input, stream) = scope.new_unordered_input();
-            stream.container::<Vec<_>>().inspect_batch(|t, x| println!("{:?} -> {:?}", t, x));
+            stream.container::<Vec<_>>().inspect_core(|e| if let Ok((s, x)) = e { println!("{:?} -> {:?}", s, x) });
             input
         });
 

@@ -11,7 +11,7 @@
 //! operators whose behavior can be supplied using closures accepting input and output handles.
 //! Most of the operators in this module are defined using these two general operators.
 
-pub use self::inspect::{Inspect, InspectCore};
+pub use self::inspect::Inspect;
 pub use self::exchange::Exchange;
 
 pub use self::generic::Operator;

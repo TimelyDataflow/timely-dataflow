@@ -236,10 +236,12 @@ As before, I'm just going to show you the new code, which now lives just after `
                     move |(input, frontier), output| {
 
                         // for each input batch, stash it at `time`.
-                        input.for_each_time(|time, data| {
-                            queues.entry(time.retain(output.output_index()))
-                                  .or_insert(Vec::new())
-                                  .extend(data.flat_map(|d| d.drain(..)));
+                        input.for_each_stamp(|cap, data| {
+                            if let Some(cap) = cap.retain_least(output.output_index()) {
+                                queues.entry(cap)
+                                      .or_insert(Vec::new())
+                                      .extend(data.flat_map(|d| d.drain(..)));
+                            }
                         });
 
                         // enable each stashed time if ready.
@@ -321,14 +323,16 @@ Inside the closure, we do two things: (i) read inputs and (ii) update counts and
 
 ```rust,ignore
         // for each input batch, stash it at `time`.
-        while let Some((time, data)) = input.next() {
-            queues.entry(time.retain(output.output_index()))
-                  .or_insert(Vec::new())
-                  .extend(std::mem::take(data));
-        }
+        input.for_each_stamp(|cap, data| {
+            if let Some(cap) = cap.retain_least(output.output_index()) {
+                queues.entry(cap)
+                      .or_insert(Vec::new())
+                      .extend(data.flat_map(|d| d.drain(..)));
+            }
+        });
 ```
 
-The `input` handle has a `next` method, and it optionally returns a pair of `time` and `data`, representing a timely dataflow timestamp and a hunk of data bearing that timestamp, respectively. Our plan is to iterate through all available input (the `next()` method doesn't block, it just returns `None` when it runs out of data), accepting it from the timely dataflow system and moving it into our `queue` hash map.
+The `input` handle has a `for_each_stamp` method, which calls our closure with a capability `cap` and the batches of `data` received under it, once for each distinct stamp (the set of timestamps under which a message travels, usually just one). Our plan is to accept all available input (the method doesn't block; it just stops when it runs out of data) and move it into our `queue` hash map, keyed by a capability for the least time of the stamp. A message sent under no capabilities has no such time, and we let it go.
 
 Why do we do this? Because this is a streaming system, we could be getting data out of order. Our goal is to update the counts in time order, and to do this we'll need to enqueue what we get until we also get word that the associated `time` is complete. That happens in the next few hunks of code
 
