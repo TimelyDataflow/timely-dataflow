@@ -23,7 +23,7 @@
 use serde::{Deserialize, Serialize};
 use smallvec::SmallVec;
 
-use crate::order::PartialOrder;
+use crate::order::{PartialOrder, TotalOrder};
 
 /// A multiset of timestamps affixed to a message, stored sorted.
 ///
@@ -96,6 +96,18 @@ impl<T> Stamp<T> {
         self.as_singleton().unwrap_or_else(|| {
             panic!("expected a singleton stamp; found {:?} elements: {:?}", self.elements.len(), self.elements())
         })
+    }
+}
+
+impl<T: TotalOrder> Stamp<T> {
+    /// The least element of the stamp, if the stamp is non-empty.
+    ///
+    /// Only totally ordered stamps have a least element. A non-empty stamp over a
+    /// total order has one however many elements it contains, and it is the time
+    /// at which the message may first result in downstream work.
+    #[inline]
+    pub fn least(&self) -> Option<&T> {
+        self.elements.iter().reduce(|a, b| if b.less_equal(a) { b } else { a })
     }
 }
 

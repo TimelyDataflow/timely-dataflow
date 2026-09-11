@@ -56,18 +56,22 @@ fn main() {
 
                     // receive edges, start to sort them
                     input1.for_each_time(|time, data| {
-                        notify.notify_at(time.retain(output.output_index()));
-                        edge_list.extend(data.map(std::mem::take));
+                        if let Some(cap) = time.retain(output.output_index()) {
+                            notify.notify_at(cap);
+                            edge_list.extend(data.map(std::mem::take));
+                        }
                     });
 
                     // receive (node, worker) pairs, note any new ones.
                     input2.for_each_time(|time, data| {
-                        node_lists.entry(*time.time())
-                                  .or_insert_with(|| {
-                                      notify.notify_at(time.retain(output.output_index()));
-                                      Vec::new()
-                                  })
-                                  .extend(data.map(std::mem::take));
+                        if let Some(cap) = time.retain(output.output_index()) {
+                            node_lists.entry(*cap.time())
+                                      .or_insert_with(|| {
+                                          notify.notify_at(cap);
+                                          Vec::new()
+                                      })
+                                      .extend(data.map(std::mem::take));
+                        }
                     });
 
                     notify.for_each(|time, _num, _notify| {

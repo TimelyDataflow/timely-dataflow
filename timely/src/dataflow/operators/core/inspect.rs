@@ -1,7 +1,8 @@
 //! Extension trait and implementation for observing and action on streamed data.
 
 use crate::Container;
-use crate::progress::Timestamp;
+use crate::order::TotalOrder;
+use crate::progress::{Stamp, Timestamp};
 use crate::dataflow::channels::pact::Pipeline;
 use crate::dataflow::Stream;
 use crate::dataflow::operators::generic::Operator;
@@ -27,10 +28,29 @@ where
     where
         F: for<'a> FnMut(<&'a C as IntoIterator>::Item) + 'static,
     {
-        self.inspect_batch(move |_, data| {
+        self.inspect_stamp(move |_, data| {
             for datum in data.into_iter() { func(datum); }
         })
     }
+
+    /// Runs a supplied closure on each observed container, with the stamp under which it travels.
+    ///
+    /// The stamp is the set of timestamps under which the container travels: a singleton unless
+    /// an upstream operator has stamped its messages with several times, or with none. This is
+    /// the batch-level inspection available for all timestamps; [`Inspect::inspect_batch`]
+    /// reveals a single time, and so exists only for totally ordered timestamps.
+    ///
+    /// # Examples
+    /// ```
+    /// use timely::dataflow::operators::{ToStream, Inspect};
+    ///
+    /// timely::example(|scope| {
+    ///     (0..10).to_stream(scope)
+    ///            .container::<Vec<_>>()
+    ///            .inspect_stamp(|stamp, xs| println!("seen under {:?}: {:?}", stamp, xs));
+    /// });
+    /// ```
+    fn inspect_stamp(self, func: impl FnMut(&Stamp<T>, &C)+'static) -> Self;
 
     /// Runs a supplied closure on each observed data element and associated time.
     ///
@@ -47,6 +67,7 @@ where
     fn inspect_time<F>(self, mut func: F) -> Self
     where
         F: for<'a> FnMut(&T, <&'a C as IntoIterator>::Item) + 'static,
+        T: TotalOrder,
     {
         self.inspect_batch(move |time, data| {
             for datum in data.into_iter() {
@@ -67,7 +88,7 @@ where
     ///            .inspect_batch(|t,xs| println!("seen at: {:?}\t{:?} records", t, xs.len()));
     /// });
     /// ```
-    fn inspect_batch(self, mut func: impl FnMut(&T, &C)+'static) -> Self {
+    fn inspect_batch(self, mut func: impl FnMut(&T, &C)+'static) -> Self where T: TotalOrder {
         self.inspect_core(move |event| {
             if let Ok((time, data)) = event {
                 func(time, data);
@@ -95,14 +116,26 @@ where
     ///             });
     /// });
     /// ```
-    fn inspect_core<F>(self, func: F) -> Self where F: FnMut(Result<(&T, &C), &[T]>)+'static;
+    fn inspect_core<F>(self, func: F) -> Self where F: FnMut(Result<(&T, &C), &[T]>)+'static, T: TotalOrder;
 }
 
 impl<T: Timestamp, C: Container> Inspect<T, C> for Stream<'_, T, C>
 where
     for<'a> &'a C: IntoIterator,
 {
-    fn inspect_core<F>(self, func: F) -> Self where F: FnMut(Result<(&T, &C), &[T]>) + 'static {
+    fn inspect_stamp(self, mut func: impl FnMut(&Stamp<T>, &C)+'static) -> Self {
+        self.unary(Pipeline, "Inspect", move |_,_| move |input, output| {
+            input.for_each_time(|time, data| {
+                let mut session = output.session(&time);
+                for data in data {
+                    func(time.stamp(), &*data);
+                    session.give_container(data);
+                }
+            });
+        })
+    }
+
+    fn inspect_core<F>(self, func: F) -> Self where F: FnMut(Result<(&T, &C), &[T]>) + 'static, T: TotalOrder {
         self.inspect_container(func)
     }
 }
@@ -129,13 +162,13 @@ pub trait InspectCore<T: Timestamp, C> {
     ///             });
     /// });
     /// ```
-    fn inspect_container<F>(self, func: F) -> Self where F: FnMut(Result<(&T, &C), &[T]>)+'static;
+    fn inspect_container<F>(self, func: F) -> Self where F: FnMut(Result<(&T, &C), &[T]>)+'static, T: TotalOrder;
 }
 
 impl<T: Timestamp, C: Container> InspectCore<T, C> for Stream<'_, T, C> {
 
     fn inspect_container<F>(self, mut func: F) -> Self
-        where F: FnMut(Result<(&T, &C), &[T]>)+'static
+        where F: FnMut(Result<(&T, &C), &[T]>)+'static, T: TotalOrder
     {
         let mut frontier = crate::progress::Antichain::from_elem(T::minimum());
         self.unary_frontier(Pipeline, "InspectBatch", move |_,_| move |(input, chain), output| {
@@ -147,7 +180,8 @@ impl<T: Timestamp, C: Container> InspectCore<T, C> for Stream<'_, T, C> {
             input.for_each_time(|time, data| {
                 let mut session = output.session(&time);
                 for data in data {
-                    func(Ok((&time, &*data)));
+                    // A message with no time is forwarded unobserved; there is no time to report.
+                    if let Some(t) = time.time() { func(Ok((t, &*data))); }
                     session.give_container(data);
                 }
             });

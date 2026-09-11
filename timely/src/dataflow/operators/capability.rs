@@ -26,7 +26,7 @@ use std::rc::Rc;
 use std::cell::{OnceCell, RefCell};
 use std::fmt::{self, Debug};
 
-use crate::order::PartialOrder;
+use crate::order::{PartialOrder, TotalOrder};
 use crate::progress::Timestamp;
 use crate::progress::{ChangeBatch, Stamp};
 use crate::progress::operate::PortConnectivity;
@@ -278,14 +278,21 @@ impl<T: Timestamp> InputCapability<T> {
         self.consumed_guard.stamp()
     }
 
-    /// The timestamp associated with this capability.
+    /// The least timestamp of the message's stamp, if the stamp is non-empty.
     ///
-    /// This method panics if the message's stamp is not a singleton, as is the case
-    /// when an upstream operator sends messages stamped by multiple timestamps, or by
-    /// none at all. Such messages must be accessed through [`InputCapability::stamp`].
+    /// This method exists only for totally ordered timestamps, where every non-empty stamp
+    /// has a least element: the time at which the message may first result in downstream
+    /// work, and the time at which to hold a capability for it. Partially ordered timestamps
+    /// have no such element; operators over them must read the whole
+    /// [`InputCapability::stamp`] and forward each of its elements.
+    ///
+    /// Messages sent under no capabilities have an empty stamp and no time to report. An
+    /// operator that needs a time should `if let Some(time) = cap.time()` and drop such
+    /// messages otherwise; they make no progress claims, and may arrive after the frontier
+    /// has passed every time in their contents.
     #[inline]
-    pub fn time(&self) -> &T {
-        self.stamp().expect_singleton()
+    pub fn time(&self) -> Option<&T> where T: TotalOrder {
+        self.stamp().least()
     }
 
     /// Delays capability for a specific output port.
@@ -314,12 +321,15 @@ impl<T: Timestamp> InputCapability<T> {
     /// capability. Users should take care that these capabilities are only stored for
     /// as long as they are required, as failing to drop them may result in livelock.
     ///
-    /// This method panics if the message's stamp is not a singleton, or if the timestamp
-    /// summary to `output_port` strictly advances the time. Stamps with zero or multiple
-    /// elements must be retained with [`InputCapability::retain_stamp`].
+    /// The capability is for the least element of the stamp, and so exists only for totally
+    /// ordered timestamps; partially ordered timestamps must be retained with
+    /// [`InputCapability::retain_stamp`], which holds a capability for each element. An
+    /// empty stamp yields no capability.
+    ///
+    /// This method panics if the timestamp summary to `output_port` strictly advances the time.
     #[inline]
-    pub fn retain(&self, output_port: usize) -> Capability<T> {
-        self.delayed(self.time(), output_port)
+    pub fn retain(&self, output_port: usize) -> Option<Capability<T>> where T: TotalOrder {
+        self.time().map(|time| self.delayed(time, output_port))
     }
 
     /// Transforms to an owned capability set for a specific output port, with one
@@ -336,18 +346,10 @@ impl<T: Timestamp> InputCapability<T> {
     }
 }
 
-impl<T: Timestamp> Deref for InputCapability<T> {
-    type Target = T;
-
-    fn deref(&self) -> &T {
-        self.time()
-    }
-}
-
 impl<T: Timestamp> Debug for InputCapability<T> {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         f.debug_struct("InputCapability")
-            .field("time", self.time())
+            .field("stamp", self.stamp())
             .field("internal", &"...")
             .finish()
     }

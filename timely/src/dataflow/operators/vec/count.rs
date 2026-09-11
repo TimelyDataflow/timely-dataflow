@@ -2,6 +2,7 @@
 use std::collections::HashMap;
 
 use crate::dataflow::channels::pact::Pipeline;
+use crate::order::TotalOrder;
 use crate::progress::Timestamp;
 use crate::dataflow::StreamVec;
 use crate::dataflow::operators::generic::operator::Operator;
@@ -48,16 +49,19 @@ pub trait Accumulate<'scope, T: Timestamp, D: 'static> : Sized {
     fn count(self) -> StreamVec<'scope, T, usize> { self.accumulate(0, |sum, data| *sum += data.len()) }
 }
 
-impl<'scope, T: Timestamp + ::std::hash::Hash, D: 'static> Accumulate<'scope, T, D> for StreamVec<'scope, T, D> {
+impl<'scope, T: Timestamp + TotalOrder + ::std::hash::Hash, D: 'static> Accumulate<'scope, T, D> for StreamVec<'scope, T, D> {
     fn accumulate<A: Clone+'static>(self, default: A, logic: impl Fn(&mut A, &mut Vec<D>)+'static) -> StreamVec<'scope, T, A> {
 
         let mut accums = HashMap::new();
         self.unary_notify(Pipeline, "Accumulate", vec![], move |input, output, notificator| {
             input.for_each_time(|time, data| {
-                for data in data {
-                    logic(accums.entry(time.time().clone()).or_insert_with(|| default.clone()), data);
+                // A message with no time makes no progress claims, and has no time to accumulate at.
+                if let Some(cap) = time.retain(output.output_index()) {
+                    for data in data {
+                        logic(accums.entry(cap.time().clone()).or_insert_with(|| default.clone()), data);
+                    }
+                    notificator.notify_at(cap);
                 }
-                notificator.notify_at(time.retain(output.output_index()));
             });
 
             notificator.for_each(|time,_,_| {

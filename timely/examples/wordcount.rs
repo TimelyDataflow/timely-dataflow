@@ -30,9 +30,11 @@ fn main() {
 
                     move |(input, frontier), output| {
                         input.for_each_time(|time, data| {
-                            queues.entry(time.retain(output.output_index()))
-                                  .or_insert(Vec::new())
-                                  .extend(data.map(std::mem::take));
+                            if let Some(cap) = time.retain(output.output_index()) {
+                                queues.entry(cap)
+                                      .or_insert(Vec::new())
+                                      .extend(data.map(std::mem::take));
+                            }
                         });
 
                         for (key, val) in queues.iter_mut() {

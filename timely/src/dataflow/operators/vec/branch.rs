@@ -1,6 +1,7 @@
 //! Operators that separate one stream into two streams based on some condition
 
 use crate::dataflow::channels::pact::Pipeline;
+use crate::order::TotalOrder;
 use crate::progress::Timestamp;
 use crate::dataflow::operators::generic::OutputBuilder;
 use crate::dataflow::operators::generic::builder_rc::OperatorBuilder;
@@ -33,7 +34,7 @@ pub trait Branch<T: Timestamp, D> : Sized {
     fn branch(self, condition: impl Fn(&T, &D) -> bool + 'static) -> (Self, Self);
 }
 
-impl<'scope, T: Timestamp, D: 'static> Branch<T, D> for StreamVec<'scope, T, D> {
+impl<'scope, T: Timestamp + TotalOrder, D: 'static> Branch<T, D> for StreamVec<'scope, T, D> {
     fn branch(self, condition: impl Fn(&T, &D) -> bool + 'static) -> (Self, Self) {
         let mut builder = OperatorBuilder::new("Branch".to_owned(), self.scope());
 
@@ -51,13 +52,16 @@ impl<'scope, T: Timestamp, D: 'static> Branch<T, D> for StreamVec<'scope, T, D> 
                 let mut output2_handle = output2.activate();
 
                 input.for_each_time(|time, data| {
-                    let mut out1 = output1_handle.session(&time);
-                    let mut out2 = output2_handle.session(&time);
-                    for datum in data.flat_map(|d| d.drain(..)) {
-                        if condition(time.time(), &datum) {
-                            out2.give(datum);
-                        } else {
-                            out1.give(datum);
+                    // A message with no time makes no progress claims, and cannot be routed by time.
+                    if let Some(t) = time.time() {
+                        let mut out1 = output1_handle.session(&time);
+                        let mut out2 = output2_handle.session(&time);
+                        for datum in data.flat_map(|d| d.drain(..)) {
+                            if condition(t, &datum) {
+                                out2.give(datum);
+                            } else {
+                                out1.give(datum);
+                            }
                         }
                     }
                 });
@@ -74,6 +78,10 @@ pub trait BranchWhen<T>: Sized {
     /// For each time, the supplied closure is called. If it returns `true`,
     /// the records for that will be sent to the second returned stream, otherwise
     /// they will be sent to the first.
+    ///
+    /// The closure sees the least time of each message's stamp, and so this operator
+    /// exists only for totally ordered timestamps; deciding routing by the value of a
+    /// timestamp has no meaning for a message stamped by several incomparable times.
     ///
     /// # Examples
     /// ```
@@ -94,7 +102,7 @@ pub trait BranchWhen<T>: Sized {
     fn branch_when(self, condition: impl Fn(&T) -> bool + 'static) -> (Self, Self);
 }
 
-impl<'scope, T: Timestamp, C: Container> BranchWhen<T> for Stream<'scope, T, C> {
+impl<'scope, T: Timestamp + TotalOrder, C: Container> BranchWhen<T> for Stream<'scope, T, C> {
     fn branch_when(self, condition: impl Fn(&T) -> bool + 'static) -> (Self, Self) {
         let mut builder = OperatorBuilder::new("Branch".to_owned(), self.scope());
 
@@ -113,12 +121,14 @@ impl<'scope, T: Timestamp, C: Container> BranchWhen<T> for Stream<'scope, T, C> 
                 let mut output2_handle = output2.activate();
 
                 input.for_each_time(|time, data| {
-                    let mut out = if condition(time.time()) {
-                        output2_handle.session(&time)
-                    } else {
-                        output1_handle.session(&time)
-                    };
-                    out.give_containers(data);
+                    if let Some(t) = time.time() {
+                        let mut out = if condition(t) {
+                            output2_handle.session(&time)
+                        } else {
+                            output1_handle.session(&time)
+                        };
+                        out.give_containers(data);
+                    }
                 });
             }
         });

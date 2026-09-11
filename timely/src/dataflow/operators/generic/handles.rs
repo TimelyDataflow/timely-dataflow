@@ -35,7 +35,8 @@ pub struct InputHandleCore<T: Timestamp, C, P: Pull<Message<T, C>>> {
 
 impl<T: Timestamp, C: Accountable, P: Pull<Message<T, C>>> InputHandleCore<T, C, P> {
     /// Reads the next input buffer (at some timestamp `t`) and a corresponding capability for `t`.
-    /// The timestamp `t` of the input buffer can be retrieved by invoking `.time()` on the capability.
+    /// The stamp of the input buffer can be retrieved by invoking `.stamp()` on the capability, and
+    /// for totally ordered timestamps its least time by `.time()`.
     /// Returns `None` when there's no more data available.
     #[inline]
     fn next(&mut self) -> Option<(InputCapability<T>, &mut C)> {

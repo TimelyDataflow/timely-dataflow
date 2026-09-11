@@ -97,17 +97,20 @@ pub trait Delay<T: Timestamp, D: 'static> {
     fn delay_batch<L: FnMut(&T)->T+'static>(self, func: L) -> Self;
 }
 
-impl<T: Timestamp + ::std::hash::Hash, D: 'static> Delay<T, D> for StreamVec<'_, T, D> {
+impl<T: Timestamp + TotalOrder + ::std::hash::Hash, D: 'static> Delay<T, D> for StreamVec<'_, T, D> {
     fn delay<L: FnMut(&D, &T)->T+'static>(self, mut func: L) -> Self {
         let mut elements = HashMap::new();
         self.unary_notify(Pipeline, "Delay", vec![], move |input, output, notificator| {
             input.for_each_time(|time, data| {
-                for datum in data.flat_map(|d| d.drain(..)) {
-                    let new_time = func(&datum, &time);
-                    assert!(time.time().less_equal(&new_time));
-                    elements.entry(new_time.clone())
-                            .or_insert_with(|| { notificator.notify_at(time.delayed(&new_time, output.output_index())); Vec::new() })
-                            .push(datum);
+                // A message with no time makes no progress claims, and has no time to delay from.
+                if let Some(old_time) = time.time() {
+                    for datum in data.flat_map(|d| d.drain(..)) {
+                        let new_time = func(&datum, old_time);
+                        assert!(old_time.less_equal(&new_time));
+                        elements.entry(new_time.clone())
+                                .or_insert_with(|| { notificator.notify_at(time.delayed(&new_time, output.output_index())); Vec::new() })
+                                .push(datum);
+                    }
                 }
             });
 
@@ -130,11 +133,13 @@ impl<T: Timestamp + ::std::hash::Hash, D: 'static> Delay<T, D> for StreamVec<'_,
         let mut elements = HashMap::new();
         self.unary_notify(Pipeline, "Delay", vec![], move |input, output, notificator| {
             input.for_each_time(|time, data| {
-                let new_time = func(&time);
-                assert!(time.time().less_equal(&new_time));
-                elements.entry(new_time.clone())
-                        .or_insert_with(|| { notificator.notify_at(time.delayed(&new_time, output.output_index())); Vec::new() })
-                        .extend(data.map(std::mem::take));
+                if let Some(old_time) = time.time() {
+                    let new_time = func(old_time);
+                    assert!(old_time.less_equal(&new_time));
+                    elements.entry(new_time.clone())
+                            .or_insert_with(|| { notificator.notify_at(time.delayed(&new_time, output.output_index())); Vec::new() })
+                            .extend(data.map(std::mem::take));
+                }
             });
 
             // for each available notification, send corresponding set

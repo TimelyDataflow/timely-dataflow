@@ -3,6 +3,7 @@ use std::hash::Hash;
 use std::collections::HashMap;
 
 use crate::ExchangeData;
+use crate::order::TotalOrder;
 use crate::progress::Timestamp;
 use crate::dataflow::StreamVec;
 use crate::dataflow::operators::generic::operator::Operator;
@@ -69,7 +70,7 @@ pub trait Aggregate<'scope, T: Timestamp, K: ExchangeData+Hash, V: ExchangeData>
         hash: H) -> StreamVec<'scope, T, R> where T: Eq;
 }
 
-impl<'scope, T: Timestamp + Hash, K: ExchangeData+Clone+Hash+Eq, V: ExchangeData> Aggregate<'scope, T, K, V> for StreamVec<'scope, T, (K, V)> {
+impl<'scope, T: Timestamp + TotalOrder + Hash, K: ExchangeData+Clone+Hash+Eq, V: ExchangeData> Aggregate<'scope, T, K, V> for StreamVec<'scope, T, (K, V)> {
 
     fn aggregate<R: 'static, D: Default+'static, F: Fn(&K, V, &mut D)+'static, E: Fn(K, D)->R+'static, H: Fn(&K)->u64+'static>(
         self,
@@ -82,12 +83,15 @@ impl<'scope, T: Timestamp + Hash, K: ExchangeData+Clone+Hash+Eq, V: ExchangeData
 
             // read each input, fold into aggregates
             input.for_each_time(|time, data| {
-                let agg_time = aggregates.entry(time.time().clone()).or_insert_with(HashMap::new);
-                for (key, val) in data.flat_map(|d| d.drain(..)) {
-                    let agg = agg_time.entry(key.clone()).or_insert_with(Default::default);
-                    fold(&key, val, agg);
+                // A message with no time makes no progress claims, and has no time to aggregate at.
+                if let Some(cap) = time.retain(output.output_index()) {
+                    let agg_time = aggregates.entry(cap.time().clone()).or_insert_with(HashMap::new);
+                    for (key, val) in data.flat_map(|d| d.drain(..)) {
+                        let agg = agg_time.entry(key.clone()).or_insert_with(Default::default);
+                        fold(&key, val, agg);
+                    }
+                    notificator.notify_at(cap);
                 }
-                notificator.notify_at(time.retain(output.output_index()));
             });
 
             // pop completed aggregates, send along whatever

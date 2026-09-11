@@ -3,6 +3,7 @@ use std::hash::Hash;
 use std::collections::HashMap;
 
 use crate::ExchangeData;
+use crate::order::TotalOrder;
 use crate::progress::Timestamp;
 use crate::dataflow::StreamVec;
 use crate::dataflow::operators::generic::operator::Operator;
@@ -55,7 +56,7 @@ pub trait StateMachine<'scope, T: Timestamp, K: ExchangeData+Hash+Eq, V: Exchang
     >(self, fold: F, hash: H) -> StreamVec<'scope, T, R> where T : Hash+Eq ;
 }
 
-impl<'scope, T: Timestamp, K: ExchangeData+Hash+Eq+Clone, V: ExchangeData> StateMachine<'scope, T, K, V> for StreamVec<'scope, T, (K, V)> {
+impl<'scope, T: Timestamp + TotalOrder, K: ExchangeData+Hash+Eq+Clone, V: ExchangeData> StateMachine<'scope, T, K, V> for StreamVec<'scope, T, (K, V)> {
     fn state_machine<
             R: 'static,                                 // output type
             D: Default+'static,                         // per-key state (data)
@@ -86,22 +87,24 @@ impl<'scope, T: Timestamp, K: ExchangeData+Hash+Eq+Clone, V: ExchangeData> State
 
             // stash each input and request a notification when ready
             input.for_each_time(|time, data| {
-
-                // stash if not time yet
-                if notificator.frontier(0).less_than(time.time()) {
-                    for data in data { pending.entry(time.time().clone()).or_insert_with(Vec::new).append(data); }
-                    notificator.notify_at(time.retain(output.output_index()));
-                }
-                else {
-                    // else we can process immediately
-                    let mut session = output.session(&time);
-                    for (key, val) in data.flat_map(|d| d.drain(..)) {
-                        let (remove, output) = {
-                            let state = states.entry(key.clone()).or_insert_with(Default::default);
-                            fold(&key, val, state)
-                        };
-                        if remove { states.remove(&key); }
-                        session.give_iterator(output.into_iter());
+                // A message with no time makes no progress claims, and has no place in time order.
+                if let Some(cap) = time.retain(output.output_index()) {
+                    // stash if not time yet
+                    if notificator.frontier(0).less_than(cap.time()) {
+                        for data in data { pending.entry(cap.time().clone()).or_insert_with(Vec::new).append(data); }
+                        notificator.notify_at(cap);
+                    }
+                    else {
+                        // else we can process immediately
+                        let mut session = output.session(&cap);
+                        for (key, val) in data.flat_map(|d| d.drain(..)) {
+                            let (remove, output) = {
+                                let state = states.entry(key.clone()).or_insert_with(Default::default);
+                                fold(&key, val, state)
+                            };
+                            if remove { states.remove(&key); }
+                            session.give_iterator(output.into_iter());
+                        }
                     }
                 }
             });

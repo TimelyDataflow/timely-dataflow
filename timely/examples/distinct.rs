@@ -19,18 +19,20 @@ fn main() {
                 .unary(Exchange::new(|x| *x), "Distinct", move |_, _|
                     move |input, output| {
                         input.for_each_time(|time, data| {
-                            let counts =
-                            counts_by_time
-                                .entry(*time.time())
-                                .or_insert(HashMap::new());
-                            let mut session = output.session(&time);
-                            for data in data {
-                                for &datum in data.iter() {
-                                    let count = counts.entry(datum).or_insert(0);
-                                    if *count == 0 {
-                                        session.give(datum);
+                            if let Some(&t) = time.time() {
+                                let counts =
+                                counts_by_time
+                                    .entry(t)
+                                    .or_insert(HashMap::new());
+                                let mut session = output.session(&time);
+                                for data in data {
+                                    for &datum in data.iter() {
+                                        let count = counts.entry(datum).or_insert(0);
+                                        if *count == 0 {
+                                            session.give(datum);
+                                        }
+                                        *count += 1;
                                     }
-                                    *count += 1;
                                 }
                             }
                         })
