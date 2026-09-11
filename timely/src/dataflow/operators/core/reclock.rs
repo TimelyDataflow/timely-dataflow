@@ -56,23 +56,26 @@ impl<'scope, T: Timestamp, C: Container> Reclock<'scope, T> for Stream<'scope, T
 
         self.binary_notify(clock, Pipeline, Pipeline, "Reclock", vec![], move |input1, input2, output, notificator| {
 
-            // stash each data input with its timestamp.
+            // stash each data input with its stamp.
             input1.for_each_time(|cap, data| {
                 for data in data {
-                    stash.push((cap.time().clone(), std::mem::take(data)));
+                    stash.push((cap.stamp().clone(), std::mem::take(data)));
                 }
             });
 
-            // request notification at time, to flush stash.
+            // request notification at each clock time, to flush stash.
             input2.for_each_time(|time, _data| {
-                notificator.notify_at(time.retain(output.output_index()));
+                for cap in time.retain_stamp(output.output_index()).iter() {
+                    notificator.notify_at(cap.clone());
+                }
             });
 
-            // each time with complete stash can be flushed.
+            // each time with complete stash can be flushed: data whose stamp has an
+            // element less or equal to the clock time may be sent at the clock time.
             notificator.for_each(|cap,_,_| {
                 let mut session = output.session(&cap);
-                for &mut (ref t, ref mut data) in &mut stash {
-                    if t.less_equal(cap.time()) {
+                for &mut (ref stamp, ref mut data) in &mut stash {
+                    if stamp.less_equal(cap.time()) {
                         session.give_container(data);
                     }
                 }
