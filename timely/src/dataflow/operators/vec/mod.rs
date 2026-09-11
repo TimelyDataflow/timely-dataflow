@@ -9,26 +9,17 @@
 //! around resource management (allocation and deallocation, across threads).
 
 pub mod input;
-pub mod flow_controlled;
 pub mod unordered_input;
 pub mod partition;
 pub mod map;
 pub mod filter;
-pub mod delay;
 pub mod broadcast;
 pub mod to_stream;
-pub mod branch;
-pub mod result;
-pub mod aggregation;
-pub mod count;
 
 pub use self::input::Input;
 pub use self::unordered_input::UnorderedInput;
 pub use self::partition::Partition;
 pub use self::map::Map;
 pub use self::filter::Filter;
-pub use self::delay::Delay;
 pub use self::broadcast::Broadcast;
-pub use self::branch::{Branch, BranchWhen};
-pub use self::result::ResultStream;
 pub use self::to_stream::ToStream;
