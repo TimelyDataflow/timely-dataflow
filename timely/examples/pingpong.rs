@@ -1,4 +1,4 @@
-use timely::dataflow::operators::{ToStream, Exchange, Feedback, Concat, ConnectLoop, vec::{Map, BranchWhen}};
+use timely::dataflow::operators::{ToStream, Exchange, Feedback, Concat, ConnectLoop, vec::{Map, Filter}};
 
 fn main() {
 
@@ -11,13 +11,16 @@ fn main() {
         let peers = worker.peers();
         worker.dataflow::<u64,_,_>(move |scope| {
             let (helper, cycle) = scope.feedback(1);
+            // Each record counts the rounds it has made; all start at zero, and each
+            // makes exactly `iterations` trips around the loop.
             (0 .. elements)
-                  .filter(move |&x| (x as usize) % peers == index)
+                  .filter(move |&i| (i as usize) % peers == index)
+                  .map(|_| 0u64)
                   .to_stream(scope)
                   .concat(cycle)
                   .exchange(|&x| x)
                   .map_in_place(|x| *x += 1)
-                  .branch_when(move |t| t < &iterations).1
+                  .filter(move |&x| x <= iterations)
                   .connect_loop(helper);
         });
     }).unwrap();

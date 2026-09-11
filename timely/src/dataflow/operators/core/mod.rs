@@ -14,7 +14,6 @@ pub mod ok_err;
 pub mod partition;
 pub mod probe;
 pub mod rc;
-pub mod reclock;
 pub mod to_stream;
 pub mod unordered_input;
 
@@ -31,5 +30,4 @@ pub use ok_err::OkErr;
 pub use partition::Partition;
 pub use probe::Probe;
 pub use to_stream::{ToStream, ToStreamBuilder};
-pub use reclock::Reclock;
 pub use unordered_input::{UnorderedInput, UnorderedHandle};

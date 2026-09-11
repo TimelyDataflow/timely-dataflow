@@ -22,16 +22,17 @@ pub trait Feedback<'scope, T: Timestamp> {
     /// ```
     /// use timely::dataflow::Scope;
     /// use timely::dataflow::operators::{Feedback, ConnectLoop, ToStream, Concat, Inspect};
-    /// use timely::dataflow::operators::vec::BranchWhen;
+    /// use timely::dataflow::operators::vec::{Map, Filter};
     ///
     /// timely::example(|scope| {
-    ///     // circulate 0..10 for 100 iterations.
+    ///     // circulate 0..10, incrementing each, until each reaches 100.
     ///     let (handle, cycle) = scope.feedback(1);
     ///     (0..10).to_stream(scope)
     ///            .container::<Vec<_>>()
     ///            .concat(cycle)
     ///            .inspect(|x| println!("seen: {:?}", x))
-    ///            .branch_when(|t| t < &100).1
+    ///            .map(|x| x + 1)
+    ///            .filter(|x| *x < 100)
     ///            .connect_loop(handle);
     /// });
     /// ```
@@ -94,16 +95,17 @@ pub trait ConnectLoop<'scope, T: Timestamp, C: Container> {
     /// ```
     /// use timely::dataflow::Scope;
     /// use timely::dataflow::operators::{Feedback, ConnectLoop, ToStream, Concat, Inspect};
-    /// use timely::dataflow::operators::vec::BranchWhen;
+    /// use timely::dataflow::operators::vec::{Map, Filter};
     ///
     /// timely::example(|scope| {
-    ///     // circulate 0..10 for 100 iterations.
+    ///     // circulate 0..10, incrementing each, until each reaches 100.
     ///     let (handle, cycle) = scope.feedback(1);
     ///     (0..10).to_stream(scope)
     ///            .container::<Vec<_>>()
     ///            .concat(cycle)
     ///            .inspect(|x| println!("seen: {:?}", x))
-    ///            .branch_when(|t| t < &100).1
+    ///            .map(|x| x + 1)
+    ///            .filter(|x| *x < 100)
     ///            .connect_loop(handle);
     /// });
     /// ```

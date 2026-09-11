@@ -54,13 +54,13 @@ but without actually producing the 4,999,950,000 intermediate records all at onc
 
 One way to do this is to build a self-regulating dataflow, into which we can immediately dump all the records, but which will buffer records until it is certain that the work for prior records has drained. We will write this out in all the gory details, but these operators are certainly things that could be packaged up and reused.
 
-The idea here is to take our stream of work, and to use the `delay` operator to assign new timestamps to the records. We will spread the work out so that each timestamp has at most (in this case) 100 numbers. We can write a `binary` operator that will buffer received records until their timestamp is "next", meaning all strictly prior work has drained from the dataflow fragment. How do we do this? We turn our previously unary operator into a binary operator that has a feedback edge connected to its second input. We use the frontier of that feedback input to control when we emit data.
+The idea here is to take our stream of work, and to use a small operator to assign new timestamps to the records, by sending each under a capability delayed to its new time. We will spread the work out so that each timestamp has at most (in this case) 100 numbers. We can write a `binary` operator that will buffer received records until their timestamp is "next", meaning all strictly prior work has drained from the dataflow fragment. How do we do this? We turn our previously unary operator into a binary operator that has a feedback edge connected to its second input. We use the frontier of that feedback input to control when we emit data.
 
 ```rust,no_run
 extern crate timely;
 
 use timely::dataflow::operators::{Feedback, ToStream, Operator, ConnectLoop};
-use timely::dataflow::operators::vec::{Delay, Map, Filter};
+use timely::dataflow::operators::vec::{Map, Filter};
 use timely::dataflow::channels::pact::Pipeline;
 
 fn main() {
@@ -74,8 +74,16 @@ fn main() {
         // Produce all numbers less than each input number.
         (1 .. 100_000u64)
             .to_stream(scope)
+            .container::<Vec<_>>()
             // Assign timestamps to records so that not much work is in each time.
-            .delay(|number, time| *number / 100 )
+            .unary(Pipeline, "Delay", |_capability, _info| move |input, output| {
+                input.for_each_stamp(|cap, data| {
+                    for number in data.flat_map(|d| d.drain(..)) {
+                        output.session(&cap.delayed(&(number / 100), 0)).give(number);
+                    }
+                });
+            })
+            .container::<Vec<_>>()
             // Buffer records until all prior timestamps have completed.
             .binary_frontier(cycle, Pipeline, Pipeline, "Buffer", move |capability, info| {
 

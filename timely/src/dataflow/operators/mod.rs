@@ -17,7 +17,6 @@ pub use self::exchange::Exchange;
 pub use self::generic::Operator;
 pub use self::generic::{Notificator, FrontierNotificator};
 
-pub use self::reclock::Reclock;
 
 pub mod core;
 pub mod vec;
@@ -36,7 +35,6 @@ pub use self::core::input::Input;
 
 pub mod generic;
 
-pub use self::core::reclock;
 
 // keep "mint" module-private
 mod capability;
