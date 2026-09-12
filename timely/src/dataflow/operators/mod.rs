@@ -15,7 +15,6 @@ pub use self::inspect::Inspect;
 pub use self::exchange::Exchange;
 
 pub use self::generic::Operator;
-pub use self::generic::{Notificator, FrontierNotificator};
 
 
 pub mod core;

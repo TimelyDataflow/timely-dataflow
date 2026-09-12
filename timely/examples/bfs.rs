@@ -1,6 +1,6 @@
-use std::collections::HashMap;
+use std::collections::{BTreeMap, HashMap};
 
-use timely::dataflow::operators::{ToStream, Concat, Feedback, ConnectLoop};
+use timely::dataflow::operators::{ToStream, Concat, Feedback, ConnectLoop, Capability};
 use timely::dataflow::operators::generic::operator::Operator;
 use timely::dataflow::channels::pact::Exchange;
 
@@ -46,18 +46,22 @@ fn main() {
             let (handle, stream) = scope.feedback(1usize);
 
             // use the stream of edges
-            graph.binary_notify(
+            graph.binary_frontier(
                 stream,
                 Exchange::new(|x: &(u32, u32)| u64::from(x.0)),
                 Exchange::new(|x: &(u32, u32)| u64::from(x.0)),
                 "BFS",
-                vec![],
-                move |input1, input2, output, notify| {
+                move |_capability, _info| {
+
+                    // capabilities for times with pending work, in time order.
+                    let mut pending: BTreeMap<usize, Capability<usize>> = BTreeMap::new();
+
+                    move |(input1, frontier1), (input2, frontier2), output| {
 
                     // receive edges, start to sort them
                     input1.for_each_stamp(|cap, data| {
                         if let Some(cap) = cap.retain_least(output.output_index()) {
-                            notify.notify_at(cap);
+                            pending.entry(*cap.time()).or_insert(cap);
                             edge_list.extend(data.map(std::mem::take));
                         }
                     });
@@ -65,16 +69,15 @@ fn main() {
                     // receive (node, worker) pairs, note any new ones.
                     input2.for_each_stamp(|cap, data| {
                         if let Some(cap) = cap.retain_least(output.output_index()) {
-                            node_lists.entry(*cap.time())
-                                      .or_insert_with(|| {
-                                          notify.notify_at(cap);
-                                          Vec::new()
-                                      })
-                                      .extend(data.map(std::mem::take));
+                            node_lists.entry(*cap.time()).or_insert_with(Vec::new).extend(data.map(std::mem::take));
+                            pending.entry(*cap.time()).or_insert(cap);
                         }
                     });
 
-                    notify.for_each(|cap, _num, _notify| {
+                    // process each time once neither input can produce data at it, in time order.
+                    while let Some(time) = pending.keys().next().copied() {
+                        if frontier1.frontier().less_equal(&time) || frontier2.frontier().less_equal(&time) { break; }
+                        let cap = pending.remove(&time).unwrap();
 
                         // maybe process the graph
                         if *cap.time() == 0 {
@@ -133,7 +136,8 @@ fn main() {
                                 }
                             }
                         }
-                    });
+                    }
+                    }
                 }
             )
             .concat((0..1).map(|x| (x,x)).to_stream(scope))

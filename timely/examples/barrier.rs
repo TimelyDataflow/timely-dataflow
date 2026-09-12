@@ -9,18 +9,22 @@ fn main() {
 
     timely::execute_from_args(std::env::args().skip(2), move |worker| {
 
-        worker.dataflow(move |scope| {
+        worker.dataflow::<usize,_,_>(move |scope| {
             let (handle, stream) = scope.feedback::<Vec<usize>>(1);
-            stream.unary_notify::<CapacityContainerBuilder<_>, _, _>(
+            stream.unary_frontier::<CapacityContainerBuilder<_>, _, _, _>(
                 Pipeline,
                 "Barrier",
-                vec![0],
-                move |_, _, notificator| {
-                    while let Some((cap, _count)) = notificator.next() {
-                        let time = *cap.time() + 1;
-                        if time < iterations {
-                            notificator.notify_at(cap.delayed(&time));
-                        }
+                move |capability, _info| {
+                    // A capability for the current round; advanced once the round is complete.
+                    let mut caps = vec![capability.delayed(&0)];
+                    move |(input, frontier), _output| {
+                        input.for_each_stamp(|_, _| { });
+                        caps = std::mem::take(&mut caps).into_iter().filter_map(|cap| {
+                            if frontier.frontier().less_equal(cap.time()) { Some(cap) } else {
+                                let time = *cap.time() + 1;
+                                if time < iterations { Some(cap.delayed(&time)) } else { None }
+                            }
+                        }).collect();
                     }
                 }
             )

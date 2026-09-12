@@ -15,22 +15,26 @@ fn barrier_sync_helper(comm_config: ::timely::CommunicationConfig) {
         worker: WorkerConfig::default(),
     };
     timely::execute(config, move |worker| {
-        worker.dataflow(move |scope| {
+        worker.dataflow::<usize,_,_>(move |scope| {
             let (handle, stream) = scope.feedback::<Vec<usize>>(1);
-            stream.unary_notify::<CapacityContainerBuilder<_>, _, _>(
+            stream.unary_frontier::<CapacityContainerBuilder<_>, _, _, _>(
                 Pipeline,
                 "Barrier",
-                vec![0, 1],
-                move |_, _, notificator| {
-                    let mut count = 0;
-                    while let Some((cap, _count)) = notificator.next() {
-                        count += 1;
-                        let time = *cap.time() + 1;
-                        if time < 100 {
-                            notificator.notify_at(cap.delayed(&time));
-                        }
+                move |capability, _info| {
+                    // Capabilities for rounds in flight; each advances once its round is complete.
+                    let mut caps = vec![capability.delayed(&0), capability.delayed(&1)];
+                    move |(input, frontier), _output| {
+                        input.for_each_stamp(|_, _| { });
+                        let mut times = std::collections::BTreeSet::new();
+                        caps = std::mem::take(&mut caps).into_iter().filter_map(|cap| {
+                            if frontier.frontier().less_equal(cap.time()) { Some(cap) } else {
+                                times.insert(*cap.time());
+                                let time = *cap.time() + 1;
+                                if time < 100 { Some(cap.delayed(&time)) } else { None }
+                            }
+                        }).collect();
+                        assert!(times.len() <= 1);
                     }
-                    assert!(count <= 1);
                 }
             )
             .connect_loop(handle);

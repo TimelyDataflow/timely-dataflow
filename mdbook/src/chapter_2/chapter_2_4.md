@@ -173,70 +173,13 @@ Specifically, each input has a `frontier` method which returns a `&[Timestamp]`,
 
 This frontier information is invaluable for operators that must be sure that their output is correct and final before they send it as output. For our `maximum` example, we will want to wait to apply the new maximum until we are sure that we will not see any more elements at earlier times. That isn't to say we can't do anything with data we receive "early"; in the case of the maximum, each batch at a given time can be reduced down to just its maximum value, as all received values would be applied simultaneously.
 
-To make life easier for you, we've written a helper type called `Notificator` whose job in life is to help you keep track of times that you would like to send outputs, and to tell you when (according to your input frontiers) it is now safe to send the data. In fact, notificators do more by holding on to the *capabilities* for you, so that you can be sure that, even if you *don't* receive any more messages but just an indication that there will be none, you will still retain the ability to send your messages.
-
-Here is a worked example where we use a binary operator that implements the behavior of `concat`, but it puts its inputs in order, buffering its inputs until their associated timestamp is complete, and then sending all data at that time. The operator defines and captures a `HashMap<Time, Vec<Data>>` named `stash` which it uses to buffer received input data that are not yet ready to send.
+Here is a worked example where we use a binary operator that implements the behavior of `concat`, but it puts its inputs in order, buffering its inputs until their associated timestamp is complete, and then sending all data at that time. The operator defines and captures a `HashMap<Capability, Vec<Data>>` named `stash` which it uses to buffer received input data that are not yet ready to send, keyed by a capability for the time at which they will eventually be sent.
 
 ```rust
 extern crate timely;
 
 use std::collections::HashMap;
-use timely::dataflow::operators::{ToStream, FrontierNotificator};
-use timely::dataflow::operators::generic::operator::Operator;
-use timely::dataflow::channels::pact::Pipeline;
-
-fn main() {
-    timely::example(|scope| {
-
-        let in1 = (0 .. 10).to_stream(scope).container::<Vec<_>>();
-        let in2 = (0 .. 10).to_stream(scope).container::<Vec<_>>();
-
-        in1.binary_frontier(in2, Pipeline, Pipeline, "concat_buffer", |capability, info| {
-
-            let mut notificator = FrontierNotificator::default();
-            let mut stash = HashMap::new();
-
-            move |(input1, frontier1), (input2, frontier2), output| {
-                input1.for_each_stamp(|cap, data| {
-                    if let Some(cap) = cap.retain_least(output.output_index()) {
-                        stash.entry(cap.time().clone())
-                             .or_insert(Vec::new())
-                             .extend(data.map(std::mem::take));
-                        notificator.notify_at(cap);
-                    }
-                });
-                input2.for_each_stamp(|cap, data| {
-                    if let Some(cap) = cap.retain_least(output.output_index()) {
-                        stash.entry(cap.time().clone())
-                             .or_insert(Vec::new())
-                             .extend(data.map(std::mem::take));
-                        notificator.notify_at(cap);
-                    }
-                });
-
-                notificator.for_each(&[frontier1, frontier2], |time, notificator| {
-                    let mut session = output.session(&time);
-                    if let Some(list) = stash.remove(time.time()) {
-                        for mut vector in list.into_iter() {
-                            session.give_container(&mut vector);
-                        }
-                    }
-                });
-            }
-        });
-    });
-}
-```
-
-As an exercise, this example could be improved in a few ways. How might you change it so that the data are still sent in the order they are received, but messages may be sent as soon as they are received if their time is currently in the frontier? This would avoid buffering messages that are ready to go, and would only buffer messages that are out-of-order, potentially reducing the memory footprint and improving the effective latency.
-
-Before ending the section, let's rewrite this example without the `notificator`, in an attempt to demystify how it works. Whether you use a notificator or not is up to you; they are mostly about staying sane in what can be a confusing setting, and you can totally skip them once you have internalized how capabilities and frontiers work.
-
-```rust
-extern crate timely;
-
-use std::collections::HashMap;
-use timely::dataflow::operators::{ToStream, FrontierNotificator};
+use timely::dataflow::operators::ToStream;
 use timely::dataflow::operators::generic::operator::Operator;
 use timely::dataflow::channels::pact::Pipeline;
 
@@ -287,4 +230,6 @@ fn main() {
 }
 ```
 
-Take a moment and check out the differences. Mainly, `stash` is now the one source of truth about `time` and `data`, but we now have to do our own checking of `time` against the input frontiers, and *very importantly* we need to make sure to discard `time` from the `stash` when we are finished with it (otherwise we retain the ability to send at `time`, and the system will not make progress).
+A few things to notice. The `stash` is the one source of truth about times and data: it holds the *capabilities*, which is what allows the operator to send at those times later, even if it receives no more messages but only word that there will be none. We check each capability's time against the input frontiers, and send once neither input can produce data at that time. And *very importantly* we discard entries from the `stash` once we are finished with them: holding a capability holds back the frontier for everyone downstream, and the system will not make progress until it is dropped.
+
+As an exercise, this example could be improved in a few ways. How might you change it so that the data are still sent in the order they are received, but messages may be sent as soon as they are received if their time is currently in the frontier? This would avoid buffering messages that are ready to go, and would only buffer messages that are out-of-order, potentially reducing the memory footprint and improving the effective latency.
