@@ -36,7 +36,7 @@
             const path_to_root = "";
             const default_light_theme = "light";
             const default_dark_theme = "navy";
-            window.path_to_searchindex_js = "searchindex-819151f0.js";
+            window.path_to_searchindex_js = "searchindex-3a0ef304.js";
         </script>
         <!-- Start loading toc.js asap -->
         <script src="toc-3e2444f9.js"></script>
@@ -1027,62 +1027,11 @@ fn main() {
 <p>Timely dataflow is constantly tracking the capabilities of operators throughout the dataflow graph, and it reports this information to operators through what are called “frontiers”. Each input has an associated frontier, which is a description of the timestamps that might arrive on that input in the future.</p>
 <p>Specifically, each input has a <code>frontier</code> method which returns a <code>&amp;[Timestamp]</code>, indicating a list of times such that any future time must be greater or equal to some element of the list. Often this list will just have a single element, indicating the “current” time, but as we get to more complicated forms of time (“partially ordered” time, if that means anything to you yet) we may need to report multiple incomparable timestamps.</p>
 <p>This frontier information is invaluable for operators that must be sure that their output is correct and final before they send it as output. For our <code>maximum</code> example, we will want to wait to apply the new maximum until we are sure that we will not see any more elements at earlier times. That isn’t to say we can’t do anything with data we receive “early”; in the case of the maximum, each batch at a given time can be reduced down to just its maximum value, as all received values would be applied simultaneously.</p>
-<p>To make life easier for you, we’ve written a helper type called <code>Notificator</code> whose job in life is to help you keep track of times that you would like to send outputs, and to tell you when (according to your input frontiers) it is now safe to send the data. In fact, notificators do more by holding on to the <em>capabilities</em> for you, so that you can be sure that, even if you <em>don’t</em> receive any more messages but just an indication that there will be none, you will still retain the ability to send your messages.</p>
-<p>Here is a worked example where we use a binary operator that implements the behavior of <code>concat</code>, but it puts its inputs in order, buffering its inputs until their associated timestamp is complete, and then sending all data at that time. The operator defines and captures a <code>HashMap&lt;Time, Vec&lt;Data&gt;&gt;</code> named <code>stash</code> which it uses to buffer received input data that are not yet ready to send.</p>
+<p>Here is a worked example where we use a binary operator that implements the behavior of <code>concat</code>, but it puts its inputs in order, buffering its inputs until their associated timestamp is complete, and then sending all data at that time. The operator defines and captures a <code>HashMap&lt;Capability, Vec&lt;Data&gt;&gt;</code> named <code>stash</code> which it uses to buffer received input data that are not yet ready to send, keyed by a capability for the time at which they will eventually be sent.</p>
 <pre class="playground"><code class="language-rust">extern crate timely;
 
 use std::collections::HashMap;
-use timely::dataflow::operators::{ToStream, FrontierNotificator};
-use timely::dataflow::operators::generic::operator::Operator;
-use timely::dataflow::channels::pact::Pipeline;
-
-fn main() {
-    timely::example(|scope| {
-
-        let in1 = (0 .. 10).to_stream(scope).container::&lt;Vec&lt;_&gt;&gt;();
-        let in2 = (0 .. 10).to_stream(scope).container::&lt;Vec&lt;_&gt;&gt;();
-
-        in1.binary_frontier(in2, Pipeline, Pipeline, "concat_buffer", |capability, info| {
-
-            let mut notificator = FrontierNotificator::default();
-            let mut stash = HashMap::new();
-
-            move |(input1, frontier1), (input2, frontier2), output| {
-                input1.for_each_stamp(|cap, data| {
-                    if let Some(cap) = cap.retain_least(output.output_index()) {
-                        stash.entry(cap.time().clone())
-                             .or_insert(Vec::new())
-                             .extend(data.map(std::mem::take));
-                        notificator.notify_at(cap);
-                    }
-                });
-                input2.for_each_stamp(|cap, data| {
-                    if let Some(cap) = cap.retain_least(output.output_index()) {
-                        stash.entry(cap.time().clone())
-                             .or_insert(Vec::new())
-                             .extend(data.map(std::mem::take));
-                        notificator.notify_at(cap);
-                    }
-                });
-
-                notificator.for_each(&amp;[frontier1, frontier2], |time, notificator| {
-                    let mut session = output.session(&amp;time);
-                    if let Some(list) = stash.remove(time.time()) {
-                        for mut vector in list.into_iter() {
-                            session.give_container(&amp;mut vector);
-                        }
-                    }
-                });
-            }
-        });
-    });
-}</code></pre>
-<p>As an exercise, this example could be improved in a few ways. How might you change it so that the data are still sent in the order they are received, but messages may be sent as soon as they are received if their time is currently in the frontier? This would avoid buffering messages that are ready to go, and would only buffer messages that are out-of-order, potentially reducing the memory footprint and improving the effective latency.</p>
-<p>Before ending the section, let’s rewrite this example without the <code>notificator</code>, in an attempt to demystify how it works. Whether you use a notificator or not is up to you; they are mostly about staying sane in what can be a confusing setting, and you can totally skip them once you have internalized how capabilities and frontiers work.</p>
-<pre class="playground"><code class="language-rust">extern crate timely;
-
-use std::collections::HashMap;
-use timely::dataflow::operators::{ToStream, FrontierNotificator};
+use timely::dataflow::operators::ToStream;
 use timely::dataflow::operators::generic::operator::Operator;
 use timely::dataflow::channels::pact::Pipeline;
 
@@ -1131,7 +1080,8 @@ fn main() {
         });
     });
 }</code></pre>
-<p>Take a moment and check out the differences. Mainly, <code>stash</code> is now the one source of truth about <code>time</code> and <code>data</code>, but we now have to do our own checking of <code>time</code> against the input frontiers, and <em>very importantly</em> we need to make sure to discard <code>time</code> from the <code>stash</code> when we are finished with it (otherwise we retain the ability to send at <code>time</code>, and the system will not make progress).</p>
+<p>A few things to notice. The <code>stash</code> is the one source of truth about times and data: it holds the <em>capabilities</em>, which is what allows the operator to send at those times later, even if it receives no more messages but only word that there will be none. We check each capability’s time against the input frontiers, and send once neither input can produce data at that time. And <em>very importantly</em> we discard entries from the <code>stash</code> once we are finished with them: holding a capability holds back the frontier for everyone downstream, and the system will not make progress until it is dropped.</p>
+<p>As an exercise, this example could be improved in a few ways. How might you change it so that the data are still sent in the order they are received, but messages may be sent as soon as they are received if their time is currently in the frontier? This would avoid buffering messages that are ready to go, and would only buffer messages that are out-of-order, potentially reducing the memory footprint and improving the effective latency.</p>
 <div style="break-before: page; page-break-before: always;"></div>
 <h1 id="a-worked-example"><a class="header" href="#a-worked-example">A Worked Example</a></h1>
 <p>You may have heard of <code>word_count</code> as the archetypical “big data” problem: you have a large collection of text, and what you want most in life is to know how many of each word are present in the text. The data are too large to load into memory, but let’s assume that the set of distinct words, each with an associated count, is small enough to fit in memory.</p>
