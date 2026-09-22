@@ -96,7 +96,7 @@ pub mod arc {
 
         /// Extracts [0, index) into a new `Bytes` which is returned, updating `self`.
         ///
-        /// # Safety
+        /// # Implementation
         ///
         /// This method first tests `index` against `self.len`, which should ensure that both
         /// the returned `Bytes` contains valid memory, and that `self` can no longer access it.
@@ -235,7 +235,7 @@ pub mod arc {
 
         /// Extracts [0, index) into a new `Bytes` which is returned, updating `self`.
         ///
-        /// # Safety
+        /// # Implementation
         ///
         /// This method first tests `index` against `self.len`, which should ensure that both
         /// the returned `Bytes` contains valid memory, and that `self` can no longer access it.
