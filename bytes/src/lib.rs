@@ -71,7 +71,12 @@ pub mod arc {
             Arc::get_mut(&mut sequestered)
                 .unwrap()
                 .downcast_mut::<B>()
-                .map(|a| (a.as_mut_ptr(), a.len()))
+                .map(|a| {
+                    // Acquire one slice, so that the two next calls must agree.
+                    // Otherwise, adversarial implementations could lie to use.
+                    let slice = a.deref_mut();
+                    (slice.as_mut_ptr(), slice.len())
+                })
                 .unwrap();
 
             BytesMut {
@@ -131,8 +136,11 @@ pub mod arc {
             // Only possible if this is the only reference to the sequestered allocation.
             if let Some(boxed) = Arc::get_mut(&mut self.sequestered) {
                 let downcast = boxed.downcast_mut::<B>()?;
-                self.ptr = downcast.as_mut_ptr();
-                self.len = downcast.len();
+                // Acquire one slice, so that the two next calls must agree.
+                // Otherwise, adversarial implementations could lie to use.
+                let slice = downcast.deref_mut();
+                self.ptr = slice.as_mut_ptr();
+                self.len = slice.len();
                 Some(true)
             }
             else {
