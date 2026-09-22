@@ -38,8 +38,12 @@ pub mod arc {
     use std::ops::{Deref, DerefMut};
     use std::sync::Arc;
     use std::any::Any;
+    use std::cell::UnsafeCell;
 
-    /// A thread-safe byte buffer backed by a shared allocation.
+    /// A mutable byte slice backed by a shared allocation.
+    ///
+    /// This type is neither `Send` nor `Sync`.
+    /// It can produce immutable [`Bytes`] views that are both `Send` and `Sync`.
     ///
     /// An instance of this type contends that `ptr` is valid for `len` bytes,
     /// and that no other reference to these bytes exists, other than through
@@ -51,10 +55,10 @@ pub mod arc {
         len: usize,
         /// Shared access to underlying resources.
         ///
-        /// Importantly, this is unavailable for as long as the struct exists, which may
-        /// prevent shared access to ptr[0 .. len]. I'm not sure I understand Rust's rules
-        /// enough to make a stronger statement about this.
-        sequestered: Arc<dyn Any>,
+        /// The backing object is accessed only during construction or unique regeneration.
+        /// Regeneration clears the old view before accessing the cell's contents.
+        /// See the safety argument above `Bytes`'s `Sync` implementation.
+        sequestered: Arc<UnsafeCell<dyn Any + Send>>,
     }
 
     impl BytesMut {
@@ -66,12 +70,21 @@ pub mod arc {
             // stable for the lifetime of `sequestered`. The `Arc` also serves as our
             // source of truth for the allocation, which we use to re-connect slices
             // of the same allocation.
-            let mut sequestered = Arc::new(bytes) as Arc<dyn Any>;
+            // `Arc` bookkeeping can form shared references covering the backing object.
+            // `UnsafeCell` lets those references coexist with writes to bytes stored inline in that object.
+            // The mutable slice must still remain disjoint from every published `Bytes` slice.
+            let mut sequestered = Arc::new(UnsafeCell::new(bytes)) as Arc<UnsafeCell<dyn Any + Send>>;
             let (ptr, len) =
             Arc::get_mut(&mut sequestered)
                 .unwrap()
+                .get_mut()
                 .downcast_mut::<B>()
-                .map(|a| (a.as_mut_ptr(), a.len()))
+                .map(|a| {
+                    // Acquire one slice, so that the two next calls must agree.
+                    // Otherwise, adversarial implementations could lie to us.
+                    let slice = a.deref_mut();
+                    (slice.as_mut_ptr(), slice.len())
+                })
                 .unwrap();
 
             BytesMut {
@@ -83,7 +96,7 @@ pub mod arc {
 
         /// Extracts [0, index) into a new `Bytes` which is returned, updating `self`.
         ///
-        /// # Safety
+        /// # Implementation
         ///
         /// This method first tests `index` against `self.len`, which should ensure that both
         /// the returned `Bytes` contains valid memory, and that `self` can no longer access it.
@@ -105,10 +118,16 @@ pub mod arc {
 
         /// Regenerates the BytesMut if it is uniquely held.
         ///
-        /// If uniquely held, this method recovers the initial pointer and length
-        /// of the sequestered allocation and re-initializes the BytesMut. The return
-        /// value indicates whether this occurred. A `None` value indicates that the
-        /// downcast to `B` failed and the type is not correct.
+        /// If uniquely held, this method obtains a fresh mutable slice from the backing object and re-initializes the BytesMut.
+        /// `Some(true)` indicates success.
+        /// `Some(false)` indicates that the allocation is shared and leaves the view unchanged.
+        /// `None` indicates that the downcast to `B` failed and leaves the view empty.
+        /// The backing object remains owned by `self`, so regeneration with the correct type can be retried.
+        ///
+        /// # Panics
+        ///
+        /// If the backing object's `deref_mut` panics, `self` is left empty.
+        /// The backing object remains owned by `self`.
         ///
         /// # Examples
         ///
@@ -130,9 +149,19 @@ pub mod arc {
         pub fn try_regenerate<B>(&mut self) -> Option<bool> where B: DerefMut<Target=[u8]>+'static {
             // Only possible if this is the only reference to the sequestered allocation.
             if let Some(boxed) = Arc::get_mut(&mut self.sequestered) {
-                let downcast = boxed.downcast_mut::<B>()?;
-                self.ptr = downcast.as_mut_ptr();
-                self.len = downcast.len();
+                // Clear the view before accessing the cell's contents.
+                // References formed during downcasting can invalidate the old pointer for inline storage.
+                // The backing object's `deref_mut` may also invalidate the old slice and then panic.
+                // Neither a failed downcast nor a caught panic may leave the old pointer accessible.
+                self.ptr = std::ptr::dangling_mut::<u8>();
+                self.len = 0;
+                let downcast = boxed.get_mut().downcast_mut::<B>()?;
+
+                // Acquire one slice, so that the two next calls must agree.
+                // Otherwise, adversarial implementations could lie to us.
+                let slice = downcast.deref_mut();
+                self.ptr = slice.as_mut_ptr();
+                self.len = slice.len();
                 Some(true)
             }
             else {
@@ -180,32 +209,33 @@ pub mod arc {
         len: usize,
         /// Shared access to underlying resources.
         ///
-        /// Importantly, this is unavailable for as long as the struct exists, which may
-        /// prevent shared access to ptr[0 .. len]. I'm not sure I understand Rust's rules
-        /// enough to make a stronger statement about this.
-        sequestered: Arc<dyn Any>,
+        /// The backing object is accessed only during construction or unique regeneration.
+        /// Regeneration clears the old view before accessing the cell's contents.
+        /// See the safety argument above `Bytes`'s `Sync` implementation.
+        sequestered: Arc<UnsafeCell<dyn Any + Send>>,
     }
 
     // Synchronization happens through `self.sequestered`, which means to ensure that even
     // across multiple threads the referenced range of bytes remains valid.
     unsafe impl Send for Bytes { }
 
-    // `Sync` holds because everything reachable through `&Bytes` is read-only or atomic:
-    // `Deref` yields `&[u8]` (and `u8: Sync`), the mutating methods take `&mut self`, and
-    // cloning only touches the atomic `Arc` refcount. There is no interior mutability and
-    // no path to a `&mut` from a shared reference.
+    // `Sync` holds because accesses through `&Bytes` are read-only or atomic.
+    // `Deref` yields `&[u8]` (and `u8: Sync`), the mutating methods take `&mut self`, and cloning only changes the atomic `Arc` refcount.
+    // The backing object is inside an `UnsafeCell`, but `&Bytes` exposes only immutable byte slices and no mutable references.
+    // A `BytesMut` sharing the allocation can only write to a disjoint byte range.
+    // Regeneration accesses the backing object only after `Arc::get_mut` establishes uniqueness and the old view is cleared.
+    // Only a fresh slice from `DerefMut` can reinstall the view; a failed downcast or panic leaves it empty.
     //
-    // Note this requires only that the sequestered payload `B` be `Send` (enforced by
-    // `BytesMut::from`), not `Sync`: `B` is never exposed by reference, so it is never
-    // shared across threads. The only cross-thread use of `B` is its destructor, which may
-    // run on whichever thread drops the last `Arc` clone -- and that needs `Send`, not `Sync`.
+    // Note this requires only that the sequestered payload `B` be `Send` (enforced by `BytesMut::from`), not `Sync`.
+    // `B` is never exposed by reference, so it is never shared across threads.
+    // The only cross-thread use of `B` is its destructor, which may run on whichever thread drops the last `Arc` clone -- and that needs `Send`, not `Sync`.
     unsafe impl Sync for Bytes { }
 
     impl Bytes {
 
         /// Extracts [0, index) into a new `Bytes` which is returned, updating `self`.
         ///
-        /// # Safety
+        /// # Implementation
         ///
         /// This method first tests `index` against `self.len`, which should ensure that both
         /// the returned `Bytes` contains valid memory, and that `self` can no longer access it.
