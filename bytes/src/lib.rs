@@ -55,9 +55,9 @@ pub mod arc {
         len: usize,
         /// Shared access to underlying resources.
         ///
-        /// Importantly, this is unavailable for as long as the struct exists, which may
-        /// prevent shared access to ptr[0 .. len]. I'm not sure I understand Rust's rules
-        /// enough to make a stronger statement about this.
+        /// The backing object is accessed only during construction or unique regeneration.
+        /// Regeneration clears the old view before accessing the cell's contents.
+        /// See the safety argument above `Bytes`'s `Sync` implementation.
         sequestered: Arc<UnsafeCell<dyn Any + Send>>,
     }
 
@@ -81,7 +81,7 @@ pub mod arc {
                 .downcast_mut::<B>()
                 .map(|a| {
                     // Acquire one slice, so that the two next calls must agree.
-                    // Otherwise, adversarial implementations could lie to use.
+                    // Otherwise, adversarial implementations could lie to us.
                     let slice = a.deref_mut();
                     (slice.as_mut_ptr(), slice.len())
                 })
@@ -118,10 +118,11 @@ pub mod arc {
 
         /// Regenerates the BytesMut if it is uniquely held.
         ///
-        /// If uniquely held, this method recovers the initial pointer and length
-        /// of the sequestered allocation and re-initializes the BytesMut. The return
-        /// value indicates whether this occurred. A `None` value indicates that the
-        /// downcast to `B` failed and the type is not correct.
+        /// If uniquely held, this method obtains a fresh mutable slice from the backing object and re-initializes the BytesMut.
+        /// `Some(true)` indicates success.
+        /// `Some(false)` indicates that the allocation is shared and leaves the view unchanged.
+        /// `None` indicates that the downcast to `B` failed and leaves the view empty.
+        /// The backing object remains owned by `self`, so regeneration with the correct type can be retried.
         ///
         /// # Panics
         ///
@@ -148,16 +149,16 @@ pub mod arc {
         pub fn try_regenerate<B>(&mut self) -> Option<bool> where B: DerefMut<Target=[u8]>+'static {
             // Only possible if this is the only reference to the sequestered allocation.
             if let Some(boxed) = Arc::get_mut(&mut self.sequestered) {
-                // This is standard library code, and should not panic / unwind.
-                // If this ever changes, we should move the (ptr, len) pair first.
-                let downcast = boxed.get_mut().downcast_mut::<B>()?;
-                // The backing object's `deref_mut` may invalidate the old slice and then panic.
-                // Clear the view first so a caught panic cannot expose an invalid pointer.
-                self.ptr = std::ptr::NonNull::<u8>::dangling().as_ptr();
+                // Clear the view before accessing the cell's contents.
+                // References formed during downcasting can invalidate the old pointer for inline storage.
+                // The backing object's `deref_mut` may also invalidate the old slice and then panic.
+                // Neither a failed downcast nor a caught panic may leave the old pointer accessible.
+                self.ptr = std::ptr::dangling_mut::<u8>();
                 self.len = 0;
+                let downcast = boxed.get_mut().downcast_mut::<B>()?;
 
                 // Acquire one slice, so that the two next calls must agree.
-                // Otherwise, adversarial implementations could lie to use.
+                // Otherwise, adversarial implementations could lie to us.
                 let slice = downcast.deref_mut();
                 self.ptr = slice.as_mut_ptr();
                 self.len = slice.len();
@@ -208,9 +209,9 @@ pub mod arc {
         len: usize,
         /// Shared access to underlying resources.
         ///
-        /// Importantly, this is unavailable for as long as the struct exists, which may
-        /// prevent shared access to ptr[0 .. len]. I'm not sure I understand Rust's rules
-        /// enough to make a stronger statement about this.
+        /// The backing object is accessed only during construction or unique regeneration.
+        /// Regeneration clears the old view before accessing the cell's contents.
+        /// See the safety argument above `Bytes`'s `Sync` implementation.
         sequestered: Arc<UnsafeCell<dyn Any + Send>>,
     }
 
@@ -222,7 +223,8 @@ pub mod arc {
     // `Deref` yields `&[u8]` (and `u8: Sync`), the mutating methods take `&mut self`, and cloning only changes the atomic `Arc` refcount.
     // The backing object is inside an `UnsafeCell`, but `&Bytes` exposes only immutable byte slices and no mutable references.
     // A `BytesMut` sharing the allocation can only write to a disjoint byte range.
-    // Regeneration accesses the backing object only after `Arc::get_mut` establishes uniqueness.
+    // Regeneration accesses the backing object only after `Arc::get_mut` establishes uniqueness and the old view is cleared.
+    // Only a fresh slice from `DerefMut` can reinstall the view; a failed downcast or panic leaves it empty.
     //
     // Note this requires only that the sequestered payload `B` be `Send` (enforced by `BytesMut::from`), not `Sync`.
     // `B` is never exposed by reference, so it is never shared across threads.
