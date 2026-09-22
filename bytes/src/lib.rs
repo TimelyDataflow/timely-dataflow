@@ -115,6 +115,11 @@ pub mod arc {
         /// value indicates whether this occurred. A `None` value indicates that the
         /// downcast to `B` failed and the type is not correct.
         ///
+        /// # Panics
+        ///
+        /// If the backing object's `deref_mut` panics, `self` is left empty.
+        /// The backing object remains owned by `self`.
+        ///
         /// # Examples
         ///
         /// ```
@@ -135,7 +140,14 @@ pub mod arc {
         pub fn try_regenerate<B>(&mut self) -> Option<bool> where B: DerefMut<Target=[u8]>+'static {
             // Only possible if this is the only reference to the sequestered allocation.
             if let Some(boxed) = Arc::get_mut(&mut self.sequestered) {
+                // This is standard library code, and should not panic / unwind.
+                // If this ever changes, we should move the (ptr, len) pair first.
                 let downcast = boxed.downcast_mut::<B>()?;
+                // The backing object's `deref_mut` may invalidate the old slice and then panic.
+                // Clear the view first so a caught panic cannot expose an invalid pointer.
+                self.ptr = std::ptr::NonNull::<u8>::dangling().as_ptr();
+                self.len = 0;
+
                 // Acquire one slice, so that the two next calls must agree.
                 // Otherwise, adversarial implementations could lie to use.
                 let slice = downcast.deref_mut();
