@@ -38,6 +38,7 @@ pub mod arc {
     use std::ops::{Deref, DerefMut};
     use std::sync::Arc;
     use std::any::Any;
+    use std::cell::UnsafeCell;
 
     /// A mutable byte slice backed by a shared allocation.
     ///
@@ -57,7 +58,7 @@ pub mod arc {
         /// Importantly, this is unavailable for as long as the struct exists, which may
         /// prevent shared access to ptr[0 .. len]. I'm not sure I understand Rust's rules
         /// enough to make a stronger statement about this.
-        sequestered: Arc<dyn Any + Send>,
+        sequestered: Arc<UnsafeCell<dyn Any + Send>>,
     }
 
     impl BytesMut {
@@ -69,10 +70,14 @@ pub mod arc {
             // stable for the lifetime of `sequestered`. The `Arc` also serves as our
             // source of truth for the allocation, which we use to re-connect slices
             // of the same allocation.
-            let mut sequestered = Arc::new(bytes) as Arc<dyn Any + Send>;
+            // `Arc` bookkeeping can form shared references covering the backing object.
+            // `UnsafeCell` lets those references coexist with writes to bytes stored inline in that object.
+            // The mutable slice must still remain disjoint from every published `Bytes` slice.
+            let mut sequestered = Arc::new(UnsafeCell::new(bytes)) as Arc<UnsafeCell<dyn Any + Send>>;
             let (ptr, len) =
             Arc::get_mut(&mut sequestered)
                 .unwrap()
+                .get_mut()
                 .downcast_mut::<B>()
                 .map(|a| {
                     // Acquire one slice, so that the two next calls must agree.
@@ -145,7 +150,7 @@ pub mod arc {
             if let Some(boxed) = Arc::get_mut(&mut self.sequestered) {
                 // This is standard library code, and should not panic / unwind.
                 // If this ever changes, we should move the (ptr, len) pair first.
-                let downcast = boxed.downcast_mut::<B>()?;
+                let downcast = boxed.get_mut().downcast_mut::<B>()?;
                 // The backing object's `deref_mut` may invalidate the old slice and then panic.
                 // Clear the view first so a caught panic cannot expose an invalid pointer.
                 self.ptr = std::ptr::NonNull::<u8>::dangling().as_ptr();
@@ -206,22 +211,22 @@ pub mod arc {
         /// Importantly, this is unavailable for as long as the struct exists, which may
         /// prevent shared access to ptr[0 .. len]. I'm not sure I understand Rust's rules
         /// enough to make a stronger statement about this.
-        sequestered: Arc<dyn Any + Send>,
+        sequestered: Arc<UnsafeCell<dyn Any + Send>>,
     }
 
     // Synchronization happens through `self.sequestered`, which means to ensure that even
     // across multiple threads the referenced range of bytes remains valid.
     unsafe impl Send for Bytes { }
 
-    // `Sync` holds because everything reachable through `&Bytes` is read-only or atomic:
-    // `Deref` yields `&[u8]` (and `u8: Sync`), the mutating methods take `&mut self`, and
-    // cloning only touches the atomic `Arc` refcount. There is no interior mutability and
-    // no path to a `&mut` from a shared reference.
+    // `Sync` holds because accesses through `&Bytes` are read-only or atomic.
+    // `Deref` yields `&[u8]` (and `u8: Sync`), the mutating methods take `&mut self`, and cloning only changes the atomic `Arc` refcount.
+    // The backing object is inside an `UnsafeCell`, but `&Bytes` exposes only immutable byte slices and no mutable references.
+    // A `BytesMut` sharing the allocation can only write to a disjoint byte range.
+    // Regeneration accesses the backing object only after `Arc::get_mut` establishes uniqueness.
     //
-    // Note this requires only that the sequestered payload `B` be `Send` (enforced by
-    // `BytesMut::from`), not `Sync`: `B` is never exposed by reference, so it is never
-    // shared across threads. The only cross-thread use of `B` is its destructor, which may
-    // run on whichever thread drops the last `Arc` clone -- and that needs `Send`, not `Sync`.
+    // Note this requires only that the sequestered payload `B` be `Send` (enforced by `BytesMut::from`), not `Sync`.
+    // `B` is never exposed by reference, so it is never shared across threads.
+    // The only cross-thread use of `B` is its destructor, which may run on whichever thread drops the last `Arc` clone -- and that needs `Send`, not `Sync`.
     unsafe impl Sync for Bytes { }
 
     impl Bytes {
