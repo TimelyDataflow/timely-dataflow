@@ -39,7 +39,10 @@ pub mod arc {
     use std::sync::Arc;
     use std::any::Any;
 
-    /// A thread-safe byte buffer backed by a shared allocation.
+    /// A mutable byte slice backed by a shared allocation.
+    ///
+    /// This type is neither `Send` nor `Sync`.
+    /// It can produce immutable [`Bytes`] views that are both `Send` and `Sync`.
     ///
     /// An instance of this type contends that `ptr` is valid for `len` bytes,
     /// and that no other reference to these bytes exists, other than through
@@ -54,7 +57,7 @@ pub mod arc {
         /// Importantly, this is unavailable for as long as the struct exists, which may
         /// prevent shared access to ptr[0 .. len]. I'm not sure I understand Rust's rules
         /// enough to make a stronger statement about this.
-        sequestered: Arc<dyn Any>,
+        sequestered: Arc<dyn Any + Send>,
     }
 
     impl BytesMut {
@@ -66,7 +69,7 @@ pub mod arc {
             // stable for the lifetime of `sequestered`. The `Arc` also serves as our
             // source of truth for the allocation, which we use to re-connect slices
             // of the same allocation.
-            let mut sequestered = Arc::new(bytes) as Arc<dyn Any>;
+            let mut sequestered = Arc::new(bytes) as Arc<dyn Any + Send>;
             let (ptr, len) =
             Arc::get_mut(&mut sequestered)
                 .unwrap()
@@ -203,7 +206,7 @@ pub mod arc {
         /// Importantly, this is unavailable for as long as the struct exists, which may
         /// prevent shared access to ptr[0 .. len]. I'm not sure I understand Rust's rules
         /// enough to make a stronger statement about this.
-        sequestered: Arc<dyn Any>,
+        sequestered: Arc<dyn Any + Send>,
     }
 
     // Synchronization happens through `self.sequestered`, which means to ensure that even
