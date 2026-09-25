@@ -329,9 +329,9 @@ where
         // Transmit produced progress updates.
         self.send_progress();
 
-        // Apply the updates of child scopes now, rather than on a later activation, so
-        // that their effect on our outputs reaches the parent in this call. Children
-        // whose frontiers change as a result run on the next activation.
+        // Apply the updates of child scopes and our own sent updates now, rather than on
+        // a later activation, so that their effect on our outputs reaches the parent in
+        // this call. Children whose frontiers change as a result run on the next activation.
         if !self.final_pointstamp.is_empty() {
             self.propagate_pointstamps();
         }
@@ -547,7 +547,7 @@ where
         };
 
         if must_send {
-            self.progcaster.send(&mut self.local_pointstamp);
+            self.progcaster.send(&mut self.local_pointstamp, &mut self.final_pointstamp);
         }
     }
 }

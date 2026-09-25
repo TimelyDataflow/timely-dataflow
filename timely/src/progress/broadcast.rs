@@ -35,7 +35,8 @@ impl<T:Timestamp+Send> Progcaster<T> {
     pub fn new(worker: &crate::worker::Worker, addr: Rc<[usize]>, identifier: usize, mut logging: Option<Logger>, progress_logging: Option<ProgressLogger<T>>) -> Progcaster<T> {
 
         let channel_identifier = worker.new_identifier();
-        let (pusher, puller) = worker.broadcast(channel_identifier, addr);
+        // The channel excludes this worker, and `send` applies our own updates directly.
+        let (pusher, puller) = worker.broadcast_peers(channel_identifier, addr);
         logging.as_mut().map(|l| l.log(crate::logging::CommChannelsEvent {
             identifier: channel_identifier,
             kind: crate::logging::CommChannelKind::Progress,
@@ -53,7 +54,10 @@ impl<T:Timestamp+Send> Progcaster<T> {
     }
 
     /// Sends pointstamp changes to all workers.
-    pub fn send(&mut self, changes: &mut ChangeBatch<(Location, T)>) {
+    ///
+    /// Other workers receive the changes through the channel, and this worker's copy is added to `local`.
+    /// Each worker's changes reach every worker in the order sent, which is all that `recv` relies on.
+    pub fn send(&mut self, changes: &mut ChangeBatch<(Location, T)>, local: &mut ChangeBatch<(Location, T)>) {
 
         changes.compact();
         if !changes.is_empty() {
@@ -83,10 +87,22 @@ impl<T:Timestamp+Send> Progcaster<T> {
                     channel: self.channel_identifier,
                     seq_no: self.counter,
                     identifier: self.identifier,
+                    messages: messages.clone(),
+                    internal: internal.clone(),
+                });
+                // Log the local delivery as a receive, as it would appear had it used the channel.
+                l.log(crate::logging::TimelyProgressEvent {
+                    is_send: false,
+                    source: self.source,
+                    channel: self.channel_identifier,
+                    seq_no: self.counter,
+                    identifier: self.identifier,
                     messages,
                     internal,
                 });
             });
+
+            local.extend(changes.iter().cloned());
 
             let payload = (self.source, self.counter, std::mem::take(changes));
             let mut to_push = Some(Bincode { payload });

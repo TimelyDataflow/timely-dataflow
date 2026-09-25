@@ -609,6 +609,15 @@ impl Worker {
         self.allocator.borrow_mut().broadcast(identifier)
     }
 
+    /// Allocates a broadcast channel, where each pushed message is received by all workers except the sender.
+    pub fn broadcast_peers<T: Exchangeable + Clone>(&self, identifier: usize, address: Rc<[usize]>) -> (Box<dyn Push<T>>, Box<dyn Pull<T>>) {
+        if address.is_empty() { panic!("Unacceptable address: Length zero"); }
+        let mut paths = self.paths.borrow_mut();
+        paths.insert(identifier, address);
+        self.temp_channel_ids.borrow_mut().push(identifier);
+        self.allocator.borrow_mut().broadcast_peers(identifier)
+    }
+
     /// Construct a new dataflow.
     ///
     /// # Examples
