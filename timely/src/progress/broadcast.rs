@@ -36,7 +36,10 @@ impl<T:Timestamp+Send> Progcaster<T> {
 
         let channel_identifier = worker.new_identifier();
         // The channel excludes this worker, and `send` applies our own updates directly.
-        let (pusher, puller) = worker.broadcast_peers(channel_identifier, addr);
+        let (pusher, mut puller) = worker.broadcast_peers(channel_identifier, addr);
+        // `Subgraph::schedule` applies everything it receives in the call that drains the channel,
+        // and activates itself if work remains, so a drained channel need not schedule it again.
+        puller.quiet();
         logging.as_mut().map(|l| l.log(crate::logging::CommChannelsEvent {
             identifier: channel_identifier,
             kind: crate::logging::CommChannelKind::Progress,
