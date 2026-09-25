@@ -137,4 +137,5 @@ impl<T: Bytesable> Pull<T> for PullerInner<T> {
             &mut self.current
         }
     }
+    fn quiet(&mut self) { self.inner.quiet() }
 }

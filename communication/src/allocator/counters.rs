@@ -118,6 +118,8 @@ pub struct Puller<T, P: Pull<T>> {
     events: Rc<RefCell<Vec<usize>>>,
     puller: P,
     phantom: ::std::marker::PhantomData<T>,
+    /// Whether to record an event once the channel has been drained.
+    echo: bool,
 }
 
 impl<T, P: Pull<T>>  Puller<T, P> {
@@ -129,6 +131,7 @@ impl<T, P: Pull<T>>  Puller<T, P> {
             events,
             puller,
             phantom: ::std::marker::PhantomData,
+            echo: true,
         }
     }
 }
@@ -138,9 +141,11 @@ impl<T, P: Pull<T>> Pull<T> for Puller<T, P> {
         let result = self.puller.pull();
         if result.is_none() {
             if self.count != 0 {
-                self.events
-                    .borrow_mut()
-                    .push(self.index);
+                if self.echo {
+                    self.events
+                        .borrow_mut()
+                        .push(self.index);
+                }
                 self.count = 0;
             }
         }
@@ -149,5 +154,9 @@ impl<T, P: Pull<T>> Pull<T> for Puller<T, P> {
         }
 
         result
+    }
+    fn quiet(&mut self) {
+        self.echo = false;
+        self.puller.quiet();
     }
 }

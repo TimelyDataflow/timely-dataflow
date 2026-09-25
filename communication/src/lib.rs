@@ -160,11 +160,18 @@ pub trait Pull<T> {
     /// Takes an `Option<T>` and leaves `None` behind.
     #[inline]
     fn recv(&mut self) -> Option<T> { self.pull().take() }
+    /// Stops the puller from announcing its channel again once it has been drained.
+    ///
+    /// By default, draining a channel that yielded messages records an event for the channel,
+    /// which schedules its recipient once more. A recipient that finishes its work in the call
+    /// that drains the channel can opt out.
+    fn quiet(&mut self) { }
 }
 
 impl<T, P: ?Sized + Pull<T>> Pull<T> for Box<P> {
     #[inline]
     fn pull(&mut self) -> &mut Option<T> { (**self).pull() }
+    fn quiet(&mut self) { (**self).quiet() }
 }
 
 

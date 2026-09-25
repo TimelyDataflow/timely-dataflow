@@ -149,6 +149,51 @@ pub struct TcpAllocator {
     to_local:   HashMap<usize, Rc<RefCell<VecDeque<Bytes>>>>,   // to worker-local typed pullers.
 }
 
+impl TcpAllocator {
+    /// Allocates a broadcast channel that delivers to this worker only if `include_self` is set.
+    fn broadcast_to<T: Exchangeable + Clone>(&mut self, identifier: usize, include_self: bool) -> (Box<dyn Push<T>>, Box<dyn Pull<T>>) {
+
+        // Assume and enforce in-order identifier allocation.
+        if let Some(bound) = self.channel_id_bound {
+            assert!(bound < identifier);
+        }
+        self.channel_id_bound = Some(identifier);
+
+        // Result list of boxed pushers.
+        // One entry for each process.
+        let mut pushes = Vec::<Box<dyn Push<T>>>::with_capacity(self.sends.len() + 1);
+
+        // Inner exchange allocations.
+        let inner_peers = self.inner.peers();
+        let (inner_send, inner_recv) = if include_self { self.inner.broadcast(identifier) } else { self.inner.broadcast_peers(identifier) };
+
+        pushes.push(inner_send);
+        for (mut index, send) in self.sends.iter().enumerate() {
+            // The span of worker indexes jumps by `inner_peers` as we skip our own process.
+            // We bump `index` by one as we pass `self.index/inner_peers` to effect this.
+            if index >= self.index/inner_peers { index += 1; }
+            let header = MessageHeader {
+                channel: identifier,
+                source: self.index,
+                target_lower: index * inner_peers,
+                target_upper: index * inner_peers + inner_peers,
+                length: 0,
+                seqno: 0,
+            };
+            pushes.push(Box::new(Pusher::new(header, Rc::clone(send))))
+        }
+
+        let channel = Rc::clone(self.to_local.entry(identifier).or_default());
+
+        use crate::allocator::counters::Puller as CountPuller;
+        let canary = Canary::new(identifier, Rc::clone(&self.canaries));
+        let puller = Box::new(CountPuller::new(PullerInner::new(inner_recv, channel, canary), identifier, Rc::clone(self.events())));
+
+        let pushes = Box::new(crate::allocator::Broadcaster { spare: None, pushers: pushes });
+        (pushes, puller, )
+    }
+}
+
 impl Allocate for TcpAllocator {
     fn index(&self) -> usize { self.index }
     fn peers(&self) -> usize { self.peers }
@@ -202,45 +247,11 @@ impl Allocate for TcpAllocator {
     }
 
     fn broadcast<T: Exchangeable + Clone>(&mut self, identifier: usize) -> (Box<dyn Push<T>>, Box<dyn Pull<T>>) {
+        self.broadcast_to(identifier, true)
+    }
 
-        // Assume and enforce in-order identifier allocation.
-        if let Some(bound) = self.channel_id_bound {
-            assert!(bound < identifier);
-        }
-        self.channel_id_bound = Some(identifier);
-
-        // Result list of boxed pushers.
-        // One entry for each process.
-        let mut pushes = Vec::<Box<dyn Push<T>>>::with_capacity(self.sends.len() + 1);
-
-        // Inner exchange allocations.
-        let inner_peers = self.inner.peers();
-        let (inner_send, inner_recv) = self.inner.broadcast(identifier);
-
-        pushes.push(inner_send);
-        for (mut index, send) in self.sends.iter().enumerate() {
-            // The span of worker indexes jumps by `inner_peers` as we skip our own process.
-            // We bump `index` by one as we pass `self.index/inner_peers` to effect this.
-            if index >= self.index/inner_peers { index += 1; }
-            let header = MessageHeader {
-                channel: identifier,
-                source: self.index,
-                target_lower: index * inner_peers,
-                target_upper: index * inner_peers + inner_peers,
-                length: 0,
-                seqno: 0,
-            };
-            pushes.push(Box::new(Pusher::new(header, Rc::clone(send))))
-        }
-
-        let channel = Rc::clone(self.to_local.entry(identifier).or_default());
-
-        use crate::allocator::counters::Puller as CountPuller;
-        let canary = Canary::new(identifier, Rc::clone(&self.canaries));
-        let puller = Box::new(CountPuller::new(PullerInner::new(inner_recv, channel, canary), identifier, Rc::clone(self.events())));
-
-        let pushes = Box::new(crate::allocator::Broadcaster { spare: None, pushers: pushes });
-        (pushes, puller, )
+    fn broadcast_peers<T: Exchangeable + Clone>(&mut self, identifier: usize) -> (Box<dyn Push<T>>, Box<dyn Pull<T>>) {
+        self.broadcast_to(identifier, false)
     }
 
     // Perform preparatory work, most likely reading binary buffers from self.recv.

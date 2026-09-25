@@ -155,8 +155,10 @@ impl BytesPush for Fanout {
 }
 
 /// A pusher that serializes once for all other workers, and hands the element itself to this worker.
+///
+/// Without a local pusher, the element is left with the caller.
 struct BroadcastPusher<T: Exchangeable> {
-    local: ThreadPusher<T>,
+    local: Option<ThreadPusher<T>>,
     remote: Option<Pusher<T, Fanout>>,
 }
 
@@ -164,7 +166,7 @@ impl<T: Exchangeable> Push<T> for BroadcastPusher<T> {
     fn push(&mut self, element: &mut Option<T>) {
         // The serializing pusher reads the element and leaves it in place.
         if let Some(remote) = self.remote.as_mut() { remote.push(element); }
-        self.local.push(element);
+        if let Some(local) = self.local.as_mut() { local.push(element); }
     }
 }
 
@@ -183,6 +185,36 @@ impl ProcessAllocator {
         let puller = PullerInner::new(Box::new(local_recv), channel, canary);
         let puller = Box::new(CountPuller::new(puller, identifier, Rc::clone(&self.events)));
         (local_send, puller)
+    }
+
+    /// Allocates a broadcast channel that delivers to this worker only if `include_self` is set.
+    fn broadcast_to<T: Exchangeable>(&mut self, identifier: usize, include_self: bool) -> (Box<dyn Push<T>>, Box<dyn Pull<T>>) {
+
+        // Assume and enforce in-order identifier allocation.
+        if let Some(bound) = self.channel_id_bound {
+            assert!(bound < identifier);
+        }
+        self.channel_id_bound = Some(identifier);
+
+        let (local, puller) = self.local_channel::<T>(identifier);
+
+        // Serialize once, and hand every other worker a reference to the bytes.
+        let targets: Vec<_> = (0 .. self.peers).filter(|&target| target != self.index).map(|target| Rc::clone(&self.sends[target])).collect();
+        let remote = if targets.is_empty() { None } else {
+            let header = MessageHeader {
+                channel:        identifier,
+                source:         self.index,
+                target_lower:   0,
+                target_upper:   self.peers,
+                length:         0,
+                seqno:          0,
+            };
+            let endpoint = SendEndpoint::new(Fanout { targets }, self.refill.clone());
+            Some(Pusher::new(header, Rc::new(RefCell::new(endpoint))))
+        };
+
+        let local = if include_self { Some(local) } else { None };
+        (Box::new(BroadcastPusher { local, remote }), puller)
     }
 }
 
@@ -225,31 +257,11 @@ impl Allocate for ProcessAllocator {
     }
 
     fn broadcast<T: Exchangeable + Clone>(&mut self, identifier: usize) -> (Box<dyn Push<T>>, Box<dyn Pull<T>>) {
+        self.broadcast_to(identifier, true)
+    }
 
-        // Assume and enforce in-order identifier allocation.
-        if let Some(bound) = self.channel_id_bound {
-            assert!(bound < identifier);
-        }
-        self.channel_id_bound = Some(identifier);
-
-        let (local, puller) = self.local_channel::<T>(identifier);
-
-        // Serialize once, and hand every other worker a reference to the bytes.
-        let targets: Vec<_> = (0 .. self.peers).filter(|&target| target != self.index).map(|target| Rc::clone(&self.sends[target])).collect();
-        let remote = if targets.is_empty() { None } else {
-            let header = MessageHeader {
-                channel:        identifier,
-                source:         self.index,
-                target_lower:   0,
-                target_upper:   self.peers,
-                length:         0,
-                seqno:          0,
-            };
-            let endpoint = SendEndpoint::new(Fanout { targets }, self.refill.clone());
-            Some(Pusher::new(header, Rc::new(RefCell::new(endpoint))))
-        };
-
-        (Box::new(BroadcastPusher { local, remote }), puller)
+    fn broadcast_peers<T: Exchangeable + Clone>(&mut self, identifier: usize) -> (Box<dyn Push<T>>, Box<dyn Pull<T>>) {
+        self.broadcast_to(identifier, false)
     }
 
     // Perform preparatory work, most likely reading binary buffers from self.recv.

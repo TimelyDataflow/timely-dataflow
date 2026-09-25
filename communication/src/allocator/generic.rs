@@ -56,6 +56,14 @@ impl Allocator {
             Allocator::Tcp(z) => z.broadcast(identifier),
         }
     }
+    /// Constructs a broadcast channel that does not deliver to the sender.
+    pub fn broadcast_peers<T: Exchangeable+Clone>(&mut self, identifier: usize) -> (Box<dyn Push<T>>, Box<dyn Pull<T>>) {
+        match self {
+            Allocator::Thread(t) => t.broadcast_peers(identifier),
+            Allocator::Process(p) => p.broadcast_peers(identifier),
+            Allocator::Tcp(z) => z.broadcast_peers(identifier),
+        }
+    }
     /// Perform work before scheduling operators.
     pub fn receive(&mut self) {
         match self {
@@ -110,6 +118,9 @@ impl Allocate for Allocator {
     }
     fn broadcast<T: Exchangeable+Clone>(&mut self, identifier: usize) -> (Box<dyn Push<T>>, Box<dyn Pull<T>>) {
         self.broadcast(identifier)
+    }
+    fn broadcast_peers<T: Exchangeable+Clone>(&mut self, identifier: usize) -> (Box<dyn Push<T>>, Box<dyn Pull<T>>) {
+        self.broadcast_peers(identifier)
     }
     fn receive(&mut self) { self.receive(); }
     fn release(&mut self) { self.release(); }

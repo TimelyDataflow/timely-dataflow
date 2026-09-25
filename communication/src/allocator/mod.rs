@@ -92,6 +92,16 @@ pub(crate) trait Allocate {
         let (pushers, pull) = self.allocate(identifier);
         (Box::new(Broadcaster { spare: None, pushers }), pull)
     }
+
+    /// Allocates a broadcast channel, where each pushed message is received by all workers except the sender.
+    ///
+    /// The puller still receives the messages that other workers push.
+    fn broadcast_peers<T: Exchangeable + Clone>(&mut self, identifier: usize) -> (Box<dyn Push<T>>, Box<dyn Pull<T>>) {
+        let index = self.index();
+        let (mut pushers, pull) = self.allocate(identifier);
+        pushers.remove(index);
+        (Box::new(Broadcaster { spare: None, pushers }), pull)
+    }
 }
 
 /// An adapter to broadcast any pushed element.
@@ -206,6 +216,14 @@ impl Process {
         match self {
             Process::Typed(p) => p.broadcast(identifier),
             Process::Bytes(pb) => pb.broadcast(identifier),
+        }
+    }
+    pub(crate) fn broadcast_peers<T: Exchangeable + Clone>(&mut self, identifier: usize)
+        -> (Box<dyn Push<T>>, Box<dyn Pull<T>>)
+    {
+        match self {
+            Process::Typed(p) => p.broadcast_peers(identifier),
+            Process::Bytes(pb) => pb.broadcast_peers(identifier),
         }
     }
     pub(crate) fn receive(&mut self) {
