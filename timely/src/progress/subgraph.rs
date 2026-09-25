@@ -332,18 +332,20 @@ where
         // Apply the updates of child scopes and our own sent updates now, rather than on
         // a later activation, so that their effect on our outputs reaches the parent in
         // this call. Children whose frontiers change as a result run on the next activation.
-        if !self.final_pointstamp.is_empty() {
+        // A dataflow root has no parent to report to, and applies the updates on its next
+        // activation, together with those it receives from other workers by then.
+        if !self.final_pointstamp.is_empty() && self.path.len() > 1 {
             self.propagate_pointstamps();
         }
-        if !self.temp_active.is_empty() {
+        if !self.temp_active.is_empty() || !self.final_pointstamp.is_empty() {
             self.activations.borrow_mut().activate(&self.path[..]);
         }
 
         // A subgraph is incomplete if any child is incomplete, there are outstanding messages,
-        // or children have yet to observe changes to their frontiers.
+        // updates remain to be applied, or children have yet to observe changes to their frontiers.
         let incomplete = self.incomplete_count > 0;
         let tracking = self.pointstamp_tracker.tracking_anything();
-        let pending = !self.temp_active.is_empty();
+        let pending = !self.temp_active.is_empty() || !self.final_pointstamp.is_empty();
 
         incomplete || tracking || pending
     }
