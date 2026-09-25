@@ -329,16 +329,23 @@ where
         // Transmit produced progress updates.
         self.send_progress();
 
-        // If child scopes surface more final pointstamp updates we must re-execute.
+        // Apply the updates of child scopes now, rather than on a later activation, so
+        // that their effect on our outputs reaches the parent in this call. Children
+        // whose frontiers change as a result run on the next activation.
         if !self.final_pointstamp.is_empty() {
+            self.propagate_pointstamps();
+        }
+        if !self.temp_active.is_empty() {
             self.activations.borrow_mut().activate(&self.path[..]);
         }
 
-        // A subgraph is incomplete if any child is incomplete, or there are outstanding messages.
+        // A subgraph is incomplete if any child is incomplete, there are outstanding messages,
+        // or children have yet to observe changes to their frontiers.
         let incomplete = self.incomplete_count > 0;
         let tracking = self.pointstamp_tracker.tracking_anything();
+        let pending = !self.temp_active.is_empty();
 
-        incomplete || tracking
+        incomplete || tracking || pending
     }
 }
 
