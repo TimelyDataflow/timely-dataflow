@@ -67,7 +67,7 @@ impl<T, C> Message<T, C> {
 // to be decoded using safe transmutation, e.g. `bytemuck`.
 impl<T, C> crate::communication::Bytesable for Message<T, C>
 where
-    T: Serialize + for<'a> Deserialize<'a>,
+    T: Serialize + for<'a> Deserialize<'a> + Ord,
     C: ContainerBytes,
 {
     fn from_bytes(mut bytes: crate::bytes::arc::Bytes) -> Self {

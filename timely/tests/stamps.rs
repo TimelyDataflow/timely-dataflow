@@ -116,6 +116,42 @@ fn zero_capability_stamps() {
     assert_eq!(seen, vec![(Stamp::new(), vec![4, 5, 6])]);
 }
 
+/// A message with an empty stamp is dropped at a feedback edge, rather than
+/// circulating the loop unseen by progress tracking.
+#[test]
+fn zero_capability_stamps_feedback() {
+    use timely::dataflow::operators::{Concat, ConnectLoop, Feedback, Inspect};
+    let seen = timely::execute_directly(move |worker| {
+        let seen = Rc::new(RefCell::new(0));
+        let seen2 = Rc::clone(&seen);
+        worker.dataflow::<u64, _, _>(move |scope| {
+            let mut builder = OperatorBuilder::new("source".to_owned(), scope.clone());
+            let (mut output, stream) = builder.new_output::<Vec<u64>>();
+            builder.build(move |init_caps| {
+                let mut once = Some(init_caps);
+                move |_frontiers| {
+                    if let Some(init_caps) = once.take() {
+                        drop(init_caps);
+                        let empty = CapabilitySet::<u64>::new();
+                        let mut data = vec![4u64, 5, 6];
+                        output.activate().give(&empty, &mut data);
+                    }
+                }
+            });
+
+            let (handle, cycle) = scope.feedback(1);
+            stream
+                .concat(cycle)
+                .inspect_core(move |event| if event.is_ok() { *seen2.borrow_mut() += 1 })
+                .connect_loop(handle);
+        });
+        for _ in 0 .. 100 { worker.step(); }
+        Rc::try_unwrap(seen).unwrap().into_inner()
+    });
+
+    assert_eq!(seen, 1);
+}
+
 /// A multi-stamp message crossing a data exchange arrives at each worker with
 /// the stamp intact, partitioned by the exchange function.
 #[test]
