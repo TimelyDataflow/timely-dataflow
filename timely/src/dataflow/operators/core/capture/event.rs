@@ -11,10 +11,14 @@ use crate::progress::Stamp;
 
 /// Data and progress events of the captured stream.
 #[derive(Debug, Clone, Hash, Ord, PartialOrd, Eq, PartialEq, Deserialize, Serialize, Columnar)]
+#[serde(bound(deserialize = "T: Deserialize<'de> + Ord, C: Deserialize<'de>"))]
 pub enum Event<T, C> {
     /// Progress received via `push_external_progress`.
     Progress(Vec<(T, i64)>),
-    /// Messages received via the data stream, stamped by an antichain of timestamps.
+    /// Messages received via the data stream, with their stamps.
+    ///
+    /// Stamps are sorted multisets, not antichains: stamps that have crossed a scope
+    /// boundary may contain comparable or duplicate elements.
     Messages(Stamp<T>, C),
 }
 
@@ -278,7 +282,7 @@ pub mod binary {
         }
     }
 
-    impl<T: DeserializeOwned + Clone, C: DeserializeOwned + Clone, R: ::std::io::Read> EventIterator<T, C> for EventReader<T, C, R> {
+    impl<T: DeserializeOwned + Ord + Clone, C: DeserializeOwned + Clone, R: ::std::io::Read> EventIterator<T, C> for EventReader<T, C, R> {
         fn next(&mut self) -> Option<Cow<'_, Event<T, C>>> {
             self.buf.ensure_capacity(1);
             // Attempt to read some more bytes into self.buffer.

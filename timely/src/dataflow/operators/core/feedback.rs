@@ -15,8 +15,12 @@ pub trait Feedback<'scope, T: Timestamp> {
     /// Creates a [Stream] and a [Handle] to later bind the source of that `Stream`.
     ///
     /// The resulting `Stream` will have its data defined by a future call to `connect_loop` with
-    /// its `Handle` passed as an argument. Containers passed through the stream will have their
-    /// timestamps advanced by `summary`.
+    /// its `Handle` passed as an argument. Messages passed through the stream will have the
+    /// elements of their stamps advanced by `summary`. Container contents are not inspected or
+    /// changed; containers whose contents carry times must advance them before the loop.
+    ///
+    /// A message is dropped if its advanced stamp is empty, which includes messages that
+    /// arrive with empty stamps.
     ///
     /// # Examples
     /// ```
@@ -44,8 +48,12 @@ pub trait LoopVariable<'scope, TOuter: Timestamp, TInner: Timestamp> {
     /// Creates a `Stream` and a `Handle` to later bind the source of that `Stream`.
     ///
     /// The resulting `Stream` will have its data defined by a future call to `connect_loop` with
-    /// its `Handle` passed as an argument. Containers passed through the stream will have their
-    /// timestamps advanced by `summary`.
+    /// its `Handle` passed as an argument. Messages passed through the stream will have the
+    /// elements of their stamps advanced by `summary`. Container contents are not inspected or
+    /// changed; containers whose contents carry times must advance them before the loop.
+    ///
+    /// A message is dropped if its advanced stamp is empty, which includes messages that
+    /// arrive with empty stamps.
     ///
     /// # Examples
     /// ```
@@ -126,16 +134,17 @@ impl<'scope, T: Timestamp, C: Container> ConnectLoop<'scope, T, C> for Stream<'s
             let mut output = output.activate();
             input.for_each(|cap, data| {
                 // Advance each stamp element by the summary, discarding elements that
-                // cannot traverse the feedback edge and restoring minimality. Contents
-                // at times supported only by discarded elements cannot be sent
-                // downstream, just as a message with a singleton stamp is discarded
-                // entirely when its element cannot traverse.
+                // cannot traverse the feedback edge and restoring minimality. The edge
+                // maps capabilities and does not inspect contents: advancing any times
+                // the contents carry, and discarding those that cannot advance, is the
+                // container's responsibility. A message whose advanced stamp is empty
+                // is dropped.
                 let new_caps = cap.stamp()
                     .map_into(|time| summary.results_in(time))
                     .iter()
                     .map(|time| cap.delayed(time, output.output_index()))
                     .collect::<crate::dataflow::operators::CapabilitySet<_>>();
-                if !new_caps.is_empty() || cap.stamp().is_empty() {
+                if !new_caps.is_empty() {
                     output.give(&new_caps, data);
                 }
             });

@@ -32,12 +32,28 @@ use crate::order::{PartialOrder, TotalOrder};
 /// stamps mapped across scope boundaries may contain comparable or duplicate
 /// elements, whose multiplicities are significant for progress accounting.
 ///
+/// Equality compares multisets, not the sets of times they contain: `{a}` and
+/// `{a, a}` are different stamps, as they are accounted differently.
+///
 /// As with [`Antichain`](crate::progress::Antichain), the storage holds a single
 /// element inline, so the overwhelmingly common zero- and one-element stamps
 /// require no allocation.
-#[derive(Clone, Debug, PartialEq, Eq, PartialOrd, Ord, Hash, Serialize, Deserialize, columnar::Columnar)]
+#[derive(Clone, Debug, PartialEq, Eq, PartialOrd, Ord, Hash, Serialize, columnar::Columnar)]
 pub struct Stamp<T> {
     elements: SmallVec<[T; 1]>,
+}
+
+/// Deserialization sorts the elements, as the bytes need not come from a valid `Stamp`.
+impl<'de, T: Deserialize<'de> + Ord> Deserialize<'de> for Stamp<T> {
+    fn deserialize<D: serde::Deserializer<'de>>(deserializer: D) -> Result<Self, D::Error> {
+        // Mirrors the serialized form of `Stamp`.
+        #[derive(Deserialize)]
+        #[serde(rename = "Stamp")]
+        struct Raw<T> { elements: SmallVec<[T; 1]> }
+        let mut elements = Raw::deserialize(deserializer)?.elements;
+        elements.sort();
+        Ok(Stamp { elements })
+    }
 }
 
 impl<T> Stamp<T> {
@@ -202,5 +218,19 @@ impl<T: PartialOrder + Ord + Clone> From<crate::progress::Antichain<T>> for Stam
 impl<T: PartialOrder + Ord + Clone> From<Stamp<T>> for crate::progress::Antichain<T> {
     fn from(stamp: Stamp<T>) -> Self {
         stamp.into_elements().into()
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::Stamp;
+
+    #[test]
+    fn deserialize_sorts() {
+        // A stamp serializes as its sequence of elements.
+        let bytes = bincode::serialize(&vec![3u64, 1, 2, 1]).unwrap();
+        let stamp: Stamp<u64> = bincode::deserialize(&bytes).unwrap();
+        assert_eq!(stamp.elements(), &[1, 1, 2, 3]);
+        assert_eq!(bincode::serialize(&stamp).unwrap(), bincode::serialize(&vec![1u64, 1, 2, 3]).unwrap());
     }
 }
