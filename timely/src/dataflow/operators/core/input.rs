@@ -40,22 +40,23 @@ pub trait Input<'scope> {
     ///
     /// # Examples
     /// ```
+    /// use std::rc::Rc;
     /// use timely::*;
-    /// use timely::dataflow::operators::{Input, Inspect};
+    /// use timely::dataflow::operators::{Input, InspectCore};
     ///
     /// // construct and execute a timely dataflow
     /// timely::execute(Config::thread(), |worker| {
     ///
     ///     // add an input and base computation off of it
     ///     let mut input = worker.dataflow(|scope| {
-    ///         let (input, stream) = scope.new_input::<Vec<_>>();
-    ///         stream.inspect(|x| println!("hello {:?}", x));
+    ///         let (input, stream) = scope.new_input::<Rc<Vec<_>>>();
+    ///         stream.inspect_container(|x| println!("hello {:?}", x));
     ///         input
     ///     });
     ///
     ///     // introduce input, advance computation
     ///     for round in 0..10 {
-    ///         input.send_batch(&mut vec![round]);
+    ///         input.send_batch(&mut Rc::new(vec![round]));
     ///         input.advance_to(round + 1);
     ///         worker.step();
     ///     }
@@ -99,8 +100,8 @@ pub trait Input<'scope> {
 
     /// Create a new stream from a supplied container input handle.
     ///
-    /// Attach all streams before consuming the handle with [`Handle::with_builder`]
-    /// or [`Handle::with_default_builder`] for element input.
+    /// For element-by-element input, attach all streams before consuming the handle
+    /// with [`Handle::with_builder`] or [`Handle::with_default_builder`].
     ///
     /// This method creates a new timely stream whose data are supplied interactively through the `handle`
     /// argument. Each handle may be used multiple times (or not at all), and will clone data as appropriate
