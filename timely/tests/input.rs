@@ -4,7 +4,7 @@ use std::cell::RefCell;
 use std::rc::Rc;
 
 use timely::container::CapacityContainerBuilder;
-use timely::dataflow::operators::{Input, Inspect, InspectCore, Probe};
+use timely::dataflow::operators::{Input, Inspect, Probe};
 use timely::dataflow::{InputHandle, ProbeHandle};
 
 #[test]
@@ -21,9 +21,13 @@ fn containers_fan_out_at_the_current_time() {
             worker.dataflow(|scope| {
                 scope
                     .input_from(&mut input)
-                    .inspect_container(move |event| {
-                        if let Ok((time, data)) = event {
-                            seen.borrow_mut().push((index, *time, (**data).clone()));
+                    .inspect_core(move |event| {
+                        if let Ok((stamp, data)) = event {
+                            seen.borrow_mut().push((
+                                index,
+                                *stamp.expect_singleton(),
+                                (**data).clone(),
+                            ));
                         }
                     })
                     .probe_with(&mut probe);
@@ -60,8 +64,12 @@ fn wrapping_preserves_streams_and_flushes_on_advance_and_drop() {
         let mut input = worker.dataflow::<u64, _, _>(|scope| {
             let (input, stream) = scope.new_input::<Vec<u64>>();
             stream
-                .inspect_batch(move |time, data| {
-                    output.borrow_mut().extend(data.iter().map(|x| (*time, *x)));
+                .inspect_core(move |event| {
+                    if let Ok((stamp, data)) = event {
+                        output
+                            .borrow_mut()
+                            .extend(data.iter().map(|x| (*stamp.expect_singleton(), *x)));
+                    }
                 })
                 .probe_with(&mut probe);
             input
@@ -97,8 +105,11 @@ fn attach_streams_before_adding_a_builder() {
             worker.dataflow(|scope| {
                 input
                     .to_stream(scope)
-                    .inspect_batch(move |time, data| {
-                        seen.borrow_mut().extend(data.iter().map(|x| (*time, *x)));
+                    .inspect_core(move |event| {
+                        if let Ok((stamp, data)) = event {
+                            seen.borrow_mut()
+                                .extend(data.iter().map(|x| (*stamp.expect_singleton(), *x)));
+                        }
                     })
                     .probe_with(&mut probe);
             });

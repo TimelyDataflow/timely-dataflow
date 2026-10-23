@@ -42,7 +42,7 @@ pub trait Input<'scope> {
     /// ```
     /// use std::rc::Rc;
     /// use timely::*;
-    /// use timely::dataflow::operators::{Input, InspectCore};
+    /// use timely::dataflow::operators::{Input, Inspect};
     ///
     /// // construct and execute a timely dataflow
     /// timely::execute(Config::thread(), |worker| {
@@ -50,7 +50,7 @@ pub trait Input<'scope> {
     ///     // add an input and base computation off of it
     ///     let mut input = worker.dataflow(|scope| {
     ///         let (input, stream) = scope.new_input::<Rc<Vec<_>>>();
-    ///         stream.inspect_container(|x| println!("hello {:?}", x));
+    ///         stream.inspect_core(|x| println!("hello {:?}", x));
     ///         input
     ///     });
     ///
@@ -76,7 +76,7 @@ pub trait Input<'scope> {
     /// # Element input
     /// ```
     /// use timely::*;
-    /// use timely::dataflow::operators::{Input, InspectCore};
+    /// use timely::dataflow::operators::{Input, Inspect};
     ///
     /// // construct and execute a timely dataflow
     /// timely::execute(Config::thread(), |worker| {
@@ -84,7 +84,7 @@ pub trait Input<'scope> {
     ///     // add an input and base computation off of it
     ///     let mut input = worker.dataflow(|scope| {
     ///         let (input, stream) = scope.new_input::<Vec<_>>();
-    ///         stream.inspect_container(|x| println!("hello {:?}", x));
+    ///         stream.inspect_core(|x| println!("hello {:?}", x));
     ///         input.with_default_builder()
     ///     });
     ///
