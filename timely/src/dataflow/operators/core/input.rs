@@ -28,6 +28,22 @@ pub trait Input<'scope> {
     /// The timestamp at which this input scope operates.
     type Timestamp: Timestamp;
 
+    /// Create an input that accepts complete containers without a container builder.
+    ///
+    /// ```
+    /// use timely::dataflow::operators::{Input, InspectCore};
+    /// timely::execute_directly(|worker| {
+    ///     let mut input = worker.dataflow::<u64, _, _>(|scope| {
+    ///         let (input, stream) = scope.new_input::<Vec<u64>>();
+    ///         stream.inspect_container(|data| println!("{data:?}"));
+    ///         input
+    ///     });
+    ///     input.send_batch(&mut vec![1, 2, 3]);
+    ///     input.advance_to(1);
+    /// });
+    /// ```
+    fn new_input<C: Container+Clone>(&self) -> (Handle<Self::Timestamp, C>, Stream<'scope, Self::Timestamp, C>);
+
     /// Create a new [Stream] and [BufferedHandle] through which to supply input.
     ///
     /// The `new_input_with_builder` method returns a pair `(BufferedHandle, Stream)` where the [Stream] can be used
@@ -63,22 +79,6 @@ pub trait Input<'scope> {
     /// });
     /// ```
     fn new_input_with_builder<CB: ContainerBuilder<Container: Clone>>(&self) -> (BufferedHandle<Self::Timestamp, CB>, Stream<'scope, Self::Timestamp, CB::Container>);
-
-    /// Create an input that accepts complete containers without a container builder.
-    ///
-    /// ```
-    /// use timely::dataflow::operators::{Input, InspectCore};
-    /// timely::execute_directly(|worker| {
-    ///     let mut input = worker.dataflow::<u64, _, _>(|scope| {
-    ///         let (input, stream) = scope.new_input::<Vec<u64>>();
-    ///         stream.inspect_container(|data| println!("{data:?}"));
-    ///         input
-    ///     });
-    ///     input.send_batch(&mut vec![1, 2, 3]);
-    ///     input.advance_to(1);
-    /// });
-    /// ```
-    fn new_input<C: Container+Clone>(&self) -> (Handle<Self::Timestamp, C>, Stream<'scope, Self::Timestamp, C>);
 
     /// Create a new stream from a supplied container input handle.
     ///
@@ -121,15 +121,15 @@ pub trait Input<'scope> {
 use crate::order::TotalOrder;
 impl<'scope, T: Timestamp + TotalOrder> Input<'scope> for Scope<'scope, T> {
     type Timestamp = T;
-    fn new_input_with_builder<CB: ContainerBuilder<Container: Clone>>(&self) -> (BufferedHandle<T, CB>, Stream<'scope, T, CB::Container>) {
-        let (handle, stream) = self.new_input();
-        (handle.with_builder(), stream)
-    }
-
     fn new_input<C: Container+Clone>(&self) -> (Handle<T, C>, Stream<'scope, T, C>) {
         let mut handle = Handle::new();
         let stream = self.input_from(&mut handle);
         (handle, stream)
+    }
+
+    fn new_input_with_builder<CB: ContainerBuilder<Container: Clone>>(&self) -> (BufferedHandle<T, CB>, Stream<'scope, T, CB::Container>) {
+        let (handle, stream) = self.new_input();
+        (handle.with_builder(), stream)
     }
 
     fn input_from<C: Container+Clone>(&self, handle: &mut Handle<T, C>) -> Stream<'scope, T, C> {
