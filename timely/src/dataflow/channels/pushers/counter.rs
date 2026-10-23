@@ -13,6 +13,8 @@ use crate::Accountable;
 pub struct Counter<T, P> {
     pushee: P,
     produced: Rc<RefCell<ChangeBatch<T>>>,
+    /// Set on message push, unset on flush.
+    dirty: bool,
 }
 
 impl<T: Clone+Ord, C: Accountable, P> Push<Message<T, C>> for Counter<T, P> where P: Push<Message<T, C>> {
@@ -23,10 +25,11 @@ impl<T: Clone+Ord, C: Accountable, P> Push<Message<T, C>> for Counter<T, P> wher
             for time in message.stamp.iter() {
                 produced.update(time.clone(), message.data.record_count());
             }
+            self.dirty = true;
         }
 
-        // only propagate `None` if dirty (indicates flush)
-        if message.is_some() || !self.produced.borrow_mut().is_empty() {
+        // only propagate `None` if a message has been pushed.
+        if message.is_some() || std::mem::take(&mut self.dirty) {
             self.pushee.push(message);
         }
     }
@@ -38,6 +41,7 @@ impl<T, P> Counter<T, P> where T : Ord+Clone+'static {
         Counter {
             pushee,
             produced: Rc::new(RefCell::new(ChangeBatch::new())),
+            dirty: false,
         }
     }
     /// A references to shared changes in counts, for cloning or draining.
