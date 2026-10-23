@@ -94,14 +94,14 @@ pub trait Input<'scope> {
     /// # Examples
     /// ```
     /// use timely::*;
-    /// use timely::dataflow::BufferedInputHandle;
+    /// use timely::dataflow::InputHandle;
     /// use timely::dataflow::operators::{Input, Inspect};
     ///
     /// // construct and execute a timely dataflow
     /// timely::execute(Config::thread(), |worker| {
     ///
     ///     // add an input and base computation off of it
-    ///     let mut input = BufferedInputHandle::new();
+    ///     let mut input = InputHandle::new().with_default_builder();
     ///     worker.dataflow(|scope| {
     ///         scope.input_from_with_builder(&mut input)
     ///              .container::<Vec<_>>()
@@ -216,8 +216,8 @@ impl<T:Timestamp> Operate<T> for Operator<T> {
 /// Record ordering within containers is determined by the builder.
 ///
 /// ```compile_fail
-/// use timely::dataflow::BufferedInputHandle;
-/// let mut input = BufferedInputHandle::<u64, timely::container::CapacityContainerBuilder<Vec<u64>>>::new();
+/// use timely::dataflow::InputHandle;
+/// let mut input = InputHandle::<u64, Vec<u64>>::new().with_default_builder();
 /// input.send_batch(&mut vec![1]);
 /// ```
 #[derive(Debug)]
@@ -232,14 +232,14 @@ impl<T: Timestamp, C: Container+Clone> BufferedHandle<T, CapacityContainerBuilde
     /// # Examples
     /// ```
     /// use timely::*;
-    /// use timely::dataflow::BufferedInputHandle;
+    /// use timely::dataflow::InputHandle;
     /// use timely::dataflow::operators::{Input, Inspect};
     ///
     /// // construct and execute a timely dataflow
     /// timely::execute(Config::thread(), |worker| {
     ///
     ///     // add an input and base computation off of it
-    ///     let mut input = BufferedInputHandle::new();
+    ///     let mut input = InputHandle::new().with_default_builder();
     ///     worker.dataflow(|scope| {
     ///         scope.input_from_with_builder(&mut input)
     ///              .container::<Vec<_>>()
@@ -255,7 +255,7 @@ impl<T: Timestamp, C: Container+Clone> BufferedHandle<T, CapacityContainerBuilde
     /// });
     /// ```
     pub fn new() -> Self {
-        Self::new_with_builder()
+        Handle::new().with_default_builder()
     }
 }
 
@@ -270,14 +270,14 @@ impl<T: Timestamp, CB: ContainerBuilder<Container: Clone>> BufferedHandle<T, CB>
     /// # Examples
     /// ```
     /// use timely::*;
-    /// use timely::dataflow::BufferedInputHandle;
+    /// use timely::dataflow::InputHandle;
     /// use timely::dataflow::operators::{Input, Inspect};
     ///
     /// // construct and execute a timely dataflow
     /// timely::execute(Config::thread(), |worker| {
     ///
     ///     // add an input and base computation off of it
-    ///     let mut input = BufferedInputHandle::new();
+    ///     let mut input = InputHandle::new().with_default_builder();
     ///     worker.dataflow(|scope| {
     ///         input.to_stream(scope)
     ///              .container::<Vec<_>>()
@@ -311,14 +311,14 @@ impl<T: Timestamp, CB: ContainerBuilder<Container: Clone>> BufferedHandle<T, CB>
     /// # Examples
     /// ```
     /// use timely::*;
-    /// use timely::dataflow::BufferedInputHandle;
+    /// use timely::dataflow::InputHandle;
     /// use timely::dataflow::operators::{Input, Inspect};
     ///
     /// // construct and execute a timely dataflow
     /// timely::execute(Config::thread(), |worker| {
     ///
     ///     // add an input and base computation off of it
-    ///     let mut input = BufferedInputHandle::new();
+    ///     let mut input = InputHandle::new().with_default_builder();
     ///     worker.dataflow(|scope| {
     ///         scope.input_from_with_builder(&mut input)
     ///              .container::<Vec<_>>()
@@ -404,6 +404,22 @@ impl<T: Timestamp, C: Container+Clone> Handle<T, C> {
             buffer: C::default(),
             now_at: T::minimum(),
         }
+    }
+
+    /// Consumes this handle and wraps it in the default builder for element input.
+    ///
+    /// The default is [`CapacityContainerBuilder<C>`], which batches records
+    /// according to the container's preferred capacity and preserves FIFO order.
+    /// Attached streams and the current timestamp are preserved.
+    ///
+    /// ```
+    /// use timely::dataflow::InputHandle;
+    /// let mut input = InputHandle::<u64, Vec<u64>>::new().with_default_builder();
+    /// input.send(1);
+    /// input.advance_to(1);
+    /// ```
+    pub fn with_default_builder(self) -> BufferedHandle<T, CapacityContainerBuilder<C>> {
+        self.with_builder()
     }
 
     /// Consumes this handle and wraps it in a builder for element input.

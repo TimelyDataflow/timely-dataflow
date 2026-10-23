@@ -1,6 +1,6 @@
 use std::collections::HashMap;
 
-use timely::dataflow::{BufferedInputHandle, ProbeHandle};
+use timely::dataflow::{InputHandle, ProbeHandle};
 use timely::dataflow::operators::{Input, Inspect, Probe};
 use timely::dataflow::operators::generic::operator::Operator;
 use timely::dataflow::channels::pact::Exchange;
@@ -9,7 +9,7 @@ fn main() {
     // initializes and runs a timely dataflow.
     timely::execute_from_args(std::env::args(), |worker| {
         let index = worker.index();
-        let mut input = BufferedInputHandle::new();
+        let mut input = InputHandle::new().with_default_builder();
         let probe = ProbeHandle::new();
 
         // create a new input, exchange data, and inspect its output

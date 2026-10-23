@@ -17,8 +17,8 @@ fn main() {
         let index = worker.index();
         let peers = worker.peers();
 
-        let mut input1 = BufferedInputHandle::new();
-        let mut input2 = BufferedInputHandle::new();
+        let mut input1 = InputHandle::new().with_default_builder();
+        let mut input2 = InputHandle::new().with_default_builder();
         let probe = ProbeHandle::new();
 
         worker.dataflow(|scope| {

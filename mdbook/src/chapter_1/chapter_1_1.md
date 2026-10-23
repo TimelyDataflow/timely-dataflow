@@ -13,7 +13,7 @@ In particular, we have commented out the line that holds back the introduce of d
 #![allow(unused_variables)]
 extern crate timely;
 
-use timely::dataflow::BufferedInputHandle;
+use timely::dataflow::InputHandle;
 use timely::dataflow::operators::{Input, Exchange, Inspect, Probe};
 
 fn main() {
@@ -21,7 +21,7 @@ fn main() {
     timely::execute_from_args(std::env::args(), |worker| {
 
         let index = worker.index();
-        let mut input = BufferedInputHandle::new();
+        let mut input = InputHandle::new().with_default_builder();
 
         // create a new input, exchange data, and inspect its output
         let probe = worker.dataflow(|scope|

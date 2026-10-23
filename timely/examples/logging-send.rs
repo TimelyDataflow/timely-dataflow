@@ -1,6 +1,6 @@
 use std::time::Duration;
 
-use timely::dataflow::{BufferedInputHandle, ProbeHandle};
+use timely::dataflow::{InputHandle, ProbeHandle};
 use timely::dataflow::operators::{Input, Exchange, Probe};
 use timely::logging::{TimelyEventBuilder, TimelyProgressEventBuilder, TimelySummaryEventBuilder};
 use timely::container::CapacityContainerBuilder;
@@ -12,7 +12,7 @@ fn main() {
 
         let batch = std::env::args().nth(1).unwrap().parse::<usize>().unwrap();
         let rounds = std::env::args().nth(2).unwrap().parse::<usize>().unwrap();
-        let mut input = BufferedInputHandle::new();
+        let mut input = InputHandle::new().with_default_builder();
         let probe = ProbeHandle::new();
 
         // Register timely worker logging.

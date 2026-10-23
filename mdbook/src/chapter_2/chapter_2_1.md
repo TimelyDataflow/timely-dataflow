@@ -9,14 +9,14 @@ For example, we can create a new dataflow with one interactive input and one sta
 ```rust
 extern crate timely;
 
-use timely::dataflow::BufferedInputHandle;
+use timely::dataflow::InputHandle;
 use timely::dataflow::operators::ToStream;
 
 fn main() {
     // initializes and runs a timely dataflow.
     timely::execute_from_args(std::env::args(), |worker| {
 
-        let mut input = BufferedInputHandle::new();
+        let mut input = InputHandle::new().with_default_builder();
 
         // define a new dataflow
         worker.dataflow::<(),_,_>(|scope| {

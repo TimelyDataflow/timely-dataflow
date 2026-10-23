@@ -1,6 +1,6 @@
 use timely::dataflow::channels::pact::Pipeline;
 use timely::dataflow::operators::Input;
-use timely::dataflow::BufferedInputHandle;
+use timely::dataflow::InputHandle;
 use timely::Config;
 
 #[test] fn operator_scaling_1() { operator_scaling(1); }
@@ -12,7 +12,7 @@ use timely::Config;
 
 fn operator_scaling(scale: u64) {
     timely::execute(Config::thread(), move |worker| {
-        let mut input = BufferedInputHandle::new();
+        let mut input = InputHandle::new().with_default_builder();
         worker.dataflow::<u64, _, _>(|scope| {
             use timely::dataflow::operators::vec::Partition;
             let parts =
@@ -56,7 +56,7 @@ fn operator_scaling(scale: u64) {
 
 fn subgraph_scaling(scale: u64) {
     timely::execute(Config::thread(), move |worker| {
-        let mut input = BufferedInputHandle::new();
+        let mut input = InputHandle::new().with_default_builder();
         worker.dataflow::<u64, _, _>(|scope| {
             use timely::dataflow::operators::vec::Partition;
             let parts =

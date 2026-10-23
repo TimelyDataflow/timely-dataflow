@@ -4,9 +4,8 @@ use std::collections::HashMap;
 
 use columnar::Index;
 use timely::Accountable;
-use timely::container::CapacityContainerBuilder;
 use timely::dataflow::channels::pact::{ExchangeCore, Pipeline};
-use timely::dataflow::BufferedInputHandle;
+use timely::dataflow::InputHandle;
 use timely::dataflow::operators::{Inspect, Operator, Probe};
 use timely::dataflow::ProbeHandle;
 
@@ -32,7 +31,7 @@ fn main() {
 
     // initializes and runs a timely dataflow.
     timely::execute(config, |worker| {
-        let mut input = <BufferedInputHandle<_, CapacityContainerBuilder<Container>>>::new();
+        let mut input = InputHandle::<_, Container>::new().with_default_builder();
         let probe = ProbeHandle::new();
 
         // create a new input, exchange data, and inspect its output

@@ -1,4 +1,4 @@
-use timely::dataflow::{BufferedInputHandle, ProbeHandle};
+use timely::dataflow::{InputHandle, ProbeHandle};
 use timely::dataflow::operators::{Input, Probe};
 use timely::dataflow::operators::vec::Filter;
 
@@ -19,7 +19,7 @@ fn main() {
 
         let timer = std::time::Instant::now();
 
-        let mut input = BufferedInputHandle::new();
+        let mut input = InputHandle::new().with_default_builder();
         let probe = ProbeHandle::new();
 
         // Create a dataflow that discards input data (just synchronizes).

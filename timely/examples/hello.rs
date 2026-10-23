@@ -1,4 +1,4 @@
-use timely::dataflow::{BufferedInputHandle, ProbeHandle};
+use timely::dataflow::{InputHandle, ProbeHandle};
 use timely::dataflow::operators::{Input, Exchange, Inspect, Probe};
 
 fn main() {
@@ -6,7 +6,7 @@ fn main() {
     timely::execute_from_args(std::env::args(), |worker| {
 
         let index = worker.index();
-        let mut input = BufferedInputHandle::new();
+        let mut input = InputHandle::new().with_default_builder();
         let probe = ProbeHandle::new();
 
         // create a new input, exchange data, and inspect its output

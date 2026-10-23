@@ -1,4 +1,4 @@
-use timely::dataflow::BufferedInputHandle;
+use timely::dataflow::InputHandle;
 use timely::dataflow::operators::{Input, Exchange, Probe};
 
 fn main() {
@@ -7,7 +7,7 @@ fn main() {
 
         let batch = std::env::args().nth(1).unwrap().parse::<usize>().unwrap();
         let rounds = std::env::args().nth(2).unwrap().parse::<usize>().unwrap();
-        let mut input = BufferedInputHandle::new();
+        let mut input = InputHandle::new().with_default_builder();
 
         // create a new input, exchange data, and inspect its output
         let probe = worker.dataflow(|scope|

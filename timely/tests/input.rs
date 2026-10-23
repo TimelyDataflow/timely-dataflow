@@ -86,8 +86,7 @@ fn wrapping_preserves_streams_and_flushes_on_advance_and_drop() {
 #[test]
 fn attaching_a_buffered_input_excludes_earlier_records() {
     timely::execute_directly(|worker| {
-        let mut input =
-            InputHandle::<u64, Vec<u64>>::new().with_builder::<CapacityContainerBuilder<_>>();
+        let mut input = InputHandle::<u64, Vec<u64>>::new().with_default_builder();
         input.advance_to(5);
         let first = Rc::new(RefCell::new(Vec::new()));
         let second = Rc::new(RefCell::new(Vec::new()));

@@ -20,11 +20,11 @@ The most common thing to do with a probe handle is to check whether we are "caug
 
 ```rust
 # extern crate timely;
-# use timely::dataflow::{BufferedInputHandle, ProbeHandle};
+# use timely::dataflow::{InputHandle, ProbeHandle};
 # use timely::dataflow::operators::{Input, Inspect, Probe};
 # fn main() {
 #     timely::execute_from_args(std::env::args().take(1), |worker| {
-#         let mut input = BufferedInputHandle::new();
+#         let mut input = InputHandle::new().with_default_builder();
 #         let probe: ProbeHandle<usize> = worker.dataflow(|scope|
 #             scope.input_from_with_builder(&mut input)
 #                  .container::<Vec<_>>()

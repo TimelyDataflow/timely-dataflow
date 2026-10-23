@@ -53,7 +53,7 @@ This is a very simple example (it's in the name), which only just suggests at ho
 For a more involved example, consider the very similar (but more explicit) [examples/hello.rs](https://github.com/timelydataflow/timely-dataflow/blob/master/timely/examples/hello.rs), which creates and drives the dataflow separately:
 
 ```rust
-use timely::dataflow::{BufferedInputHandle, ProbeHandle};
+use timely::dataflow::{InputHandle, ProbeHandle};
 use timely::dataflow::operators::{Input, Exchange, Inspect, Probe};
 
 fn main() {
@@ -61,7 +61,7 @@ fn main() {
     timely::execute_from_args(std::env::args(), |worker| {
 
         let index = worker.index();
-        let mut input = BufferedInputHandle::new();
+        let mut input = InputHandle::new().with_default_builder();
         let mut probe = ProbeHandle::new();
 
         // create a new input, exchange data, and inspect its output

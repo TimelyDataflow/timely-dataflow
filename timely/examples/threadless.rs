@@ -1,4 +1,4 @@
-use timely::dataflow::{BufferedInputHandle, ProbeHandle};
+use timely::dataflow::{InputHandle, ProbeHandle};
 use timely::dataflow::operators::{Inspect, Probe};
 use timely::WorkerConfig;
 
@@ -11,7 +11,7 @@ fn main() {
     let mut worker = timely::worker::Worker::new(WorkerConfig::default(), allocator, None);
 
     // create input and probe handles.
-    let mut input = BufferedInputHandle::new();
+    let mut input = InputHandle::new().with_default_builder();
     let probe = ProbeHandle::new();
 
     // directly build a dataflow.

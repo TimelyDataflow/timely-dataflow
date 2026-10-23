@@ -63,13 +63,13 @@ pub trait Input<'scope> {
     /// ```
     /// use timely::*;
     /// use timely::dataflow::operators::{Input, Inspect};
-    /// use timely::dataflow::BufferedInputHandle;
+    /// use timely::dataflow::InputHandle;
     ///
     /// // construct and execute a timely dataflow
     /// timely::execute(Config::thread(), |worker| {
     ///
     ///     // add an input and base computation off of it
-    ///     let mut input = BufferedInputHandle::new();
+    ///     let mut input = InputHandle::new().with_default_builder();
     ///     worker.dataflow(|scope| {
     ///         scope.input_from_with_builder(&mut input)
     ///              .container::<Vec<_>>()

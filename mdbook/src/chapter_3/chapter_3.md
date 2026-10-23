@@ -4,15 +4,15 @@ In this section we will look at driving a timely dataflow computation.
 
 With a dataflow graph defined, how do we interactively supply data to the computation, and how do we understand what the computation has actually done given that we are not ourselves doing it? These are good questions, and the dataflow execution model is indeed a bit of a departure from how most folks first experience programming.
 
-The first thing to understand about timely dataflow is that *we are programming the worker threads*. Part of this program is asking the worker to build up a dataflow graph; we did that when we created an `BufferedInputHandle` and when we called `dataflow` followed by some `filter` and `map` and `probe` commands. But another part is where we actually start feeding the dataflow graph, advancing the inputs, and letting the worker give each of the operators a chance to run.
+The first thing to understand about timely dataflow is that *we are programming the worker threads*. Part of this program is asking the worker to build up a dataflow graph; we did that when we created a `BufferedInputHandle` and when we called `dataflow` followed by some `filter` and `map` and `probe` commands. But another part is where we actually start feeding the dataflow graph, advancing the inputs, and letting the worker give each of the operators a chance to run.
 
 ```rust
 # extern crate timely;
-# use timely::dataflow::BufferedInputHandle;
+# use timely::dataflow::InputHandle;
 # use timely::dataflow::operators::{Input, Inspect, Probe};
 # fn main() {
 #     timely::execute_from_args(std::env::args().take(1), |worker| {
-#         let mut input = BufferedInputHandle::new();
+#         let mut input = InputHandle::new().with_default_builder();
 #         let probe = worker.dataflow(|scope|
 #             scope.input_from_with_builder(&mut input)
 #                  .container::<Vec<_>>()

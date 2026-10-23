@@ -30,7 +30,7 @@ use std::time::{Duration, Instant};
 use timely::CommunicationConfig;
 use timely::WorkerConfig;
 use timely::communication::initialize::Hooks;
-use timely::dataflow::BufferedInputHandle;
+use timely::dataflow::InputHandle;
 use timely::dataflow::operators::Input;
 use timely::dataflow::operators::generic::Operator;
 use timely::dataflow::channels::pact::Exchange;
@@ -109,7 +109,7 @@ fn main() {
         let peers = worker.peers();
         let target = ((index + 1) % peers) as u64;
 
-        let mut input = BufferedInputHandle::<u64, timely::container::CapacityContainerBuilder<Vec<serde_bytes::ByteBuf>>>::new();
+        let mut input = InputHandle::<u64, Vec<serde_bytes::ByteBuf>>::new().with_default_builder();
 
         worker.dataflow(|scope| {
             scope.input_from_with_builder(&mut input)

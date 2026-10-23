@@ -1,5 +1,5 @@
 use std::rc::Rc;
-use timely::dataflow::{BufferedInputHandle, ProbeHandle};
+use timely::dataflow::{InputHandle, ProbeHandle};
 use timely::dataflow::operators::{Input, Inspect, Probe};
 
 #[derive(Debug, Clone)]
@@ -12,7 +12,7 @@ fn main() {
     timely::execute_from_args(std::env::args(), |worker| {
         // create a new input, exchange data, and inspect its output
         let index = worker.index();
-        let mut input = BufferedInputHandle::new();
+        let mut input = InputHandle::new().with_default_builder();
         let probe = ProbeHandle::new();
         worker.dataflow(|scope| {
             scope.input_from_with_builder(&mut input)
