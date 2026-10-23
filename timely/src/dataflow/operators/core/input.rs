@@ -217,10 +217,10 @@ impl<T:Timestamp> Operate<T> for Operator<T> {
 ///
 /// Use [`BufferedHandle`] to build containers from individual records instead.
 ///
-/// ```compile_fail
+/// ```
 /// use timely::dataflow::InputHandle;
 /// let mut input = InputHandle::<u64, Vec<u64>>::new();
-/// input.send(1);
+/// input.send_batch(&mut vec![1]);
 /// ```
 #[derive(Debug)]
 pub struct Handle<T: Timestamp, C: Container+Clone> {
@@ -491,10 +491,10 @@ impl<T:Timestamp, C: Container+Clone> Drop for Handle<T, C> {
 /// Attach streams to a [`Handle`] before consuming it with [`Handle::with_builder`]
 /// or [`Handle::with_default_builder`] to create this wrapper.
 ///
-/// ```compile_fail
+/// ```
 /// use timely::dataflow::InputHandle;
 /// let mut input = InputHandle::<u64, Vec<u64>>::new().with_default_builder();
-/// input.send_batch(&mut vec![1]);
+/// input.send(1);
 /// ```
 #[derive(Debug)]
 pub struct BufferedHandle<T: Timestamp, CB: ContainerBuilder<Container: Clone>> {
