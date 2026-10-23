@@ -61,32 +61,30 @@ pub trait Input<'scope> {
     ///     }
     /// });
     /// ```
-    fn new_input<C: Container+Clone>(&self) -> (Handle<Self::Timestamp, C>, Stream<'scope, Self::Timestamp, C>);
-
-    /// Create a new [Stream] and [BufferedHandle] through which to supply input.
     ///
-    /// The `new_input_with_builder` method returns a pair `(BufferedHandle, Stream)` where the [Stream] can be used
-    /// immediately for timely dataflow construction, and the `BufferedHandle` is later used to introduce
+    /// To supply elements, wrap the returned [Handle] in a [BufferedHandle].
+    ///
+    /// The [Stream] can be used immediately for timely dataflow construction, and
+    /// [`Handle::with_default_builder`] creates the `BufferedHandle` used to introduce
     /// data into the timely dataflow computation.
     ///
     /// The `BufferedHandle` also provides a means to indicate
     /// to timely dataflow that the input has advanced beyond certain timestamps, allowing timely
     /// to issue progress notifications.
     ///
-    /// # Examples
+    /// # Element input
     /// ```
     /// use timely::*;
     /// use timely::dataflow::operators::{Input, InspectCore};
-    /// use timely::container::CapacityContainerBuilder;
     ///
     /// // construct and execute a timely dataflow
     /// timely::execute(Config::thread(), |worker| {
     ///
     ///     // add an input and base computation off of it
     ///     let mut input = worker.dataflow(|scope| {
-    ///         let (input, stream) = scope.new_input_with_builder::<CapacityContainerBuilder<Vec<_>>>();
+    ///         let (input, stream) = scope.new_input::<Vec<_>>();
     ///         stream.inspect_container(|x| println!("hello {:?}", x));
-    ///         input
+    ///         input.with_default_builder()
     ///     });
     ///
     ///     // introduce input, advance computation
@@ -97,7 +95,7 @@ pub trait Input<'scope> {
     ///     }
     /// });
     /// ```
-    fn new_input_with_builder<CB: ContainerBuilder<Container: Clone>>(&self) -> (BufferedHandle<Self::Timestamp, CB>, Stream<'scope, Self::Timestamp, CB::Container>);
+    fn new_input<C: Container+Clone>(&self) -> (Handle<Self::Timestamp, C>, Stream<'scope, Self::Timestamp, C>);
 
     /// Create a new stream from a supplied container input handle.
     ///
@@ -144,11 +142,6 @@ impl<'scope, T: Timestamp + TotalOrder> Input<'scope> for Scope<'scope, T> {
         let mut handle = Handle::new();
         let stream = self.input_from(&mut handle);
         (handle, stream)
-    }
-
-    fn new_input_with_builder<CB: ContainerBuilder<Container: Clone>>(&self) -> (BufferedHandle<T, CB>, Stream<'scope, T, CB::Container>) {
-        let (handle, stream) = self.new_input();
-        (handle.with_builder(), stream)
     }
 
     fn input_from<C: Container+Clone>(&self, handle: &mut Handle<T, C>) -> Stream<'scope, T, C> {
@@ -466,11 +459,11 @@ impl<T: Timestamp, C: Container+Clone> Handle<T, C> {
         }
     }
 
-    /// Closes the input.
+    /// Closes the input by consuming and dropping the handle.
     ///
     /// This method allows timely dataflow to issue all progress notifications blocked by this input
     /// and to begin to shut down operators, as this input can no longer produce data.
-    pub fn close(self) { }
+    pub fn close(self) { drop(self); }
 
     /// Reports the current timestamp.
     pub fn time(&self) -> &T {
@@ -535,8 +528,9 @@ impl<T: Timestamp, CB: ContainerBuilder<Container: Clone>> BufferedHandle<T, CB>
         }
     }
 
-    /// Closes the input, flushing buffered records and releasing progress holds.
-    pub fn close(self) { }
+    /// Closes the input by consuming and dropping the handle, flushing buffered records
+    /// and releasing progress holds.
+    pub fn close(self) { drop(self); }
 
     /// Reports the current timestamp.
     pub fn time(&self) -> &T { self.inner.time() }

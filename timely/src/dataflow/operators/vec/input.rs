@@ -31,7 +31,6 @@ pub trait Input<'scope> {
     /// # Examples
     /// ```
     /// use timely::*;
-    /// use timely::container::CapacityContainerBuilder;
     /// use timely::dataflow::operators::{Input, Inspect};
     ///
     /// // construct and execute a timely dataflow
@@ -39,7 +38,8 @@ pub trait Input<'scope> {
     ///
     ///     // add an input and base computation off of it
     ///     let mut input = worker.dataflow(|scope| {
-    ///         let (input, stream) = scope.new_input_with_builder::<CapacityContainerBuilder<Vec<_>>>();
+    ///         let (input, stream) = scope.new_input::<Vec<_>>();
+    ///         let input = input.with_default_builder();
     ///         stream.inspect(|x| println!("hello {:?}", x));
     ///         input
     ///     });
@@ -93,7 +93,8 @@ use crate::order::TotalOrder;
 impl<'scope, T: Timestamp + TotalOrder> Input<'scope> for Scope<'scope, T> {
     type Timestamp = T;
     fn new_input<D: Clone+'static>(&self) -> (Handle<T, D>, StreamVec<'scope, T, D>) {
-        InputCore::new_input_with_builder(self)
+        let (handle, stream) = InputCore::new_input(self);
+        (handle.with_default_builder(), stream)
     }
 
     fn input_from<D: Clone+'static>(&self, handle: &mut ContainerHandle<T, Vec<D>>) -> StreamVec<'scope, T, D> {
