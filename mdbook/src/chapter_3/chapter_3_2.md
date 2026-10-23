@@ -32,6 +32,7 @@ The most common thing to do with a probe handle is to check whether we are "caug
 #                  .probe()
 #                  .0
 #         );
+#         let mut input = input.with_default_builder();
 #         input.send(0u64);
 probe.less_than(input.time())
 #     ;}).unwrap();

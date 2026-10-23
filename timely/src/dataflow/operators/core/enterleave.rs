@@ -295,6 +295,7 @@ mod test {
                     .inspect(move |x| println!("worker {}:\thello {}", index, x))
                     .probe_with(&probe);
             });
+            let mut input = input.with_default_builder();
 
             // introduce data and watch!
             input.advance_to(0);
