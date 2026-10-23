@@ -6,17 +6,18 @@ fn main() {
     timely::execute_from_args(std::env::args(), |worker| {
 
         let index = worker.index();
-        let mut input = InputHandle::new().with_default_builder();
+        let mut input = InputHandle::new();
         let probe = ProbeHandle::new();
 
         // create a new input, exchange data, and inspect its output
         worker.dataflow(|scope| {
-            scope.input_from_with_builder(&mut input)
+            scope.input_from(&mut input)
                  .container::<Vec<_>>()
                  .exchange(|x| *x)
                  .inspect(move |x| println!("worker {}:\thello {}", index, x))
                  .probe_with(&probe);
         });
+        let mut input = input.with_default_builder();
 
         // introduce data and watch!
         for round in 0..10 {

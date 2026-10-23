@@ -19,16 +19,17 @@ fn main() {
 
         let timer = std::time::Instant::now();
 
-        let mut input = InputHandle::new().with_default_builder();
+        let mut input = InputHandle::new();
         let probe = ProbeHandle::new();
 
         // Create a dataflow that discards input data (just synchronizes).
         worker.dataflow(|scope| {
             scope
-                .input_from_with_builder(&mut input)     // read input.
+                .input_from(&mut input)     // read input.
                 .filter(|_| false)          // do nothing.
                 .probe_with(&probe);    // observe output.
         });
+        let mut input = input.with_default_builder();
 
         let ns_per_request = 1_000_000_000 / rate;
         let mut insert_counter = index;           // counts up as we insert records.

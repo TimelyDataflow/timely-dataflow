@@ -2,7 +2,7 @@
 
 Let's start with the first thing we'll want for a dataflow computation: a source of data.
 
-Almost all operators in timely can only be defined from a source of data, with a few exceptions. One of these exceptions is the `to_stream` operator, which is defined for various types and which takes a `scope` as an argument and produces a stream in that scope. Our `BufferedInputHandle` type from previous examples has a `to_stream` method, as well as any type that can be turned into an iterator (which we used in the preceding example).
+Almost all operators in timely can only be defined from a source of data, with a few exceptions. One of these exceptions is the `to_stream` operator, which is defined for various types and which takes a `scope` as an argument and produces a stream in that scope. Our `InputHandle` type from previous examples has a `to_stream` method, as well as any type that can be turned into an iterator (which we used in the preceding example).
 
 For example, we can create a new dataflow with one interactive input and one static input:
 
@@ -16,7 +16,7 @@ fn main() {
     // initializes and runs a timely dataflow.
     timely::execute_from_args(std::env::args(), |worker| {
 
-        let mut input = InputHandle::new().with_default_builder();
+        let mut input = InputHandle::new();
 
         // define a new dataflow
         worker.dataflow::<(),_,_>(|scope| {

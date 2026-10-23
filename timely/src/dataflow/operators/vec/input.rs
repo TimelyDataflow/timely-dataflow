@@ -4,6 +4,7 @@ use crate::container::CapacityContainerBuilder;
 use crate::progress::Timestamp;
 use crate::dataflow::{StreamVec, Scope};
 use crate::dataflow::operators::core::{Input as InputCore};
+use crate::dataflow::operators::core::input::Handle as ContainerHandle;
 
 // TODO : This is an exogenous input, but it would be nice to wrap a Subgraph in something
 // TODO : more like a harness, with direct access to its inputs.
@@ -69,12 +70,13 @@ pub trait Input<'scope> {
     /// timely::execute(Config::thread(), |worker| {
     ///
     ///     // add an input and base computation off of it
-    ///     let mut input = InputHandle::new().with_default_builder();
+    ///     let mut input = InputHandle::new();
     ///     worker.dataflow(|scope| {
-    ///         scope.input_from_with_builder(&mut input)
+    ///         scope.input_from(&mut input)
     ///              .container::<Vec<_>>()
     ///              .inspect(|x| println!("hello {:?}", x));
     ///     });
+    ///     let mut input = input.with_default_builder();
     ///
     ///     // introduce input, advance computation
     ///     for round in 0..10 {
@@ -84,7 +86,7 @@ pub trait Input<'scope> {
     ///     }
     /// });
     /// ```
-    fn input_from<D: Clone+'static>(&self, handle: &mut Handle<Self::Timestamp, D>) -> StreamVec<'scope, Self::Timestamp, D>;
+    fn input_from<D: Clone+'static>(&self, handle: &mut ContainerHandle<Self::Timestamp, Vec<D>>) -> StreamVec<'scope, Self::Timestamp, D>;
 }
 
 use crate::order::TotalOrder;
@@ -94,8 +96,8 @@ impl<'scope, T: Timestamp + TotalOrder> Input<'scope> for Scope<'scope, T> {
         InputCore::new_input_with_builder(self)
     }
 
-    fn input_from<D: Clone+'static>(&self, handle: &mut Handle<T, D>) -> StreamVec<'scope, T, D> {
-        InputCore::input_from_with_builder(self, handle)
+    fn input_from<D: Clone+'static>(&self, handle: &mut ContainerHandle<T, Vec<D>>) -> StreamVec<'scope, T, D> {
+        InputCore::input_from(self, handle)
     }
 }
 

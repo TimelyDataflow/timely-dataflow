@@ -9,13 +9,13 @@ fn main() {
     // initializes and runs a timely dataflow.
     timely::execute_from_args(std::env::args(), |worker| {
         let index = worker.index();
-        let mut input = InputHandle::new().with_default_builder();
+        let mut input = InputHandle::new();
         let probe = ProbeHandle::new();
 
         // create a new input, exchange data, and inspect its output
         worker.dataflow::<usize,_,_>(|scope| {
             let mut counts_by_time = HashMap::new();
-            scope.input_from_with_builder(&mut input)
+            scope.input_from(&mut input)
                 .unary(Exchange::new(|x| *x), "Distinct", move |_, _|
                     move |input, output| {
                         input.for_each_stamp(|cap, data| {
@@ -41,6 +41,7 @@ fn main() {
                 .inspect(move |x| println!("worker {}:\tvalue {}", index, x))
                 .probe_with(&probe);
         });
+        let mut input = input.with_default_builder();
 
         // introduce data and watch!
         for round in 0..1 {

@@ -15,17 +15,18 @@ fn main() {
     timely::execute_from_args(std::env::args(), |worker| {
 
         let index = worker.index();
-        let mut input = InputHandle::new().with_default_builder();
+        let mut input = InputHandle::new();
 
         // create a new input, exchange data, and inspect its output
         let probe = worker.dataflow(|scope|
-            scope.input_from_with_builder(&mut input)
+            scope.input_from(&mut input)
                  .container::<Vec<_>>()
                  .exchange(|x| *x)
                  .inspect(move |x| println!("worker {}:\thello {}", index, x))
                  .probe()
                  .0
         );
+        let mut input = input.with_default_builder();
 
         // introduce data and watch!
         for round in 0..10 {
@@ -47,15 +48,16 @@ We'll put the whole program up here, but there are really just two lines that de
 # use timely::dataflow::operators::{Input, Exchange, Inspect, Probe};
 # fn main() {
 #     timely::execute_from_args(std::env::args().take(1), |worker| {
-#         let mut input = InputHandle::new().with_default_builder();
+#         let mut input = InputHandle::new();
 #         let probe = worker.dataflow(|scope|
-#             scope.input_from_with_builder(&mut input)
+#             scope.input_from(&mut input)
 #                  .container::<Vec<_>>()
 #                  .exchange(|x| *x)
 #                  .inspect(move |x| println!("hello {}", x))
 #                  .probe()
 #                  .0
 #         );
+#         let mut input = input.with_default_builder();
 #         for round in 0..10 {
 #             input.send(round);
 input.advance_to(round + 1);

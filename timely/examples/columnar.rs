@@ -31,7 +31,7 @@ fn main() {
 
     // initializes and runs a timely dataflow.
     timely::execute(config, |worker| {
-        let mut input = InputHandle::<_, Container>::new().with_default_builder();
+        let mut input = InputHandle::<_, Container>::new();
         let probe = ProbeHandle::new();
 
         // create a new input, exchange data, and inspect its output
@@ -113,6 +113,7 @@ fn main() {
                 })
                 .probe_with(&probe);
         });
+        let mut input = input.with_default_builder();
 
         // introduce data and watch!
         for round in 0..10 {

@@ -12,7 +12,7 @@ fn main() {
 
         let batch = std::env::args().nth(1).unwrap().parse::<usize>().unwrap();
         let rounds = std::env::args().nth(2).unwrap().parse::<usize>().unwrap();
-        let mut input = InputHandle::new().with_default_builder();
+        let mut input = InputHandle::new();
         let probe = ProbeHandle::new();
 
         // Register timely worker logging.
@@ -75,7 +75,7 @@ fn main() {
         // create a new input, exchange data, and inspect its output
         worker.dataflow(|scope| {
             scope
-                .input_from_with_builder(&mut input)
+                .input_from(&mut input)
                 .container::<Vec<_>>()
                 .exchange(|&x| x as u64)
                 .probe_with(&probe);
@@ -94,10 +94,11 @@ fn main() {
         // create a new input, exchange data, and inspect its output
         worker.dataflow(|scope| {
             scope
-                .input_from_with_builder(&mut input)
+                .input_from(&mut input)
                 .exchange(|&x| x as u64)
                 .probe_with(&probe);
         });
+        let mut input = input.with_default_builder();
 
         // Register user-level logging.
         type MyBuilder = CapacityContainerBuilder<Vec<(Duration, ())>>;

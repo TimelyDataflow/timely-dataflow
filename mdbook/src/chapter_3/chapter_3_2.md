@@ -24,14 +24,15 @@ The most common thing to do with a probe handle is to check whether we are "caug
 # use timely::dataflow::operators::{Input, Inspect, Probe};
 # fn main() {
 #     timely::execute_from_args(std::env::args().take(1), |worker| {
-#         let mut input = InputHandle::new().with_default_builder();
+#         let mut input = InputHandle::new();
 #         let probe: ProbeHandle<usize> = worker.dataflow(|scope|
-#             scope.input_from_with_builder(&mut input)
+#             scope.input_from(&mut input)
 #                  .container::<Vec<_>>()
 #                  .inspect(|x| println!("seen: {:?}", x))
 #                  .probe()
 #                  .0
 #         );
+#         let mut input = input.with_default_builder();
 #         input.send(0u64);
 probe.less_than(input.time())
 #     ;}).unwrap();

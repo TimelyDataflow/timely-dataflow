@@ -80,12 +80,10 @@ pub trait Input<'scope> {
     /// ```
     fn new_input<C: Container+Clone>(&self) -> (Handle<Self::Timestamp, C>, Stream<'scope, Self::Timestamp, C>);
 
-    /// Create a stream from a handle that accepts complete containers.
+    /// Create a new stream from a supplied container input handle.
     ///
-    /// Each handle can supply multiple streams, cloning containers as needed.
-    fn input_from<C: Container+Clone>(&self, handle: &mut Handle<Self::Timestamp, C>) -> Stream<'scope, Self::Timestamp, C>;
-
-    /// Create a new stream from a supplied interactive handle.
+    /// Attach all streams before consuming the handle with [`Handle::with_builder`]
+    /// or [`Handle::with_default_builder`] for element input.
     ///
     /// This method creates a new timely stream whose data are supplied interactively through the `handle`
     /// argument. Each handle may be used multiple times (or not at all), and will clone data as appropriate
@@ -101,12 +99,13 @@ pub trait Input<'scope> {
     /// timely::execute(Config::thread(), |worker| {
     ///
     ///     // add an input and base computation off of it
-    ///     let mut input = InputHandle::new().with_default_builder();
+    ///     let mut input = InputHandle::new();
     ///     worker.dataflow(|scope| {
-    ///         scope.input_from_with_builder(&mut input)
+    ///         scope.input_from(&mut input)
     ///              .container::<Vec<_>>()
     ///              .inspect(|x| println!("hello {:?}", x));
     ///     });
+    ///     let mut input = input.with_default_builder();
     ///
     ///     // introduce input, advance computation
     ///     for round in 0..10 {
@@ -116,22 +115,15 @@ pub trait Input<'scope> {
     ///     }
     /// });
     /// ```
-    fn input_from_with_builder<CB: ContainerBuilder<Container: Clone>>(&self, handle: &mut BufferedHandle<Self::Timestamp, CB>) -> Stream<'scope, Self::Timestamp, CB::Container>;
+    fn input_from<C: Container+Clone>(&self, handle: &mut Handle<Self::Timestamp, C>) -> Stream<'scope, Self::Timestamp, C>;
 }
 
 use crate::order::TotalOrder;
 impl<'scope, T: Timestamp + TotalOrder> Input<'scope> for Scope<'scope, T> {
     type Timestamp = T;
     fn new_input_with_builder<CB: ContainerBuilder<Container: Clone>>(&self) -> (BufferedHandle<T, CB>, Stream<'scope, T, CB::Container>) {
-        let mut handle = BufferedHandle::new_with_builder();
-        let stream = self.input_from_with_builder(&mut handle);
-        (handle, stream)
-    }
-
-    fn input_from_with_builder<CB: ContainerBuilder<Container: Clone>>(&self, handle: &mut BufferedHandle<T, CB>) -> Stream<'scope, T, CB::Container> {
-        // New streams must not receive records buffered before registration.
-        handle.flush();
-        self.input_from(&mut handle.inner)
+        let (handle, stream) = self.new_input();
+        (handle.with_builder(), stream)
     }
 
     fn new_input<C: Container+Clone>(&self) -> (Handle<T, C>, Stream<'scope, T, C>) {
@@ -214,6 +206,8 @@ impl<T:Timestamp> Operate<T> for Operator<T> {
 /// Use [`Handle`] to send complete containers instead. This handle exposes
 /// only element input, so there is no ordering to reconcile between the two modes.
 /// Record ordering within containers is determined by the builder.
+/// Attach streams to a [`Handle`] before consuming it with [`Handle::with_builder`]
+/// or [`Handle::with_default_builder`] to create this wrapper.
 ///
 /// ```compile_fail
 /// use timely::dataflow::InputHandle;
@@ -226,78 +220,7 @@ pub struct BufferedHandle<T: Timestamp, CB: ContainerBuilder<Container: Clone>> 
     builder: CB,
 }
 
-impl<T: Timestamp, C: Container+Clone> BufferedHandle<T, CapacityContainerBuilder<C>> {
-    /// Allocates a new input handle, from which one can create timely streams.
-    ///
-    /// # Examples
-    /// ```
-    /// use timely::*;
-    /// use timely::dataflow::InputHandle;
-    /// use timely::dataflow::operators::{Input, Inspect};
-    ///
-    /// // construct and execute a timely dataflow
-    /// timely::execute(Config::thread(), |worker| {
-    ///
-    ///     // add an input and base computation off of it
-    ///     let mut input = InputHandle::new().with_default_builder();
-    ///     worker.dataflow(|scope| {
-    ///         scope.input_from_with_builder(&mut input)
-    ///              .container::<Vec<_>>()
-    ///              .inspect(|x| println!("hello {:?}", x));
-    ///     });
-    ///
-    ///     // introduce input, advance computation
-    ///     for round in 0..10 {
-    ///         input.send(round);
-    ///         input.advance_to(round + 1);
-    ///         worker.step();
-    ///     }
-    /// });
-    /// ```
-    pub fn new() -> Self {
-        Handle::new().with_default_builder()
-    }
-}
-
 impl<T: Timestamp, CB: ContainerBuilder<Container: Clone>> BufferedHandle<T, CB> {
-    /// Allocates an element input handle using `CB` to build containers.
-    pub fn new_with_builder() -> Self {
-        Handle::new().with_builder()
-    }
-
-    /// Creates an input stream from the handle in the supplied scope.
-    ///
-    /// # Examples
-    /// ```
-    /// use timely::*;
-    /// use timely::dataflow::InputHandle;
-    /// use timely::dataflow::operators::{Input, Inspect};
-    ///
-    /// // construct and execute a timely dataflow
-    /// timely::execute(Config::thread(), |worker| {
-    ///
-    ///     // add an input and base computation off of it
-    ///     let mut input = InputHandle::new().with_default_builder();
-    ///     worker.dataflow(|scope| {
-    ///         input.to_stream(scope)
-    ///              .container::<Vec<_>>()
-    ///              .inspect(|x| println!("hello {:?}", x));
-    ///     });
-    ///
-    ///     // introduce input, advance computation
-    ///     for round in 0..10 {
-    ///         input.send(round);
-    ///         input.advance_to(round + 1);
-    ///         worker.step();
-    ///     }
-    /// });
-    /// ```
-    pub fn to_stream<'scope>(&mut self, scope: Scope<'scope, T>) -> Stream<'scope, T, CB::Container>
-    where T: TotalOrder,
-    {
-        scope.input_from_with_builder(self)
-    }
-
     /// Flush all contents and distribute to downstream operators.
     #[inline]
     pub fn flush(&mut self) {
@@ -318,12 +241,13 @@ impl<T: Timestamp, CB: ContainerBuilder<Container: Clone>> BufferedHandle<T, CB>
     /// timely::execute(Config::thread(), |worker| {
     ///
     ///     // add an input and base computation off of it
-    ///     let mut input = InputHandle::new().with_default_builder();
+    ///     let mut input = InputHandle::new();
     ///     worker.dataflow(|scope| {
-    ///         scope.input_from_with_builder(&mut input)
+    ///         scope.input_from(&mut input)
     ///              .container::<Vec<_>>()
     ///              .inspect(|x| println!("hello {:?}", x));
     ///     });
+    ///     let mut input = input.with_default_builder();
     ///
     ///     // introduce input, advance computation
     ///     for round in 0..10 {
@@ -366,10 +290,6 @@ where
             self.inner.send_batch(container);
         }
     }
-}
-
-impl<T: Timestamp, CB: ContainerBuilder<Container: Clone>> Default for BufferedHandle<T, CB> {
-    fn default() -> Self { Self::new_with_builder() }
 }
 
 impl<T: Timestamp, CB: ContainerBuilder<Container: Clone>> Drop for BufferedHandle<T, CB> {

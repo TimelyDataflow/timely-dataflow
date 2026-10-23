@@ -11,7 +11,7 @@ fn main() {
     let mut worker = timely::worker::Worker::new(WorkerConfig::default(), allocator, None);
 
     // create input and probe handles.
-    let mut input = InputHandle::new().with_default_builder();
+    let mut input = InputHandle::new();
     let probe = ProbeHandle::new();
 
     // directly build a dataflow.
@@ -22,6 +22,7 @@ fn main() {
             .inspect(|x| println!("{:?}", x))
             .probe_with(&probe);
     });
+    let mut input = input.with_default_builder();
 
     // manage inputs.
     for i in 0 .. 10 {

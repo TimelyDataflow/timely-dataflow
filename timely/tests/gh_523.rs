@@ -6,10 +6,10 @@ use timely::Config;
 #[test]
 fn gh_523() {
     timely::execute(Config::thread(), |worker| {
-        let mut input = InputHandle::new().with_default_builder();
+        let mut input = InputHandle::new();
         let probe = worker.dataflow::<u64, _, _>(|scope| {
             scope
-                .input_from_with_builder(&mut input)
+                .input_from(&mut input)
                 .container::<Vec<_>>()
                 .unary(Pipeline, "Test", move |_, _| {
                     move |input, output| {
@@ -26,6 +26,7 @@ fn gh_523() {
                 .probe()
                 .0
         });
+        let mut input = input.with_default_builder();
 
         for round in 0..2 {
             input.send(round);

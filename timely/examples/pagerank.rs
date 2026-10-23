@@ -9,7 +9,7 @@ fn main() {
 
     timely::execute_from_args(std::env::args().skip(3), move |worker| {
 
-        let mut input = InputHandle::new().with_default_builder();
+        let mut input = InputHandle::new();
         let probe = ProbeHandle::new();
 
         worker.dataflow::<usize,_,_>(|scope| {
@@ -154,6 +154,7 @@ fn main() {
                 .connect_loop(handle);
 
         });
+        let mut input = input.with_default_builder();
 
         let nodes: usize = std::env::args().nth(1).unwrap().parse().unwrap();
         let edges: usize = std::env::args().nth(2).unwrap().parse().unwrap();

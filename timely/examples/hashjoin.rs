@@ -17,14 +17,14 @@ fn main() {
         let index = worker.index();
         let peers = worker.peers();
 
-        let mut input1 = InputHandle::new().with_default_builder();
-        let mut input2 = InputHandle::new().with_default_builder();
+        let mut input1 = InputHandle::new();
+        let mut input2 = InputHandle::new();
         let probe = ProbeHandle::new();
 
         worker.dataflow(|scope| {
 
-            let stream1 = scope.input_from_with_builder(&mut input1);
-            let stream2 = scope.input_from_with_builder(&mut input2);
+            let stream1 = scope.input_from(&mut input1);
+            let stream2 = scope.input_from(&mut input2);
 
             let exchange1 = Exchange::new(|x: &(u64, u64)| x.0);
             let exchange2 = Exchange::new(|x: &(u64, u64)| x.0);
@@ -69,6 +69,8 @@ fn main() {
                 .container::<Vec<_>>()
                 .probe_with(&probe);
         });
+        let mut input1 = input1.with_default_builder();
+        let mut input2 = input2.with_default_builder();
 
         // Generate roughly random data.
         use std::hash::{BuildHasher, BuildHasherDefault, DefaultHasher};

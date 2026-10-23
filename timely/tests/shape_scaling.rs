@@ -12,12 +12,12 @@ use timely::Config;
 
 fn operator_scaling(scale: u64) {
     timely::execute(Config::thread(), move |worker| {
-        let mut input = InputHandle::new().with_default_builder();
+        let mut input = InputHandle::new();
         worker.dataflow::<u64, _, _>(|scope| {
             use timely::dataflow::operators::vec::Partition;
             let parts =
             scope
-                .input_from_with_builder(&mut input)
+                .input_from(&mut input)
                 .partition(scale, |()| (0, ()));
 
             use timely::dataflow::operators::generic::builder_rc::OperatorBuilder;
@@ -56,12 +56,12 @@ fn operator_scaling(scale: u64) {
 
 fn subgraph_scaling(scale: u64) {
     timely::execute(Config::thread(), move |worker| {
-        let mut input = InputHandle::new().with_default_builder();
+        let mut input = InputHandle::new();
         worker.dataflow::<u64, _, _>(|scope| {
             use timely::dataflow::operators::vec::Partition;
             let parts =
             scope
-                .input_from_with_builder(&mut input)
+                .input_from(&mut input)
                 .partition(scale, |()| (0, ()));
 
             let _outputs = scope.region(|inner| {

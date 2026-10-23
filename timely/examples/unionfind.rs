@@ -18,17 +18,18 @@ fn main() {
         let index = worker.index();
         let peers = worker.peers();
 
-        let mut input = InputHandle::new().with_default_builder();
+        let mut input = InputHandle::new();
         let probe = ProbeHandle::new();
 
         worker.dataflow(|scope| {
-            scope.input_from_with_builder(&mut input)
+            scope.input_from(&mut input)
                 //  .exchange(move |x: &(usize, usize)| (x.0 % (peers - 1)) as u64 + 1)
                  .union_find()
                  .exchange(|_| 0)
                  .union_find()
                  .probe_with(&probe);
         });
+        let mut input = input.with_default_builder();
 
         // Generate roughly random data.
         use std::hash::{BuildHasher, BuildHasherDefault, DefaultHasher};

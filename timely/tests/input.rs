@@ -84,9 +84,9 @@ fn wrapping_preserves_streams_and_flushes_on_advance_and_drop() {
 }
 
 #[test]
-fn attaching_a_buffered_input_excludes_earlier_records() {
+fn attach_streams_before_adding_a_builder() {
     timely::execute_directly(|worker| {
-        let mut input = InputHandle::<u64, Vec<u64>>::new().with_default_builder();
+        let mut input = InputHandle::<u64, Vec<u64>>::new();
         input.advance_to(5);
         let first = Rc::new(RefCell::new(Vec::new()));
         let second = Rc::new(RefCell::new(Vec::new()));
@@ -103,11 +103,13 @@ fn attaching_a_buffered_input_excludes_earlier_records() {
                     .probe_with(&mut probe);
             });
             probes.push(probe);
-            input.send(probes.len() as u64);
+            input.send_batch(&mut vec![probes.len() as u64]);
         }
+        let mut input = input.with_default_builder();
+        input.send(3);
         input.close();
         worker.step_while(|| probes.iter().any(|probe| !probe.done()));
-        assert_eq!(*first.borrow(), vec![(5, 1), (5, 2)]);
-        assert_eq!(*second.borrow(), vec![(5, 2)]);
+        assert_eq!(*first.borrow(), vec![(5, 1), (5, 2), (5, 3)]);
+        assert_eq!(*second.borrow(), vec![(5, 2), (5, 3)]);
     });
 }

@@ -23,7 +23,7 @@ pub fn run() {
     let mut worker = timely::worker::Worker::new(WorkerConfig::default(), allocator, None);
 
     // Create input and probe handles.
-    let mut input = InputHandle::new().with_default_builder();
+    let mut input = InputHandle::new();
     let probe = ProbeHandle::new();
 
     // Build a small dataflow that logs each record to the browser console.
@@ -34,6 +34,7 @@ pub fn run() {
             .inspect(|x| console::log_1(&format!("timely says: {:?}", x).into()))
             .probe_with(&probe);
     });
+    let mut input = input.with_default_builder();
 
     // Drive the dataflow with a few inputs.
     for i in 0..10 {

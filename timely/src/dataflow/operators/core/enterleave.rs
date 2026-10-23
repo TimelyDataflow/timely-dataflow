@@ -280,7 +280,7 @@ mod test {
         crate::execute(crate::Config::process(3), |worker| {
 
             let index = worker.index();
-            let mut input = InputHandle::new().with_default_builder();
+            let mut input = InputHandle::new();
             let probe = ProbeHandle::new();
 
             // create a new input, exchange data, and inspect its output
@@ -295,6 +295,7 @@ mod test {
                     .inspect(move |x| println!("worker {}:\thello {}", index, x))
                     .probe_with(&probe);
             });
+            let mut input = input.with_default_builder();
 
             // introduce data and watch!
             input.advance_to(0);

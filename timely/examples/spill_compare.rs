@@ -109,10 +109,10 @@ fn main() {
         let peers = worker.peers();
         let target = ((index + 1) % peers) as u64;
 
-        let mut input = InputHandle::<u64, Vec<serde_bytes::ByteBuf>>::new().with_default_builder();
+        let mut input = InputHandle::<u64, Vec<serde_bytes::ByteBuf>>::new();
 
         worker.dataflow(|scope| {
-            scope.input_from_with_builder(&mut input)
+            scope.input_from(&mut input)
                  .sink(Exchange::new(move |_v: &serde_bytes::ByteBuf| target), "Sink", {
                      let mut received_bytes: usize = 0;
                      let mut received_chunks: usize = 0;
@@ -132,6 +132,7 @@ fn main() {
                      }
                  });
         });
+        let mut input = input.with_default_builder();
 
         // Production: each worker pushes its share into the input handle in
         // one shot, with no `step` calls. Then closes the input and lets
