@@ -17,7 +17,7 @@
 pub use self::stream::{Stream, StreamVec};
 pub use self::scope::{Scope, OperatorSlot};
 
-pub use self::operators::core::input::Handle as InputHandle;
+pub use self::operators::core::input::{Handle as InputHandle, BufferedHandle as BufferedInputHandle};
 pub use self::operators::vec::input::Handle as InputHandleVec;
 pub use self::operators::probe::Handle as ProbeHandle;
 

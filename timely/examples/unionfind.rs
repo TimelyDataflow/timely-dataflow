@@ -18,11 +18,11 @@ fn main() {
         let index = worker.index();
         let peers = worker.peers();
 
-        let mut input = InputHandle::new();
+        let mut input = BufferedInputHandle::new();
         let probe = ProbeHandle::new();
 
         worker.dataflow(|scope| {
-            scope.input_from(&mut input)
+            scope.input_from_with_builder(&mut input)
                 //  .exchange(move |x: &(usize, usize)| (x.0 % (peers - 1)) as u64 + 1)
                  .union_find()
                  .exchange(|_| 0)

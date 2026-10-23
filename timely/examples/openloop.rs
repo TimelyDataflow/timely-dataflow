@@ -1,4 +1,4 @@
-use timely::dataflow::{InputHandle, ProbeHandle};
+use timely::dataflow::{BufferedInputHandle, ProbeHandle};
 use timely::dataflow::operators::{Input, Probe};
 use timely::dataflow::operators::vec::Filter;
 
@@ -19,13 +19,13 @@ fn main() {
 
         let timer = std::time::Instant::now();
 
-        let mut input = InputHandle::new();
+        let mut input = BufferedInputHandle::new();
         let probe = ProbeHandle::new();
 
         // Create a dataflow that discards input data (just synchronizes).
         worker.dataflow(|scope| {
             scope
-                .input_from(&mut input)     // read input.
+                .input_from_with_builder(&mut input)     // read input.
                 .filter(|_| false)          // do nothing.
                 .probe_with(&probe);    // observe output.
         });

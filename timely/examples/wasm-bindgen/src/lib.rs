@@ -10,7 +10,7 @@ use web_sys::console;
 
 use timely::WorkerConfig;
 use timely::dataflow::operators::{Inspect, Probe};
-use timely::dataflow::{InputHandle, ProbeHandle};
+use timely::dataflow::{BufferedInputHandle, ProbeHandle};
 
 #[wasm_bindgen(start)]
 pub fn run() {
@@ -23,7 +23,7 @@ pub fn run() {
     let mut worker = timely::worker::Worker::new(WorkerConfig::default(), allocator, None);
 
     // Create input and probe handles.
-    let mut input = InputHandle::new();
+    let mut input = BufferedInputHandle::new();
     let probe = ProbeHandle::new();
 
     // Build a small dataflow that logs each record to the browser console.

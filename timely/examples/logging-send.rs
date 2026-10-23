@@ -1,6 +1,6 @@
 use std::time::Duration;
 
-use timely::dataflow::{InputHandle, ProbeHandle};
+use timely::dataflow::{BufferedInputHandle, ProbeHandle};
 use timely::dataflow::operators::{Input, Exchange, Probe};
 use timely::logging::{TimelyEventBuilder, TimelyProgressEventBuilder, TimelySummaryEventBuilder};
 use timely::container::CapacityContainerBuilder;
@@ -12,7 +12,7 @@ fn main() {
 
         let batch = std::env::args().nth(1).unwrap().parse::<usize>().unwrap();
         let rounds = std::env::args().nth(2).unwrap().parse::<usize>().unwrap();
-        let mut input = InputHandle::new();
+        let mut input = BufferedInputHandle::new();
         let probe = ProbeHandle::new();
 
         // Register timely worker logging.
@@ -75,7 +75,7 @@ fn main() {
         // create a new input, exchange data, and inspect its output
         worker.dataflow(|scope| {
             scope
-                .input_from(&mut input)
+                .input_from_with_builder(&mut input)
                 .container::<Vec<_>>()
                 .exchange(|&x| x as u64)
                 .probe_with(&probe);
@@ -94,7 +94,7 @@ fn main() {
         // create a new input, exchange data, and inspect its output
         worker.dataflow(|scope| {
             scope
-                .input_from(&mut input)
+                .input_from_with_builder(&mut input)
                 .exchange(|&x| x as u64)
                 .probe_with(&probe);
         });

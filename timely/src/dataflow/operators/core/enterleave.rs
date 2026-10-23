@@ -271,7 +271,7 @@ mod test {
     #[test]
     fn test_nested() {
 
-        use crate::dataflow::{InputHandle, ProbeHandle};
+        use crate::dataflow::{BufferedInputHandle, ProbeHandle};
         use crate::dataflow::operators::{vec::Input, Inspect, Probe};
 
         use crate::dataflow::operators::{Enter, Leave};
@@ -280,7 +280,7 @@ mod test {
         crate::execute(crate::Config::process(3), |worker| {
 
             let index = worker.index();
-            let mut input = InputHandle::new();
+            let mut input = BufferedInputHandle::new();
             let probe = ProbeHandle::new();
 
             // create a new input, exchange data, and inspect its output

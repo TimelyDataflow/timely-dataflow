@@ -7,7 +7,7 @@ Let's recall that bit of code we commented out from `examples/hello.rs`, which h
 ```rust
 extern crate timely;
 
-use timely::dataflow::InputHandle;
+use timely::dataflow::BufferedInputHandle;
 use timely::dataflow::operators::{Input, Exchange, Inspect, Probe};
 
 fn main() {
@@ -15,11 +15,11 @@ fn main() {
     timely::execute_from_args(std::env::args(), |worker| {
 
         let index = worker.index();
-        let mut input = InputHandle::new();
+        let mut input = BufferedInputHandle::new();
 
         // create a new input, exchange data, and inspect its output
         let probe = worker.dataflow(|scope|
-            scope.input_from(&mut input)
+            scope.input_from_with_builder(&mut input)
                  .container::<Vec<_>>()
                  .exchange(|x| *x)
                  .inspect(move |x| println!("worker {}:\thello {}", index, x))
@@ -43,13 +43,13 @@ We'll put the whole program up here, but there are really just two lines that de
 
 ```rust
 # extern crate timely;
-# use timely::dataflow::InputHandle;
+# use timely::dataflow::BufferedInputHandle;
 # use timely::dataflow::operators::{Input, Exchange, Inspect, Probe};
 # fn main() {
 #     timely::execute_from_args(std::env::args().take(1), |worker| {
-#         let mut input = InputHandle::new();
+#         let mut input = BufferedInputHandle::new();
 #         let probe = worker.dataflow(|scope|
-#             scope.input_from(&mut input)
+#             scope.input_from_with_builder(&mut input)
 #                  .container::<Vec<_>>()
 #                  .exchange(|x| *x)
 #                  .inspect(move |x| println!("hello {}", x))

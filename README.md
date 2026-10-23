@@ -53,7 +53,7 @@ This is a very simple example (it's in the name), which only just suggests at ho
 For a more involved example, consider the very similar (but more explicit) [examples/hello.rs](https://github.com/timelydataflow/timely-dataflow/blob/master/timely/examples/hello.rs), which creates and drives the dataflow separately:
 
 ```rust
-use timely::dataflow::{InputHandle, ProbeHandle};
+use timely::dataflow::{BufferedInputHandle, ProbeHandle};
 use timely::dataflow::operators::{Input, Exchange, Inspect, Probe};
 
 fn main() {
@@ -61,12 +61,12 @@ fn main() {
     timely::execute_from_args(std::env::args(), |worker| {
 
         let index = worker.index();
-        let mut input = InputHandle::new();
+        let mut input = BufferedInputHandle::new();
         let mut probe = ProbeHandle::new();
 
         // create a new input, exchange data, and inspect its output
         worker.dataflow(|scope| {
-            scope.input_from(&mut input)
+            scope.input_from_with_builder(&mut input)
                  .container::<Vec<_>>()
                  .exchange(|x| *x)
                  .inspect(move |x| println!("worker {}:\thello {}", index, x))
@@ -89,7 +89,7 @@ fn main() {
 
 This example does a fair bit more, to show off more of what timely can do for you.
 
-We first build a dataflow graph creating an input stream (with `input_from`), whose output we `exchange` to drive records between workers (using the data itself to indicate which worker to route to). We `inspect` the data and print the worker index to indicate which worker received which data, and then `probe` the result so that each worker can see when all of a given round of data has been processed.
+We first build a dataflow graph creating an input stream (with `input_from_with_builder`), whose output we `exchange` to drive records between workers (using the data itself to indicate which worker to route to). We `inspect` the data and print the worker index to indicate which worker received which data, and then `probe` the result so that each worker can see when all of a given round of data has been processed.
 
 We then drive the computation by repeatedly introducing rounds of data, where the `round` itself is used as the data. In each round, each worker introduces the same data, and then repeatedly takes dataflow steps until the `probe` reveals that all workers have processed all work for that epoch, at which point the computation proceeds.
 

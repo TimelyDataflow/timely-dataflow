@@ -1,15 +1,15 @@
 use timely::dataflow::channels::pact::Pipeline;
 use timely::dataflow::operators::{Exchange, Input, Operator, Probe};
-use timely::dataflow::InputHandle;
+use timely::dataflow::BufferedInputHandle;
 use timely::Config;
 
 #[test]
 fn gh_523() {
     timely::execute(Config::thread(), |worker| {
-        let mut input = InputHandle::new();
+        let mut input = BufferedInputHandle::new();
         let probe = worker.dataflow::<u64, _, _>(|scope| {
             scope
-                .input_from(&mut input)
+                .input_from_with_builder(&mut input)
                 .container::<Vec<_>>()
                 .unary(Pipeline, "Test", move |_, _| {
                     move |input, output| {

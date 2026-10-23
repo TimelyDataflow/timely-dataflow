@@ -30,6 +30,7 @@ pub trait Input<'scope> {
     /// # Examples
     /// ```
     /// use timely::*;
+    /// use timely::container::CapacityContainerBuilder;
     /// use timely::dataflow::operators::{Input, Inspect};
     ///
     /// // construct and execute a timely dataflow
@@ -37,7 +38,7 @@ pub trait Input<'scope> {
     ///
     ///     // add an input and base computation off of it
     ///     let mut input = worker.dataflow(|scope| {
-    ///         let (input, stream) = scope.new_input::<Vec<_>>();
+    ///         let (input, stream) = scope.new_input_with_builder::<CapacityContainerBuilder<Vec<_>>>();
     ///         stream.inspect(|x| println!("hello {:?}", x));
     ///         input
     ///     });
@@ -62,15 +63,15 @@ pub trait Input<'scope> {
     /// ```
     /// use timely::*;
     /// use timely::dataflow::operators::{Input, Inspect};
-    /// use timely::dataflow::InputHandle;
+    /// use timely::dataflow::BufferedInputHandle;
     ///
     /// // construct and execute a timely dataflow
     /// timely::execute(Config::thread(), |worker| {
     ///
     ///     // add an input and base computation off of it
-    ///     let mut input = InputHandle::new();
+    ///     let mut input = BufferedInputHandle::new();
     ///     worker.dataflow(|scope| {
-    ///         scope.input_from(&mut input)
+    ///         scope.input_from_with_builder(&mut input)
     ///              .container::<Vec<_>>()
     ///              .inspect(|x| println!("hello {:?}", x));
     ///     });
@@ -90,13 +91,13 @@ use crate::order::TotalOrder;
 impl<'scope, T: Timestamp + TotalOrder> Input<'scope> for Scope<'scope, T> {
     type Timestamp = T;
     fn new_input<D: Clone+'static>(&self) -> (Handle<T, D>, StreamVec<'scope, T, D>) {
-        InputCore::new_input(self)
+        InputCore::new_input_with_builder(self)
     }
 
     fn input_from<D: Clone+'static>(&self, handle: &mut Handle<T, D>) -> StreamVec<'scope, T, D> {
-        InputCore::input_from(self, handle)
+        InputCore::input_from_with_builder(self, handle)
     }
 }
 
 /// A handle to an input `StreamVec`, used to introduce data to a timely dataflow computation.
-pub type Handle<T, D> = crate::dataflow::operators::core::input::Handle<T, CapacityContainerBuilder<Vec<D>>>;
+pub type Handle<T, D> = crate::dataflow::operators::core::input::BufferedHandle<T, CapacityContainerBuilder<Vec<D>>>;

@@ -37,7 +37,7 @@ Let's first build a timely computation into which we can send text and which wil
 ```rust
 extern crate timely;
 
-use timely::dataflow::{InputHandle, ProbeHandle};
+use timely::dataflow::{BufferedInputHandle, ProbeHandle};
 use timely::dataflow::operators::{Inspect, Probe};
 
 fn main() {
@@ -45,7 +45,7 @@ fn main() {
     timely::execute_from_args(std::env::args(), |worker| {
 
         // create input and output handles.
-        let mut input = InputHandle::new();
+        let mut input = BufferedInputHandle::new();
         let mut probe = ProbeHandle::new();
 
         // build a new dataflow.
@@ -74,7 +74,7 @@ After some boiler-plate including the `timely` crate and some of its traits and 
 
 ```rust,ignore
         // create input and output handles.
-        let mut input = InputHandle::new();
+        let mut input = BufferedInputHandle::new();
         let mut probe = ProbeHandle::new();
 ```
 
@@ -84,11 +84,11 @@ The next step is to build a timely dataflow. Here we use `input` as a source of 
 
 ```rust
 # extern crate timely;
-# use timely::dataflow::{InputHandle, ProbeHandle};
+# use timely::dataflow::{BufferedInputHandle, ProbeHandle};
 # use timely::dataflow::operators::{Input, Inspect, Probe};
 # fn main() {
 #     timely::execute_from_args(std::env::args().take(1), |worker| {
-#         let mut input = InputHandle::new();
+#         let mut input = BufferedInputHandle::new();
 #         let mut probe: ProbeHandle<usize> = ProbeHandle::new();
         // build a new dataflow.
         worker.dataflow(|scope| {
@@ -108,11 +108,11 @@ Having constructed the dataflow, we feed it some data.
 
 ```rust
 # extern crate timely;
-# use timely::dataflow::{InputHandle, ProbeHandle};
+# use timely::dataflow::{BufferedInputHandle, ProbeHandle};
 # use timely::dataflow::operators::{Input, Inspect, Probe};
 # fn main() {
 #     timely::execute_from_args(std::env::args().take(1), |worker| {
-#         let mut input = InputHandle::new();
+#         let mut input = BufferedInputHandle::new();
 #         let mut probe = ProbeHandle::new();
 #         worker.dataflow(|scope| {
 #             input.to_stream(scope)
@@ -145,7 +145,7 @@ Rather than repeat all the code up above, I'm just going to show you the fragmen
 ```rust
 # extern crate timely;
 #
-# use timely::dataflow::{InputHandle, ProbeHandle};
+# use timely::dataflow::{BufferedInputHandle, ProbeHandle};
 # use timely::dataflow::operators::{Inspect, Probe, vec::Map};
 #
 # fn main() {
@@ -153,7 +153,7 @@ Rather than repeat all the code up above, I'm just going to show you the fragmen
 #     timely::execute_from_args(std::env::args(), |worker| {
 #
 #         // create input and output handles.
-#         let mut input = InputHandle::new();
+#         let mut input = BufferedInputHandle::new();
 #         let mut probe = ProbeHandle::new();
 #
 #         // build a new dataflow.
@@ -199,7 +199,7 @@ As before, I'm just going to show you the new code, which now lives just after `
 ```rust
 # extern crate timely;
 #
-# use timely::dataflow::{InputHandle, ProbeHandle};
+# use timely::dataflow::{BufferedInputHandle, ProbeHandle};
 # use timely::dataflow::operators::{Inspect, Probe, vec::Map};
 #
 # use std::collections::HashMap;
@@ -212,7 +212,7 @@ As before, I'm just going to show you the new code, which now lives just after `
 #     timely::execute_from_args(std::env::args(), |worker| {
 #
 #         // create input and output handles.
-#         let mut input = InputHandle::new();
+#         let mut input = BufferedInputHandle::new();
 #         let mut probe = ProbeHandle::new();
 #
 #         // build a new dataflow.

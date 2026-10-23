@@ -20,7 +20,7 @@ fn main() {
         // create a new input, exchange data, and inspect its output
         for _dataflow in 0 .. dataflows {
             worker.dataflow(|scope| {
-                let (input, stream) = scope.new_input();
+                let (input, stream) = scope.new_input_with_builder::<timely::container::CapacityContainerBuilder<Vec<_>>>();
                 let stream = scope.region(|inner| {
                     let mut stream = stream.enter(inner);
                     for _step in 0 .. length {

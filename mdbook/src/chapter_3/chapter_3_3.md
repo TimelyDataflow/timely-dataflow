@@ -35,13 +35,13 @@ Instead, use a probe to step until the dataflow has caught up to the input:
 
 ```rust
 # extern crate timely;
-# use timely::dataflow::InputHandle;
+# use timely::dataflow::BufferedInputHandle;
 # use timely::dataflow::operators::{Input, Inspect, Probe};
 # fn main() {
 #     timely::execute_from_args(std::env::args().take(1), |worker| {
-#         let mut input = InputHandle::new();
+#         let mut input = BufferedInputHandle::new();
 #         let probe = worker.dataflow(|scope|
-#             scope.input_from(&mut input)
+#             scope.input_from_with_builder(&mut input)
 #                  .container::<Vec<_>>()
 #                  .inspect(|x| println!("seen: {:?}", x))
 #                  .probe()
