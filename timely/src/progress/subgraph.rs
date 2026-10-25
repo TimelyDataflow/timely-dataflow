@@ -532,10 +532,10 @@ where
             self.local_pointstamp
                 .iter()
                 .any(|((location, time), diff)|
-                    // Must publish scope-wide visible subtractions.
-                    tracker.is_global(*location, time) && *diff < 0 ||
                     // Must confirm the receipt of inbound messages.
-                    location.node == 0
+                    location.node == 0 ||
+                    // Only subtractions can require a scope-wide visibility check.
+                    *diff < 0 && tracker.is_global(*location, time)
                 )
         };
 
