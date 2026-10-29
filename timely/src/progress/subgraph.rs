@@ -715,7 +715,10 @@ impl<T: Timestamp> PerOperatorState<T> {
                 l.log(crate::logging::ScheduleEvent::start(self.id));
             }
 
-            let incomplete = operator.schedule();
+            let incomplete = {
+                let _current = crate::scheduling::current::enter(self.id);
+                operator.schedule()
+            };
 
             // Perhaps log information about the stop of the schedule call.
             if let Some(l) = self.logging.as_mut() {
