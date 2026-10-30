@@ -810,7 +810,10 @@ impl Wrapper {
             l.log(crate::logging::ScheduleEvent::start(self.identifier));
         }
 
-        let incomplete = self.operate.as_mut().map(|op| op.schedule()).unwrap_or(false);
+        let incomplete = {
+            let _current = crate::scheduling::current::enter(self.identifier);
+            self.operate.as_mut().map(|op| op.schedule()).unwrap_or(false)
+        };
         if !incomplete {
             self.operate = None;
             self.resources = None;

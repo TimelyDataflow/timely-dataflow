@@ -1,6 +1,7 @@
 //! Types and traits to activate and schedule fibers.
 
 pub mod activate;
+pub mod current;
 
 pub use self::activate::{Activations, Activator, ActivateOnDrop, SyncActivator};
 
