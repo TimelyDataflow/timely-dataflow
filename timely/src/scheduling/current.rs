@@ -10,14 +10,11 @@
 //! a thread at a time. A host that steps several workers of unrelated computations on one thread
 //! has to tell them apart itself.
 //!
-//! The current operator is whoever is running, not whoever owns the data. An allocation made by
-//! one operator and handed to another, such as a buffer pushed through `Pipeline`, is attributed
-//! to the operator that made it. Work outside any operator, such as communication in
-//! `Worker::step` and dataflow construction, has no current operator.
-//!
-//! Work that happens on behalf of an operator outside its `schedule` call, for example trace
-//! maintenance driven by the host application, can claim that operator with [`enter`]. Hold the
-//! guard in a scoped binding around that work, and never across a call to `Worker::step`.
+//! Work outside any operator, such as communication in `Worker::step` and dataflow construction,
+//! has no current operator. Work that happens on behalf of an operator outside its `schedule`
+//! call, for example trace maintenance driven by the host application, can claim that operator
+//! with [`enter`]. Hold the guard in a scoped binding around that work, and never across a call
+//! to `Worker::step`.
 //!
 //! Reading and writing the value does not allocate where the platform provides native
 //! thread-locals. Elsewhere, the first access on a thread may allocate.
