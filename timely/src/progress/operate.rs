@@ -191,6 +191,11 @@ pub struct SharedProgress<T: Timestamp> {
     pub internals: Vec<ChangeBatch<T>>,
     /// Produced message changes reported by the child operator.
     pub produceds: Vec<ChangeBatch<T>>,
+    /// Outputs on which the child sent records this activation, before reporting them as produced.
+    ///
+    /// A scope reports records leaving it as produced only once its own progress updates have been
+    /// exchanged. This lets its parent schedule the recipients sooner, which changes no counts.
+    pub pushed: Vec<bool>,
 }
 
 impl<T: Timestamp> SharedProgress<T> {
@@ -201,6 +206,7 @@ impl<T: Timestamp> SharedProgress<T> {
             consumeds: vec![ChangeBatch::new(); inputs],
             internals: vec![ChangeBatch::new(); outputs],
             produceds: vec![ChangeBatch::new(); outputs],
+            pushed: vec![false; outputs],
         }
     }
 }

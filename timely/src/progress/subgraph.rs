@@ -326,6 +326,17 @@ where
             }
         }
 
+        // Note scope outputs that were sent records in this pass, so that the parent can schedule
+        // their recipients now rather than after these counts are exchanged and reported upward.
+        {
+            let mut shared = self.shared_progress.borrow_mut();
+            for ((location, _time), diff) in self.local_pointstamp.iter() {
+                if let (0, Port::Target(port), true) = (location.node, location.port, *diff > 0) {
+                    shared.pushed[port] = true;
+                }
+            }
+        }
+
         // Transmit produced progress updates.
         self.send_progress();
 
@@ -781,6 +792,13 @@ impl<T: Timestamp> PerOperatorState<T> {
                     }
                     pointstamps.update((Location::from(*last), time), delta);
                     temp_active.push(Reverse(last.node));
+                }
+            }
+        }
+        for (output, pushed) in shared_progress.pushed.iter_mut().enumerate() {
+            if std::mem::take(pushed) {
+                for target in self.edges[output].iter() {
+                    temp_active.push(Reverse(target.node));
                 }
             }
         }
