@@ -39,7 +39,7 @@
 //! tracker
 //!     .pushed()
 //!     .0
-//!     .drain()
+//!     .drain(..)
 //!     .filter(|((location, time), delta)| location.is_target())
 //!     .collect::<Vec<_>>();
 //!
@@ -62,7 +62,7 @@
 //! tracker
 //!     .pushed()
 //!     .0
-//!     .drain()
+//!     .drain(..)
 //!     .filter(|((location, time), delta)| location.is_target())
 //!     .collect::<Vec<_>>();
 //!
@@ -410,14 +410,16 @@ pub struct Tracker<T:Timestamp> {
 
     /// Source and target changes are buffered, which allows us to delay processing until propagation,
     /// and so consolidate updates, but to leap directly to those frontiers that may have changed.
-    target_changes: ChangeBatch<(Target, T)>,
-    source_changes: ChangeBatch<(Source, T)>,
+    pending_changes: LocationChanges<T>,
 
-    /// Worklist of updates to perform, ordered by increasing timestamp and target.
-    worklist: BinaryHeap<Reverse<(T, Location, i64)>>,
+    /// Worklist of changes to implications to perform, by location, with
+    /// locations visited in an order consistent with the graph's edges.
+    worklist: Worklist<T>,
 
-    /// Buffer of consequent changes.
-    pushed_changes: ChangeBatch<(Location, T)>,
+    /// Buffer of consequent changes: the net change to the frontier at each location.
+    pushed_changes: Vec<((Location, T), i64)>,
+    /// The changes to the frontiers in the cyclic component being visited, to consolidate.
+    cycle_changes: LocationChanges<T>,
 
     /// Compiled summaries from each internal location (not scope inputs) to each scope output.
     output_changes: Vec<ChangeBatch<T>>,
@@ -509,18 +511,17 @@ impl<T:Timestamp> Tracker<T> {
     /// Updates the count for a time at a target (operator input, scope output).
     #[inline]
     pub fn update_target(&mut self, target: Target, time: T, value: i64) {
-        self.target_changes.update((target, time), value);
+        self.pending_changes.update(Location::from(target), time, value);
     }
     /// Updates the count for a time at a source (operator output, scope input).
     #[inline]
     pub fn update_source(&mut self, source: Source, time: T, value: i64) {
-        self.source_changes.update((source, time), value);
+        self.pending_changes.update(Location::from(source), time, value);
     }
 
     /// Indicates if any pointstamps have positive count.
     pub fn tracking_anything(&mut self) -> bool {
-        !self.source_changes.is_empty() ||
-        !self.target_changes.is_empty() ||
+        !self.pending_changes.is_empty() ||
         self.total_counts > 0
     }
 
@@ -539,6 +540,9 @@ impl<T:Timestamp> Tracker<T> {
             .iter()
             .map(|&(inputs, outputs)| PerOperator::new(inputs, outputs))
             .collect::<Vec<_>>();
+
+        // The order in which to visit locations when propagating changes.
+        let worklist = Worklist::new(&builder.shape, &builder.nodes, &builder.edges);
 
         // Summary of scope inputs to scope outputs.
         let mut builder_summary = vec![PortConnectivity::default(); builder.shape[0].1];
@@ -618,10 +622,10 @@ impl<T:Timestamp> Tracker<T> {
             target_summaries,
             source_summaries,
             per_operator,
-            target_changes: ChangeBatch::new(),
-            source_changes: ChangeBatch::new(),
-            worklist: BinaryHeap::new(),
-            pushed_changes: ChangeBatch::new(),
+            pending_changes: LocationChanges::new(&builder.shape),
+            worklist,
+            pushed_changes: Vec::new(),
+            cycle_changes: LocationChanges::new(&builder.shape),
             output_changes,
             total_counts: 0,
             logger,
@@ -640,128 +644,109 @@ impl<T:Timestamp> Tracker<T> {
         if let Some(logger) = &mut self.logger {
 
             let target_changes =
-            self.target_changes
+            self.pending_changes
                 .iter()
-                .map(|((target, time), diff)| (target.node, target.port, time, *diff));
+                .filter_map(|(location, time, diff)| match location.port {
+                    Port::Target(port) => Some((location.node, port, time, diff)),
+                    Port::Source(_) => None,
+                });
 
             logger.log_target_updates(target_changes);
 
             let source_changes =
-            self.source_changes
+            self.pending_changes
                 .iter()
-                .map(|((source, time), diff)| (source.node, source.port, time, *diff));
+                .filter_map(|(location, time, diff)| match location.port {
+                    Port::Source(port) => Some((location.node, port, time, diff)),
+                    Port::Target(_) => None,
+                });
 
             logger.log_source_updates(source_changes);
         }
 
-        // Step 1: Drain `self.input_changes` and determine actual frontier changes.
+        // Step 1: Drain `self.pending_changes` and determine actual frontier changes.
         //
-        // Not all changes in `self.input_changes` may alter the frontier at a location.
+        // Not all pending changes may alter the frontier at a location.
         // By filtering the changes through `self.pointstamps` we react only to discrete
         // changes in the frontier, rather than changes in the pointstamp counts that
         // witness that frontier.
-        use itertools::Itertools;
-        let mut target_changes = self.target_changes.drain().peekable();
-        while let Some(((target, _), _)) = target_changes.peek() {
-
-            let target = *target;
-            let operator = &mut self.per_operator[target.node].targets[target.port];
-            let target_updates = target_changes.peeking_take_while(|((t, _),_)| t == &target).map(|((_,time),diff)| (time,diff));
-            let changes = operator.pointstamps.update_iter(target_updates);
-
-            for (time, diff) in changes {
-                self.total_counts += diff;
-                for &(output, ref summary) in (&self.target_summaries).get(target.node).get(target.port).into_index_iter() {
-                    if let Some(out_time) = summary.results_in(&time) {
-                        self.output_changes[output].update(out_time, diff);
+        for (location, updates) in self.pending_changes.drain_locations() {
+            let operator = &mut self.per_operator[location.node];
+            match location.port {
+                Port::Target(port) => {
+                    let changes = operator.targets[port].pointstamps.update_iter(updates);
+                    for (time, diff) in changes {
+                        self.total_counts += diff;
+                        for &(output, ref summary) in (&self.target_summaries).get(location.node).get(port).into_index_iter() {
+                            if let Some(out_time) = summary.results_in(&time) {
+                                self.output_changes[output].update(out_time, diff);
+                            }
+                        }
+                        self.worklist.update(location, time, diff);
                     }
                 }
-                self.worklist.push(Reverse((time, Location::from(target), diff)));
-            }
-        }
-
-        let mut source_changes = self.source_changes.drain().peekable();
-        while let Some(((source, _), _)) = source_changes.peek() {
-
-            let source = *source;
-            let operator = &mut self.per_operator[source.node];
-            let op_source = &mut operator.sources[source.port];
-            let source_updates = source_changes.peeking_take_while(|((s, _),_)| s == &source).map(|((_,time),diff)| (time,diff));
-            let changes = op_source.pointstamps.update_iter(source_updates);
-
-            for (time, diff) in changes {
-                self.total_counts += diff;
-                operator.cap_counts += diff;
-                for &(output, ref summary) in (&self.source_summaries).get(source.node).get(source.port).into_index_iter() {
-                    if let Some(out_time) = summary.results_in(&time) {
-                        self.output_changes[output].update(out_time, diff);
+                Port::Source(port) => {
+                    let changes = operator.sources[port].pointstamps.update_iter(updates);
+                    for (time, diff) in changes {
+                        self.total_counts += diff;
+                        operator.cap_counts += diff;
+                        for &(output, ref summary) in (&self.source_summaries).get(location.node).get(port).into_index_iter() {
+                            if let Some(out_time) = summary.results_in(&time) {
+                                self.output_changes[output].update(out_time, diff);
+                            }
+                        }
+                        self.worklist.update(location, time, diff);
                     }
                 }
-                self.worklist.push(Reverse((time, Location::from(source), diff)));
             }
         }
 
         // Step 2: Circulate implications of changes to `self.pointstamps`.
         //
-        // TODO: The argument that this always terminates is subtle, and should be made.
-        //       The intent is that that by moving forward in layers through `time`, we
-        //       will discover zero-change times when we first visit them, as no further
-        //       changes can be made to them once we complete them.
-        while let Some(Reverse((time, location, mut diff))) = self.worklist.pop() {
-
-            // Drain and accumulate all updates that have the same time and location.
-            while self.worklist.peek().map(|x| ((x.0).0 == time) && ((x.0).1 == location)).unwrap_or(false) {
-                diff += (self.worklist.pop().unwrap().0).2;
-            }
-
-            // Only act if there is a net change, positive or negative.
-            if diff != 0 {
-
-                match location.port {
-                    // Update to an operator input.
-                    // Propagate any changes forward across the operator.
-                    Port::Target(port_index) => {
-
-                        let changes =
-                        self.per_operator[location.node]
-                            .targets[port_index]
-                            .implications
-                            .update_iter(Some((time, diff)));
-
-                        for (time, diff) in changes {
-                            for &(output_port, ref summary) in (&self.nodes).get(location.node).get(port_index).into_index_iter() {
-                                if let Some(new_time) = summary.results_in(&time) {
-                                    let source = Location { node: location.node, port: Port::Source(output_port) };
-                                    self.worklist.push(Reverse((new_time, source, diff)));
-                                }
-                            }
-                            self.pushed_changes.update((location, time), diff);
-                        }
-                    }
-                    // Update to an operator output.
-                    // Propagate any changes forward along outgoing edges.
-                    Port::Source(port_index) => {
-
-                        let changes =
-                        self.per_operator[location.node]
-                            .sources[port_index]
-                            .implications
-                            .update_iter(Some((time, diff)));
-
-                        for (time, diff) in changes {
-                            for new_target in (&self.edges).get(location.node).get(port_index).into_index_iter() {
-                                self.worklist.push(Reverse((
-                                    time.clone(),
-                                    Location::from(*new_target),
-                                    diff,
-                                )));
-                            }
-                            self.pushed_changes.update((location, time), diff);
-                        }
-                    },
+        // Locations are visited by strongly connected component, in a
+        // topological order of the components, so that every change that
+        // can reach a location has reached it before it is visited. A
+        // location outside any cycle is then visited once, and applies all
+        // its changes, at whatever times, together: its frontier moves once,
+        // directly from the old to the new, and its successors receive the
+        // net change. Within a component with a cycle, changes are applied
+        // in order of increasing time, as they reach each location.
+        //
+        // The order affects only the work done, not the result: each
+        // location's implications accumulate the same changes, and the
+        // changes pushed for it are consolidated, so they are the net change
+        // to its frontier.
+        while let Some(component) = self.worklist.pop_component() {
+            if !self.worklist.cyclic(component) {
+                let location = self.worklist.members(component)[0];
+                let updates = self.worklist.take(location);
+                let implications = match location.port {
+                    Port::Target(port) => &mut self.per_operator[location.node].targets[port].implications,
+                    Port::Source(port) => &mut self.per_operator[location.node].sources[port].implications,
                 };
+                // The location is visited once, so these are its net changes.
+                for (time, diff) in implications.update_iter(updates) {
+                    push_implication(&self.nodes, &self.edges, &mut self.worklist, location, &time, diff, None);
+                    self.pushed_changes.push(((location, time), diff));
+                }
+                continue;
             }
+
+            // A component with a cycle: its changes in order of increasing time.
+            self.worklist.load_cycle(component);
+            while let Some((at, location, change)) = self.worklist.pop_cycle() {
+                let implications = match location.port {
+                    Port::Target(port) => &mut self.per_operator[location.node].targets[port].implications,
+                    Port::Source(port) => &mut self.per_operator[location.node].sources[port].implications,
+                };
+                for (time, diff) in implications.update_iter(Some((at, change))) {
+                    push_implication(&self.nodes, &self.edges, &mut self.worklist, location, &time, diff, Some(component));
+                    self.cycle_changes.update(location, time, diff);
+                }
+            }
+            self.pushed_changes.extend(self.cycle_changes.drain());
         }
+        self.worklist.clear();
     }
 
     /// Implications of maintained capabilities projected to each output.
@@ -770,7 +755,7 @@ impl<T:Timestamp> Tracker<T> {
     }
 
     /// A mutable reference to the pushed results of changes.
-    pub fn pushed(&mut self) -> (&mut ChangeBatch<(Location, T)>, &[PerOperator<T>]) {
+    pub fn pushed(&mut self) -> (&mut Vec<((Location, T), i64)>, &[PerOperator<T>]) {
         (&mut self.pushed_changes, &self.per_operator)
     }
 
@@ -790,6 +775,359 @@ impl<T:Timestamp> Tracker<T> {
             Port::Target(port) => self.per_operator[location.node].targets[port].is_global(time),
             Port::Source(port) => self.per_operator[location.node].sources[port].is_global(time),
         }
+    }
+}
+
+/// Pushes the implications of a change of `diff` to `time` in the frontier
+/// at `location` to its successors: across the operator, from an input, or
+/// along the edges, from an output. A successor in the cyclic `component`
+/// being visited receives it in time order; any other, when its component is
+/// visited.
+fn push_implication<T: Timestamp>(
+    nodes: &Vecs<Vecs<Vec<(usize, T::Summary)>>>,
+    edges: &Vecs<Vecs<Vec<Target>>>,
+    worklist: &mut Worklist<T>,
+    location: Location,
+    time: &T,
+    diff: i64,
+    component: Option<usize>,
+) {
+    match location.port {
+        // Propagate the change forward across the operator.
+        Port::Target(port) => {
+            for &(output, ref summary) in nodes.get(location.node).get(port).into_index_iter() {
+                if let Some(new_time) = summary.results_in(time) {
+                    worklist.push(Location::new_source(location.node, output), new_time, diff, component);
+                }
+            }
+        }
+        // Propagate the change forward along outgoing edges.
+        Port::Source(port) => {
+            for target in edges.get(location.node).get(port).into_index_iter() {
+                worklist.push(Location::from(*target), time.clone(), diff, component);
+            }
+        }
+    }
+}
+
+/// Changes to the implications at locations, waiting to be applied.
+///
+/// The locations are grouped into the strongly connected components of the
+/// graph whose edges lead from each operator input to the outputs it may
+/// reach, and from each output to the inputs it is connected to. The
+/// components are numbered in a topological order, so a change at a location
+/// can reach only locations in the same component or a later one.
+struct Worklist<T: Timestamp> {
+    /// The changes at each location.
+    changes: LocationChanges<T>,
+    /// The component of each location, indexed as `changes` indexes them.
+    component: Vec<usize>,
+    /// The locations of each component, those of component `c` being
+    /// `members[starts[c] .. starts[c + 1]]`.
+    members: Vec<Location>,
+    /// The start in `members` of each component, and the number of locations.
+    starts: Vec<usize>,
+    /// The components with changes, possibly more than once each.
+    components: BinaryHeap<Reverse<usize>>,
+    /// The changes in the cyclic component being visited, by time and location.
+    cycle: BinaryHeap<Reverse<(T, Location, i64)>>,
+}
+
+impl<T: Timestamp> Worklist<T> {
+    /// A worklist for a graph with nodes of the `(inputs, outputs)` of
+    /// `shape`, the internal connectivity of `nodes`, and the edges of `edges`.
+    fn new(shape: &[(usize, usize)], nodes: &[Connectivity<T::Summary>], edges: &[Vec<Vec<Target>>]) -> Self {
+        let changes = LocationChanges::new(shape);
+        let locations = changes.slot.len();
+
+        // Each location's successors, by index.
+        let mut successors = vec![Vec::new(); locations];
+        for (node, inputs) in nodes.iter().enumerate() {
+            for (input, outputs) in inputs.iter().enumerate() {
+                let from = changes.index(Location::new_target(node, input));
+                for (output, summaries) in outputs.iter_ports() {
+                    if !summaries.elements().is_empty() {
+                        successors[from].push(changes.index(Location::new_source(node, output)));
+                    }
+                }
+            }
+        }
+        for (node, outputs) in edges.iter().enumerate() {
+            for (output, targets) in outputs.iter().enumerate() {
+                let from = changes.index(Location::new_source(node, output));
+                for &target in targets {
+                    successors[from].push(changes.index(Location::from(target)));
+                }
+            }
+        }
+
+        // Each location by index.
+        let mut location = Vec::with_capacity(locations);
+        for (node, &(inputs, outputs)) in shape.iter().enumerate() {
+            location.extend((0 .. inputs).map(|port| Location::new_target(node, port)));
+            location.extend((0 .. outputs).map(|port| Location::new_source(node, port)));
+        }
+
+        // Tarjan's algorithm finds the components in reverse topological order.
+        let found = strongly_connected_components(&successors);
+        let count = found.len();
+        let mut component = vec![0; locations];
+        let mut members = Vec::with_capacity(locations);
+        let mut starts = Vec::with_capacity(count + 1);
+        for (number, scc) in found.iter().rev().enumerate() {
+            starts.push(members.len());
+            for &index in scc {
+                component[index] = number;
+                members.push(location[index]);
+            }
+        }
+        starts.push(members.len());
+
+        Worklist { changes, component, members, starts, components: BinaryHeap::new(), cycle: BinaryHeap::new() }
+    }
+
+    /// The locations of `component`.
+    #[inline]
+    fn members(&self, component: usize) -> &[Location] {
+        &self.members[self.starts[component] .. self.starts[component + 1]]
+    }
+
+    /// Indicates that `component` has a cycle: more than one location, as
+    /// no location is its own successor.
+    #[inline]
+    fn cyclic(&self, component: usize) -> bool {
+        self.starts[component + 1] - self.starts[component] > 1
+    }
+
+    /// Adds a change of `diff` to `time` at `location`, to be applied in
+    /// time order if `location` is in the cyclic `visiting` component, and
+    /// otherwise when its component is visited.
+    #[inline]
+    fn push(&mut self, location: Location, time: T, diff: i64, visiting: Option<usize>) {
+        let component = self.component[self.changes.index(location)];
+        if Some(component) == visiting {
+            self.cycle.push(Reverse((time, location, diff)));
+        }
+        else {
+            self.update(location, time, diff);
+        }
+    }
+
+    /// Adds a change of `diff` to `time` at `location`, to be applied when
+    /// its component is visited.
+    #[inline]
+    fn update(&mut self, location: Location, time: T, diff: i64) {
+        if self.changes.update(location, time, diff) {
+            self.components.push(Reverse(self.component[self.changes.index(location)]));
+        }
+    }
+
+    /// The first component with changes, in topological order.
+    fn pop_component(&mut self) -> Option<usize> {
+        let Reverse(component) = self.components.pop()?;
+        while self.components.peek() == Some(&Reverse(component)) {
+            self.components.pop();
+        }
+        Some(component)
+    }
+
+    /// Removes the changes at `location`, consolidated.
+    fn take(&mut self, location: Location) -> smallvec::IntoIter<[(T, i64); 4]> {
+        self.changes.take(location).into_inner().into_iter()
+    }
+
+    /// Moves the changes at the locations of `component` into the time-ordered `cycle`.
+    fn load_cycle(&mut self, component: usize) {
+        for index in self.starts[component] .. self.starts[component + 1] {
+            let location = self.members[index];
+            for (time, diff) in self.changes.take(location).into_inner() {
+                self.cycle.push(Reverse((time, location, diff)));
+            }
+        }
+    }
+
+    /// The net change at the earliest time and location in the cyclic
+    /// component being visited, skipping those with none.
+    fn pop_cycle(&mut self) -> Option<(T, Location, i64)> {
+        while let Some(Reverse((time, location, mut diff))) = self.cycle.pop() {
+            // Drain and accumulate all updates that have the same time and location.
+            while self.cycle.peek().is_some_and(|x| (x.0).0 == time && (x.0).1 == location) {
+                diff += (self.cycle.pop().unwrap().0).2;
+            }
+            if diff != 0 {
+                return Some((time, location, diff));
+            }
+        }
+        None
+    }
+
+    /// Forgets the locations that had changes, once all are applied.
+    fn clear(&mut self) {
+        self.changes.changes.clear();
+    }
+}
+
+/// The strongly connected components of the graph with the `successors` of
+/// each vertex, in reverse topological order: a component is listed before
+/// any component with an edge to it. Tarjan's algorithm, without recursion.
+fn strongly_connected_components(successors: &[Vec<usize>]) -> Vec<Vec<usize>> {
+    const UNVISITED: usize = usize::MAX;
+    let count = successors.len();
+    let mut index = vec![UNVISITED; count];
+    let mut lowlink = vec![0; count];
+    let mut on_stack = vec![false; count];
+    let mut stack = Vec::new();
+    let mut components = Vec::new();
+    let mut next = 0;
+    // The depth-first path: each vertex, and how many of its successors it has visited.
+    let mut path: Vec<(usize, usize)> = Vec::new();
+    for root in 0 .. count {
+        if index[root] != UNVISITED {
+            continue;
+        }
+        path.push((root, 0));
+        index[root] = next;
+        lowlink[root] = next;
+        next += 1;
+        stack.push(root);
+        on_stack[root] = true;
+        while let Some(&mut (vertex, ref mut visited)) = path.last_mut() {
+            if let Some(&successor) = <[usize]>::get(&successors[vertex], *visited) {
+                *visited += 1;
+                if index[successor] == UNVISITED {
+                    index[successor] = next;
+                    lowlink[successor] = next;
+                    next += 1;
+                    stack.push(successor);
+                    on_stack[successor] = true;
+                    path.push((successor, 0));
+                }
+                else if on_stack[successor] {
+                    lowlink[vertex] = lowlink[vertex].min(index[successor]);
+                }
+                continue;
+            }
+            path.pop();
+            if let Some(&(parent, _)) = <[(usize, usize)]>::last(&path) {
+                lowlink[parent] = lowlink[parent].min(lowlink[vertex]);
+            }
+            if lowlink[vertex] == index[vertex] {
+                let mut component = Vec::new();
+                loop {
+                    let member = stack.pop().unwrap();
+                    on_stack[member] = false;
+                    component.push(member);
+                    if member == vertex {
+                        break;
+                    }
+                }
+                components.push(component);
+            }
+        }
+    }
+    components
+}
+
+/// Changes to the counts of times at the locations of a graph.
+///
+/// The changes are kept per location, each location's in its own
+/// `ChangeBatch`, with the locations in the order they first changed.
+/// Consolidating them then sorts only each location's few times, rather
+/// than all the changes by location and time together; their consumers
+/// need each location's changes consolidated, in no particular order.
+struct LocationChanges<T> {
+    /// For each node, the index in `slot` of its first input, its outputs
+    /// following its inputs, and its number of inputs.
+    offsets: Vec<(usize, usize)>,
+    /// The index in `changes` of each location's changes, valid only while
+    /// `changes` holds that location at that index.
+    slot: Vec<usize>,
+    /// The locations that have changes, in the order first changed, and their changes.
+    changes: Vec<(Location, ChangeBatch<T, 4>)>,
+}
+
+impl<T: Timestamp> LocationChanges<T> {
+    /// Changes for a graph whose nodes have the `(inputs, outputs)` of `shape`.
+    fn new(shape: &[(usize, usize)]) -> Self {
+        let mut offsets = Vec::with_capacity(shape.len());
+        let mut ports = 0;
+        for &(inputs, outputs) in shape {
+            offsets.push((ports, inputs));
+            ports += inputs + outputs;
+        }
+        LocationChanges { offsets, slot: vec![usize::MAX; ports], changes: Vec::new() }
+    }
+
+    /// The index in `slot` of `location`.
+    #[inline]
+    fn index(&self, location: Location) -> usize {
+        let (first, inputs) = self.offsets[location.node];
+        match location.port {
+            Port::Target(port) => first + port,
+            Port::Source(port) => first + inputs + port,
+        }
+    }
+
+    /// Adds `diff` to the count of `time` at `location`, and indicates
+    /// whether `location` had no changes before.
+    #[inline]
+    fn update(&mut self, location: Location, time: T, diff: i64) -> bool {
+        if diff == 0 {
+            return false;
+        }
+        let index = self.index(location);
+        let slot = self.slot[index];
+        match self.changes.get_mut(slot) {
+            Some((at, batch)) if *at == location => {
+                let first = batch.unstable_internal_updates().is_empty();
+                batch.update(time, diff);
+                first
+            }
+            _ => {
+                self.slot[index] = self.changes.len();
+                self.changes.push((location, ChangeBatch::new_from(time, diff)));
+                true
+            }
+        }
+    }
+
+    /// Removes the changes at `location`.
+    #[inline]
+    fn take(&mut self, location: Location) -> ChangeBatch<T, 4> {
+        let slot = self.slot[self.index(location)];
+        match self.changes.get_mut(slot) {
+            Some((at, batch)) if *at == location => std::mem::take(batch),
+            _ => ChangeBatch::new(),
+        }
+    }
+
+    /// Indicates that no location has a net change.
+    fn is_empty(&mut self) -> bool {
+        self.changes.iter_mut().all(|(_, batch)| batch.is_empty())
+    }
+
+    /// The net changes, by location, time and change.
+    fn iter(&mut self) -> impl Iterator<Item = (Location, &T, i64)> + '_ {
+        self.changes.iter_mut().flat_map(|(location, batch)| {
+            let location = *location;
+            batch.iter().map(move |(time, diff)| (location, time, *diff))
+        })
+    }
+
+    /// Removes the changes, yielding each location with a net change and
+    /// its net changes, consolidated.
+    fn drain_locations(&mut self) -> impl Iterator<Item = (Location, smallvec::IntoIter<[(T, i64); 4]>)> + '_ {
+        self.changes.drain(..).filter_map(|(location, batch)| {
+            let updates = batch.into_inner();
+            (!updates.is_empty()).then(|| (location, updates.into_iter()))
+        })
+    }
+
+    /// Removes the changes, yielding each net change at each location.
+    fn drain(&mut self) -> impl Iterator<Item = ((Location, T), i64)> + '_ {
+        self.drain_locations().flat_map(|(location, updates)| {
+            updates.map(move |(time, diff)| ((location, time), diff))
+        })
     }
 }
 
