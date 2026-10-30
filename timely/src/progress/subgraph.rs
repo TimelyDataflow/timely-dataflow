@@ -417,6 +417,9 @@ where
             for (time, delta) in borrowed.drain() {
                 for target in &self.children[0].edges[input] {
                     self.local_pointstamp.update((Location::from(*target), time.clone()), delta);
+                    // Schedule the recipient in this pass, as `extract_progress` does for messages
+                    // produced inside the scope, so that it consumes the records it was just sent.
+                    self.temp_active.push(Reverse(target.node));
                 }
                 self.local_pointstamp.update((source, time), -delta);
             }
