@@ -326,6 +326,17 @@ where
             }
         }
 
+        // Note scope outputs that were sent records in this pass, so that the parent can schedule
+        // their recipients now rather than after these counts are exchanged and reported upward.
+        {
+            let mut shared = self.shared_progress.borrow_mut();
+            for ((location, _time), diff) in self.local_pointstamp.iter() {
+                if let (0, Port::Target(port), true) = (location.node, location.port, *diff > 0) {
+                    shared.pushed[port] = true;
+                }
+            }
+        }
+
         // Transmit produced progress updates.
         self.send_progress();
 
@@ -380,11 +391,12 @@ where
         }
 
         // Extract progress statements into either pre- or post-exchange buffers.
+        let outer_pushed = &mut self.shared_progress.borrow_mut().pushed[..];
         if child.local {
-            child.extract_progress(&mut self.local_pointstamp, &mut self.temp_active);
+            child.extract_progress(&mut self.local_pointstamp, &mut self.temp_active, outer_pushed);
         }
         else {
-            child.extract_progress(&mut self.final_pointstamp, &mut self.temp_active);
+            child.extract_progress(&mut self.final_pointstamp, &mut self.temp_active, outer_pushed);
         }
 
         incomplete
@@ -414,11 +426,17 @@ where
         for input in 0 .. self.inputs {
             let source = Location::new_source(0, input);
             let mut borrowed = self.input_messages[input].borrow_mut();
+            if borrowed.is_empty() { continue; }
             for (time, delta) in borrowed.drain() {
                 for target in &self.children[0].edges[input] {
                     self.local_pointstamp.update((Location::from(*target), time.clone()), delta);
                 }
                 self.local_pointstamp.update((source, time), -delta);
+            }
+            // Schedule the recipients in this pass, as `extract_progress` does for messages
+            // produced inside the scope, so that they consume the records they were just sent.
+            for target in &self.children[0].edges[input] {
+                self.temp_active.push(Reverse(target.node));
             }
         }
     }
@@ -590,7 +608,7 @@ where
         // We introduce these into the progress tracker to determine the scope's initial
         // internal capabilities.
         for child in self.children.iter_mut() {
-            child.extract_progress(&mut self.final_pointstamp, &mut self.temp_active);
+            child.extract_progress(&mut self.final_pointstamp, &mut self.temp_active, &mut []);
         }
 
         self.propagate_pointstamps();  // Propagate expressed capabilities to output frontiers.
@@ -752,7 +770,11 @@ impl<T: Timestamp> PerOperatorState<T> {
     }
 
     /// Extracts shared progress information and converts to pointstamp changes.
-    fn extract_progress(&self, pointstamps: &mut ChangeBatch<(Location, T)>, temp_active: &mut BinaryHeap<Reverse<usize>>) {
+    ///
+    /// `outer_pushed` holds the enclosing scope's own output marks: a marked output wired to the
+    /// scope's outputs (node zero) marks them in turn, so that records leaving nested scopes
+    /// reach their recipients in the same pass however many scope boundaries they cross.
+    fn extract_progress(&self, pointstamps: &mut ChangeBatch<(Location, T)>, temp_active: &mut BinaryHeap<Reverse<usize>>, outer_pushed: &mut [bool]) {
 
         let shared_progress = &mut *self.shared_progress.borrow_mut();
 
@@ -778,6 +800,14 @@ impl<T: Timestamp> PerOperatorState<T> {
                     }
                     pointstamps.update((Location::from(*last), time), delta);
                     temp_active.push(Reverse(last.node));
+                }
+            }
+        }
+        for (output, pushed) in shared_progress.pushed.iter_mut().enumerate() {
+            if std::mem::take(pushed) {
+                for target in self.edges[output].iter() {
+                    if target.node == 0 { outer_pushed[target.port] = true; }
+                    else { temp_active.push(Reverse(target.node)); }
                 }
             }
         }
