@@ -391,11 +391,12 @@ where
         }
 
         // Extract progress statements into either pre- or post-exchange buffers.
+        let outer_pushed = &mut self.shared_progress.borrow_mut().pushed[..];
         if child.local {
-            child.extract_progress(&mut self.local_pointstamp, &mut self.temp_active);
+            child.extract_progress(&mut self.local_pointstamp, &mut self.temp_active, outer_pushed);
         }
         else {
-            child.extract_progress(&mut self.final_pointstamp, &mut self.temp_active);
+            child.extract_progress(&mut self.final_pointstamp, &mut self.temp_active, outer_pushed);
         }
 
         incomplete
@@ -604,7 +605,7 @@ where
         // We introduce these into the progress tracker to determine the scope's initial
         // internal capabilities.
         for child in self.children.iter_mut() {
-            child.extract_progress(&mut self.final_pointstamp, &mut self.temp_active);
+            child.extract_progress(&mut self.final_pointstamp, &mut self.temp_active, &mut []);
         }
 
         self.propagate_pointstamps();  // Propagate expressed capabilities to output frontiers.
@@ -766,7 +767,11 @@ impl<T: Timestamp> PerOperatorState<T> {
     }
 
     /// Extracts shared progress information and converts to pointstamp changes.
-    fn extract_progress(&self, pointstamps: &mut ChangeBatch<(Location, T)>, temp_active: &mut BinaryHeap<Reverse<usize>>) {
+    ///
+    /// `outer_pushed` holds the enclosing scope's own output marks: a marked output wired to the
+    /// scope's outputs (node zero) marks them in turn, so that records leaving nested scopes
+    /// reach their recipients in the same pass however many scope boundaries they cross.
+    fn extract_progress(&self, pointstamps: &mut ChangeBatch<(Location, T)>, temp_active: &mut BinaryHeap<Reverse<usize>>, outer_pushed: &mut [bool]) {
 
         let shared_progress = &mut *self.shared_progress.borrow_mut();
 
@@ -798,7 +803,8 @@ impl<T: Timestamp> PerOperatorState<T> {
         for (output, pushed) in shared_progress.pushed.iter_mut().enumerate() {
             if std::mem::take(pushed) {
                 for target in self.edges[output].iter() {
-                    temp_active.push(Reverse(target.node));
+                    if target.node == 0 { outer_pushed[target.port] = true; }
+                    else { temp_active.push(Reverse(target.node)); }
                 }
             }
         }
