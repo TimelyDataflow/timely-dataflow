@@ -426,14 +426,17 @@ where
         for input in 0 .. self.inputs {
             let source = Location::new_source(0, input);
             let mut borrowed = self.input_messages[input].borrow_mut();
+            if borrowed.is_empty() { continue; }
             for (time, delta) in borrowed.drain() {
                 for target in &self.children[0].edges[input] {
                     self.local_pointstamp.update((Location::from(*target), time.clone()), delta);
-                    // Schedule the recipient in this pass, as `extract_progress` does for messages
-                    // produced inside the scope, so that it consumes the records it was just sent.
-                    self.temp_active.push(Reverse(target.node));
                 }
                 self.local_pointstamp.update((source, time), -delta);
+            }
+            // Schedule the recipients in this pass, as `extract_progress` does for messages
+            // produced inside the scope, so that they consume the records they were just sent.
+            for target in &self.children[0].edges[input] {
+                self.temp_active.push(Reverse(target.node));
             }
         }
     }
