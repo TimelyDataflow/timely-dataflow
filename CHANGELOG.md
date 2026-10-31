@@ -7,6 +7,20 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.32.0](https://github.com/TimelyDataflow/timely-dataflow/compare/timely-v0.31.0...timely-v0.32.0) - 2026-10-31
+
+### Other
+
+- Schedule recipients of records crossing a scope boundary in the pass that moves them ([#832](https://github.com/TimelyDataflow/timely-dataflow/pull/832))
+- Record the operator a thread is scheduling ([#831](https://github.com/TimelyDataflow/timely-dataflow/pull/831))
+- Add explicit dirty bit to pushers::Counter ([#825](https://github.com/TimelyDataflow/timely-dataflow/pull/825))
+- Feedback drops empty-stamped messages; stamp deserialization sorts ([#823](https://github.com/TimelyDataflow/timely-dataflow/pull/823))
+- Remove Notificator, FrontierNotificator, unary_notify, and binary_notify ([#819](https://github.com/TimelyDataflow/timely-dataflow/pull/819))
+- Remove operators that read a time off the capability, and the flow-control and Result helpers ([#818](https://github.com/TimelyDataflow/timely-dataflow/pull/818))
+- :time() requires TotalOrder and returns Option ([#817](https://github.com/TimelyDataflow/timely-dataflow/pull/817))
+- Cheaper coordination among workers: poll before parking, fewer signals, serialize broadcasts once ([#816](https://github.com/TimelyDataflow/timely-dataflow/pull/816))
+- Messages stamped by sets of capabilities ([#813](https://github.com/TimelyDataflow/timely-dataflow/pull/813))
+
 ## [0.31.0](https://github.com/TimelyDataflow/timely-dataflow/compare/timely-v0.30.0...timely-v0.31.0) - 2026-07-14
 
 This release continues excising monomorphization sprawl from the progress subsystem: `PortConnectivity`'s map becomes a sorted `Vec`, removing the last `BTreeMap` and `HashMap` from progress tracking (9.1% fewer LLVM lines on the `bfs` example), alongside clone and allocation trimming on hot paths.
