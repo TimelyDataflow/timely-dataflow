@@ -29,6 +29,7 @@ fn main() {
                  .union_find()
                  .probe_with(&probe);
         });
+        let mut input = input.with_default_builder();
 
         // Generate roughly random data.
         use std::hash::{BuildHasher, BuildHasherDefault, DefaultHasher};

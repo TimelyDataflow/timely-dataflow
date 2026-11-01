@@ -145,7 +145,7 @@ pub trait Operator<'scope, T: Timestamp, C1> {
     ///        .container::<Vec<_>>()
     ///        .inspect_core(|e| if let Ok((s, x)) = e { println!("{:?} -> {:?}", s, x) });
     ///
-    ///        (in1_handle, in2_handle)
+    ///        (in1_handle.with_default_builder(), in2_handle.with_default_builder())
     ///    });
     ///
     ///    for i in 1..10 {
