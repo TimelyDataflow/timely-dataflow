@@ -562,23 +562,15 @@ impl<T> MutableAntichain<T> {
     where
         T: PartialOrder,
     {
-        // Single-pass `for` loop (instead of two `Iterator::any` calls) avoids
-        // monomorphizing `slice::Iter::any` over per-call-site closure types and
-        // traverses `self.frontier` at most once.
-        let mut beyond_frontier = false;
-        let mut before_frontier = true;
-        for f in &self.frontier {
-            if !beyond_frontier && f.less_than(time) {
-                beyond_frontier = true;
-            }
-            if before_frontier && f.less_equal(time) {
-                before_frontier = false;
-            }
-            if beyond_frontier && !before_frontier {
-                break;
-            }
+        if delta > 0 {
+            // Adding a count at or beyond the frontier cannot change it.
+            !self.frontier.iter().any(|f| f.less_equal(time))
         }
-        !(beyond_frontier || (delta < 0 && before_frontier))
+        else {
+            // Removing a count can only expose new frontier elements if it
+            // removes an existing frontier element. Zero changes do nothing.
+            delta < 0 && self.frontier.contains(time)
+        }
     }
 
     /// Rebuilds `self.frontier` from `self.updates`.
@@ -865,5 +857,45 @@ mod tests {
             mutable.update_iter(Some((9, -1)));
         }
         assert!(mutable.updates.unstable_internal_updates().len() <= 32);
+    }
+
+    #[test]
+    fn mutable_matches_counted_set() {
+        // Include negative counts, zero changes, frontier retreat, and batches
+        // that remove and replace a frontier element before they are applied.
+        fn check<T: Clone + Ord + PartialOrder + std::fmt::Debug>(domain: Vec<T>) {
+            let mut counts = std::collections::BTreeMap::<T, i64>::new();
+            let mut mutable = MutableAntichain::new();
+            let mut seed = 1u64;
+            for _ in 0..2000 {
+                let before = mutable.frontier().to_vec();
+                let mut updates = Vec::new();
+                for _ in 0..1 + (seed as usize % 5) {
+                    seed = seed.wrapping_mul(6364136223846793005).wrapping_add(1);
+                    let time = domain[((seed >> 32) as usize) % domain.len()].clone();
+                    let diff = ((seed >> 48) % 5) as i64 - 2;
+                    *counts.entry(time.clone()).or_default() += diff;
+                    updates.push((time, diff));
+                }
+                let actual: Vec<_> = mutable.update_iter(updates).collect();
+                let expected: Antichain<_> = counts.iter()
+                    .filter(|(_, count)| **count > 0)
+                    .map(|(time, _)| time.clone())
+                    .collect();
+                assert_eq!(mutable.frontier(), expected.borrow());
+
+                let mut changes = std::collections::BTreeMap::<T, i64>::new();
+                for time in before { *changes.entry(time).or_default() -= 1; }
+                for time in expected.elements() { *changes.entry(time.clone()).or_default() += 1; }
+                let expected_changes: Vec<_> = changes.into_iter().filter(|(_, d)| *d != 0).collect();
+                assert_eq!(actual, expected_changes);
+                for time in &domain {
+                    assert_eq!(mutable.count_for(time), *counts.get(time).unwrap_or(&0));
+                }
+            }
+        }
+        check((0..16usize).collect());
+        check((0..4).flat_map(|outer| (0..4).map(move |inner|
+            crate::order::Product::new(outer, inner))).collect());
     }
 }
