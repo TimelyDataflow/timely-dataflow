@@ -7,6 +7,54 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.32.0](https://github.com/TimelyDataflow/timely-dataflow/compare/timely-v0.31.0...timely-v0.32.0) - 2026-11-04
+
+This release changes how messages are stamped, and it removes the notificator and the operators that read a time off a capability.
+Idle workers poll before they park, and progress tracking does less work on hot paths.
+
+### Breaking changes
+
+- **Message stamps are sets of times.** A message's stamp is now a multiset of timestamps instead of one time.
+  Singleton stamps behave as before.
+  An empty stamp makes no progress claims. ([#813](https://github.com/TimelyDataflow/timely-dataflow/pull/813))
+- **`InputCapability::time()` is now `least()`.** It exists only for `TotalOrder` and returns `Option<&T>`.
+  It returns `None` when no capabilities stamped the message.
+  `retain(port)` is now `retain_least(port)`, and the `Deref` to `T` is gone.
+  Partially ordered times should use `stamp()` and `retain_stamp()`. ([#817](https://github.com/TimelyDataflow/timely-dataflow/pull/817))
+- **The notificator is removed.** `Notificator`, `FrontierNotificator`, `unary_notify`, and `binary_notify` are gone.
+  To wait for a time, hold capabilities in a map keyed by time, and check them against the input frontiers. ([#819](https://github.com/TimelyDataflow/timely-dataflow/pull/819))
+- **Operators that read a time off the capability are removed.** This covers `delay`, `delay_batch`, `delay_total`, `count`, `accumulate`, `aggregate`, `state_machine`, `branch`, `branch_when`, and `reclock`.
+  It also covers the flow-controlled `iterator_source` and `ResultStream`.
+  For the container-generic form, use `ok_err` in `core`. ([#818](https://github.com/TimelyDataflow/timely-dataflow/pull/818))
+- **Stamp deserialization requires `T: Ord`.** Deserialization sorts the elements, because the bytes need not come from a valid `Stamp`.
+  The bound applies to `Stamp`, `Event`, `Message`'s `Bytesable` impl, and `EventReader`'s `EventIterator` impl. ([#823](https://github.com/TimelyDataflow/timely-dataflow/pull/823))
+- **`SharedProgress` has a new field, `pushed`.** Code that builds it with a struct literal must set the field. ([#832](https://github.com/TimelyDataflow/timely-dataflow/pull/832))
+
+### Added
+
+- `CapabilitySet` can serve as a session capability.
+  `InputCapability::stamp()` and `retain_stamp()` expose the full stamp. ([#813](https://github.com/TimelyDataflow/timely-dataflow/pull/813))
+- `timely::scheduling::current` reports the identifier of the operator scheduled on this thread.
+  A host can call `current::enter` to charge outside work to an operator. ([#831](https://github.com/TimelyDataflow/timely-dataflow/pull/831))
+- `WorkerConfig::idle_spin`, set with `--idle-spin MICROS`, sets how long an idle worker polls before it parks.
+  The default is 10 µs. ([#816](https://github.com/TimelyDataflow/timely-dataflow/pull/816))
+
+### Fixed
+
+- Counting pushers track a dirty bit explicitly.
+  This fixes a missed flush reported in #824. ([#825](https://github.com/TimelyDataflow/timely-dataflow/pull/825))
+- Feedback edges drop messages with empty stamps.
+  Those messages could circulate a loop without progress tracking seeing them. ([#823](https://github.com/TimelyDataflow/timely-dataflow/pull/823))
+
+### Performance
+
+- Workers poll before they park, signal peers less often, and serialize broadcasts once. ([#816](https://github.com/TimelyDataflow/timely-dataflow/pull/816))
+- Records that enter or leave a nested scope schedule their recipients in the same pass that moves them.
+  This means fewer progress batches and less latency. ([#832](https://github.com/TimelyDataflow/timely-dataflow/pull/832))
+- Frontier updates skip a rebuild when a positive count cannot change the frontier.
+  In one instrumented Differential BFS run, this avoided 9,808 of 71,806 rebuilds. ([#829](https://github.com/TimelyDataflow/timely-dataflow/pull/829))
+- Lazy progress reporting skips count scans it does not need. ([#830](https://github.com/TimelyDataflow/timely-dataflow/pull/830))
+
 ## [0.31.0](https://github.com/TimelyDataflow/timely-dataflow/compare/timely-v0.30.0...timely-v0.31.0) - 2026-07-14
 
 This release continues excising monomorphization sprawl from the progress subsystem: `PortConnectivity`'s map becomes a sorted `Vec`, removing the last `BTreeMap` and `HashMap` from progress tracking (9.1% fewer LLVM lines on the `bfs` example), alongside clone and allocation trimming on hot paths.
