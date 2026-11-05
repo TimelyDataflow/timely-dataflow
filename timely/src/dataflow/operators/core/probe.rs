@@ -33,6 +33,7 @@ pub trait Probe<T: Timestamp, C: Container> {
     ///     // add an input and base computation off of it
     ///     let (mut input, probe) = worker.dataflow(|scope| {
     ///         let (input, stream) = scope.new_input::<Vec<_>>();
+    ///         let input = input.with_default_builder();
     ///         let (probe, _) = stream.inspect(|x| println!("hello {:?}", x))
     ///                                .probe();
     ///         (input, probe)
@@ -64,6 +65,7 @@ pub trait Probe<T: Timestamp, C: Container> {
     ///     let mut probe = Handle::new();
     ///     let mut input = worker.dataflow(|scope| {
     ///         let (input, stream) = scope.new_input::<Vec<_>>();
+    ///         let input = input.with_default_builder();
     ///         stream.probe_with(&mut probe)
     ///               .inspect(|x| println!("hello {:?}", x));
     ///
@@ -209,6 +211,7 @@ mod tests {
             // create a new input, and inspect its output
             let (mut input, probe) = worker.dataflow(move |scope| {
                 let (input, stream) = scope.new_input::<Vec<String>>();
+                let input = input.with_default_builder();
                 (input, stream.probe().0)
             });
 

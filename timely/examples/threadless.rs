@@ -22,6 +22,7 @@ fn main() {
             .inspect(|x| println!("{:?}", x))
             .probe_with(&probe);
     });
+    let mut input = input.with_default_builder();
 
     // manage inputs.
     for i in 0 .. 10 {

@@ -41,6 +41,7 @@ fn main() {
                 .inspect(move |x| println!("worker {}:\tvalue {}", index, x))
                 .probe_with(&probe);
         });
+        let mut input = input.with_default_builder();
 
         // introduce data and watch!
         for round in 0..1 {

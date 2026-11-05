@@ -109,7 +109,7 @@ fn main() {
         let peers = worker.peers();
         let target = ((index + 1) % peers) as u64;
 
-        let mut input = InputHandle::<u64, timely::container::CapacityContainerBuilder<Vec<serde_bytes::ByteBuf>>>::new();
+        let mut input = InputHandle::<u64, Vec<serde_bytes::ByteBuf>>::new();
 
         worker.dataflow(|scope| {
             scope.input_from(&mut input)
@@ -132,6 +132,7 @@ fn main() {
                      }
                  });
         });
+        let mut input = input.with_default_builder();
 
         // Production: each worker pushes its share into the input handle in
         // one shot, with no `step` calls. Then closes the input and lets

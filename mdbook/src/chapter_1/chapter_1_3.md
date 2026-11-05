@@ -26,6 +26,7 @@ fn main() {
                  .probe()
                  .0
         );
+        let mut input = input.with_default_builder();
 
         // introduce data and watch!
         for round in 0..10 {
@@ -56,6 +57,7 @@ We'll put the whole program up here, but there are really just two lines that de
 #                  .probe()
 #                  .0
 #         );
+#         let mut input = input.with_default_builder();
 #         for round in 0..10 {
 #             input.send(round);
 input.advance_to(round + 1);

@@ -56,6 +56,7 @@ fn main() {
                  .inspect(|x| println!("seen: {:?}", x))
                  .probe_with(&probe);
         });
+        let mut input = input.with_default_builder();
 
         // introduce data and watch!
         for round in 0..10 {

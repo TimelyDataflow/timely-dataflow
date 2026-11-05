@@ -47,6 +47,7 @@ Instead, use a probe to step until the dataflow has caught up to the input:
 #                  .probe()
 #                  .0
 #         );
+#         let mut input = input.with_default_builder();
 for round in 0..10 {
     input.send(round);
     input.advance_to(round + 1);

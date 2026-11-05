@@ -26,6 +26,7 @@ fn gh_523() {
                 .probe()
                 .0
         });
+        let mut input = input.with_default_builder();
 
         for round in 0..2 {
             input.send(round);

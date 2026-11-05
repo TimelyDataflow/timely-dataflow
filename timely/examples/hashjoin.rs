@@ -69,6 +69,8 @@ fn main() {
                 .container::<Vec<_>>()
                 .probe_with(&probe);
         });
+        let mut input1 = input1.with_default_builder();
+        let mut input2 = input2.with_default_builder();
 
         // Generate roughly random data.
         use std::hash::{BuildHasher, BuildHasherDefault, DefaultHasher};

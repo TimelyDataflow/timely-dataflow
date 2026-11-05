@@ -35,6 +35,7 @@ fn main() {
             step.probe_with(&probe)
                 .connect_loop(loop_handle);
         });
+        let mut input = input.with_default_builder();
 
         let ns_per_request = 1_000_000_000 / rate;
         let mut insert_counter = index;           // counts up as we insert records.

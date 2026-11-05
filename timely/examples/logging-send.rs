@@ -98,6 +98,7 @@ fn main() {
                 .exchange(|&x| x as u64)
                 .probe_with(&probe);
         });
+        let mut input = input.with_default_builder();
 
         // Register user-level logging.
         type MyBuilder = CapacityContainerBuilder<Vec<(Duration, ())>>;
