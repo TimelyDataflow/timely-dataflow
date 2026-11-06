@@ -210,6 +210,7 @@ where
             activations,
             temp_active: BinaryHeap::new(),
             maybe_shutdown: Vec::new(),
+            maybe_shutdown_listed: vec![false; children.len()],
             children,
             input_messages: self.input_messages,
             output_capabilities: vec![MutableAntichain::new(); self.outputs],
@@ -254,6 +255,8 @@ where
     activations: Rc<RefCell<Activations>>,
     temp_active: BinaryHeap<Reverse<usize>>,
     maybe_shutdown: Vec<usize>,
+    // whether each child is in `maybe_shutdown`.
+    maybe_shutdown_listed: Vec<bool>,
 
     // shared state written to by the datapath, counting records entering this subgraph instance.
     input_messages: Vec<Rc<RefCell<ChangeBatch<TInner>>>>,
@@ -494,7 +497,10 @@ where
         // Drain propagated information into shared progress structure.
         let (pushed, operators) = self.pointstamp_tracker.pushed();
         for ((location, time), diff) in pushed.drain() {
-            self.maybe_shutdown.push(location.node);
+            if !self.maybe_shutdown_listed[location.node] {
+                self.maybe_shutdown_listed[location.node] = true;
+                self.maybe_shutdown.push(location.node);
+            }
             // Targets are actionable, sources are not.
             if let crate::progress::Port::Target(port) = location.port {
                 // Activate based on expressed frontier interest for this input.
@@ -515,9 +521,8 @@ where
         }
 
         // Consider scheduling each recipient of progress information to shut down.
-        self.maybe_shutdown.sort_unstable();
-        self.maybe_shutdown.dedup();
         for child_index in self.maybe_shutdown.drain(..) {
+            self.maybe_shutdown_listed[child_index] = false;
             let child_state = self.pointstamp_tracker.node_state(child_index);
             let frontiers_empty = child_state.targets.iter().all(|x| x.implications.is_empty());
             let no_capabilities = child_state.cap_counts == 0;
