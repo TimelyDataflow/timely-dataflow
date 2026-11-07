@@ -291,7 +291,11 @@ where
     #[inline]
     pub fn compact(&mut self) {
         if self.clean < self.updates.len() && self.updates.len() > 1 {
-            self.updates.sort_unstable_by(|x,y| x.0.cmp(&y.0));
+            // A stable sort, not `sort_unstable_by`: `updates[..clean]` is already sorted, and
+            // the stable sort finds that run and merges the new updates into it in linear time,
+            // where the unstable sort sorts the whole list again. It allocates scratch only past
+            // its stack buffer (4 KiB), so a small batch still allocates nothing.
+            self.updates.sort_by(|x,y| x.0.cmp(&y.0));
             for i in 0 .. self.updates.len() - 1 {
                 if self.updates[i].0 == self.updates[i+1].0 {
                     self.updates[i+1].1 += self.updates[i].1;
