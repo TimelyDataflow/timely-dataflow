@@ -7,6 +7,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.33.0](https://github.com/TimelyDataflow/timely-dataflow/compare/timely-v0.32.0...timely-v0.33.0) - 2026-11-08
+
+### Other
+
+- Log each operator's frontier interest with its summary ([#836](https://github.com/TimelyDataflow/timely-dataflow/pull/836))
+- inspect and inspect_stamped do not observe frontiers ([#834](https://github.com/TimelyDataflow/timely-dataflow/pull/834))
+
 ## [0.32.0](https://github.com/TimelyDataflow/timely-dataflow/compare/timely-v0.31.0...timely-v0.32.0) - 2026-11-04
 
 This release changes how messages are stamped, and it removes the notificator and the operators that read a time off a capability.
