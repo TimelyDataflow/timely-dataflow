@@ -683,6 +683,7 @@ impl<T: Timestamp> PerOperatorState<T> {
             l.log(crate::logging::OperatesSummaryEvent {
                 id: identifier,
                 summary: internal_summary.clone(),
+                notify: notify.clone(),
             })
         }
 
