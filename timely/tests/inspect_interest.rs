@@ -8,8 +8,8 @@ use timely::dataflow::operators::{Enter, Input, Inspect, Leave, Probe};
 use timely::logging::{TimelyEvent, TimelyEventBuilder, StartStop};
 
 /// Advances an input through `rounds` rounds without data, and returns how often the region
-/// between the input and the probe was scheduled. `frontier` selects `inspect_core` over `inspect`.
-fn region_schedules(frontier: bool, rounds: u64) -> usize {
+/// between the input and the probe was scheduled, when the region holds the inspect `which`.
+fn region_schedules(which: Which, rounds: u64) -> usize {
     timely::execute_directly(move |worker| {
         let names: Rc<RefCell<HashMap<usize, String>>> = Default::default();
         let starts: Rc<RefCell<HashMap<usize, usize>>> = Default::default();
@@ -28,7 +28,11 @@ fn region_schedules(frontier: bool, rounds: u64) -> usize {
             let (input, stream) = scope.new_input::<Vec<u64>>();
             let stream = scope.region(|inner| {
                 let stream = stream.enter(inner);
-                let stream = if frontier { stream.inspect_core(|_| {}) } else { stream.inspect(|_| {}) };
+                let stream = match which {
+                    Which::Core => stream.inspect_core(|_| {}),
+                    Which::Stamped => stream.inspect_stamped(|_, _| {}),
+                    Which::Records => stream.inspect(|_| {}),
+                };
                 stream.leave(scope)
             });
             (input, stream.probe().0)
@@ -48,11 +52,17 @@ fn region_schedules(frontier: bool, rounds: u64) -> usize {
     })
 }
 
+/// The inspect operator a region holds.
+#[derive(Clone, Copy)]
+enum Which { Core, Stamped, Records }
+
 #[test]
 fn inspect_lets_region_sleep() {
     let rounds = 100;
-    let sleepy = region_schedules(false, rounds);
-    let awake = region_schedules(true, rounds);
+    let awake = region_schedules(Which::Core, rounds);
     assert!(awake >= rounds as usize, "inspect_core should wake the region each round: {awake}");
-    assert!(sleepy < 10, "inspect should not wake the region as frontiers move: {sleepy}");
+    let stamped = region_schedules(Which::Stamped, rounds);
+    assert!(stamped < 10, "inspect_stamped should not wake the region as frontiers move: {stamped}");
+    let records = region_schedules(Which::Records, rounds);
+    assert!(records < 10, "inspect should not wake the region as frontiers move: {records}");
 }
