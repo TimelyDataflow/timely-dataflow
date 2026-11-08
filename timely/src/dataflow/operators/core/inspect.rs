@@ -16,6 +16,10 @@ pub trait Inspect<T: Timestamp, C>: Sized {
     /// a singleton unless an upstream operator has stamped its messages with several times, or
     /// with none.
     ///
+    /// To observe frontiers the operator is scheduled whenever its input frontier changes, and
+    /// so is any region that contains it. Prefer `inspect_stamped` or `inspect` when frontiers
+    /// are not needed.
+    ///
     /// # Examples
     /// ```
     /// use timely::dataflow::operators::{ToStream, Inspect};
@@ -33,7 +37,27 @@ pub trait Inspect<T: Timestamp, C>: Sized {
     /// ```
     fn inspect_core<F>(self, func: F) -> Self where F: FnMut(Result<(&Stamp<T>, &C), &[T]>)+'static;
 
+    /// Runs a supplied closure on each observed container and the stamp under which it travels.
+    ///
+    /// Unlike `inspect_core`, the operator does not observe frontiers, and is scheduled only
+    /// when containers arrive.
+    ///
+    /// # Examples
+    /// ```
+    /// use timely::dataflow::operators::{ToStream, Inspect};
+    ///
+    /// timely::example(|scope| {
+    ///     (0..10).to_stream(scope)
+    ///            .container::<Vec<_>>()
+    ///            .inspect_stamped(|stamp, data| println!("seen under {:?}: {:?} records", stamp, data.len()));
+    /// });
+    /// ```
+    fn inspect_stamped<F>(self, func: F) -> Self where F: FnMut(&Stamp<T>, &C)+'static;
+
     /// Runs a supplied closure on each observed record.
+    ///
+    /// Unlike `inspect_core`, the operator does not observe frontiers, and is scheduled only
+    /// when records arrive.
     ///
     /// # Examples
     /// ```
@@ -50,10 +74,8 @@ pub trait Inspect<T: Timestamp, C>: Sized {
         for<'a> &'a C: IntoIterator,
         F: for<'a> FnMut(<&'a C as IntoIterator>::Item) + 'static,
     {
-        self.inspect_core(move |event| {
-            if let Ok((_, data)) = event {
-                for datum in data.into_iter() { func(datum); }
-            }
+        self.inspect_stamped(move |_, data| {
+            for datum in data.into_iter() { func(datum); }
         })
     }
 }
@@ -72,6 +94,20 @@ impl<T: Timestamp, C: Container> Inspect<T, C> for Stream<'_, T, C> {
                 for data in data {
                     func(Ok((cap.stamp(), &*data)));
                     session.give_container(data);
+                }
+            });
+        })
+    }
+
+    fn inspect_stamped<F>(self, mut func: F) -> Self where F: FnMut(&Stamp<T>, &C)+'static {
+        // `unary` rather than `unary_frontier`: an operator that never reads its frontier
+        // need not be scheduled when it changes, which lets an enclosing region sleep too.
+        self.unary(Pipeline, "Inspect", move |_,_| move |input, output| {
+            input.for_each_stamp(|cap, data| {
+                let mut session = output.session(&cap);
+                for container in data {
+                    func(cap.stamp(), &*container);
+                    session.give_container(container);
                 }
             });
         })
