@@ -35,7 +35,7 @@
             const path_to_root = "../";
             const default_light_theme = "light";
             const default_dark_theme = "navy";
-            window.path_to_searchindex_js = "../searchindex-3a0ef304.js";
+            window.path_to_searchindex_js = "../searchindex-89d087a4.js";
         </script>
         <!-- Start loading toc.js asap -->
         <script src="../toc-3e2444f9.js"></script>
@@ -396,6 +396,7 @@ Inside the child scope, a <code>ChannelsEvent</code> with <code>source: (0, i)</
 <p>The <code>summary</code> field is a <code>Connectivity&lt;TS&gt;</code>, which is a <code>Vec&lt;PortConnectivity&lt;TS&gt;&gt;</code> indexed by input port. Each <code>PortConnectivity&lt;TS&gt;</code> maps output port indices to an <code>Antichain&lt;TS&gt;</code> of timestamp summaries. A summary <code>s</code> at position <code>(input_i, output_j)</code> means: “a record arriving at input <code>i</code> with timestamp <code>t</code> could produce a record at output <code>j</code> with timestamp <code>t.join(s)</code>.” If an <code>(input, output)</code> pair has no entry, the operator guarantees that input can never cause output at that port.</p>
 <p>For example, a <code>map</code> operator has one input and one output with an identity summary (timestamps pass through unchanged). An operator that delays output by one tick would have a summary that advances the timestamp. An operator with two inputs and one output (like <code>concat</code>) would report that both inputs connect to the single output with identity summaries.</p>
 <p>This information is essential for understanding the progress guarantees of a dataflow. If you are trying to understand why a particular timestamp is not yet “complete” at some point in the graph, the operator summaries tell you which paths could still produce data at that timestamp.</p>
+<p>The <code>notify</code> field has one <code>FrontierInterest</code> per input port: whether the operator asks to be scheduled when that input’s frontier changes (<code>Always</code>), only while it holds capabilities (<code>IfCapability</code>), or never (<code>Never</code>). A scope such as a region reports the strongest interest among its children, and at least <code>IfCapability</code>, so an <code>Always</code> child keeps its whole region scheduled as frontiers move. Joining <code>notify</code> with <code>OperatesEvent</code> names shows which operators those are.</p>
 <h2 id="additional-log-streams"><a class="header" href="#additional-log-streams">Additional Log Streams</a></h2>
 <p>Beyond the main <code>"timely"</code> stream, there are typed log streams for deeper introspection:</p>
 <div class="table-wrapper">
