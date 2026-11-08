@@ -493,7 +493,7 @@ where
 
         // Drain propagated information into shared progress structure.
         let (pushed, operators) = self.pointstamp_tracker.pushed();
-        for ((location, time), diff) in pushed.drain() {
+        for ((location, time), diff) in pushed.drain(..) {
             self.maybe_shutdown.push(location.node);
             // Targets are actionable, sources are not.
             if let crate::progress::Port::Target(port) = location.port {
