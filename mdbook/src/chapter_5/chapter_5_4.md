@@ -209,6 +209,8 @@ For example, a `map` operator has one input and one output with an identity summ
 
 This information is essential for understanding the progress guarantees of a dataflow. If you are trying to understand why a particular timestamp is not yet "complete" at some point in the graph, the operator summaries tell you which paths could still produce data at that timestamp.
 
+The `notify` field has one `FrontierInterest` per input port: whether the operator asks to be scheduled when that input's frontier changes (`Always`), only while it holds capabilities (`IfCapability`), or never (`Never`). A scope such as a region reports the strongest interest among its children, and at least `IfCapability`, so an `Always` child keeps its whole region scheduled as frontiers move. Joining `notify` with `OperatesEvent` names shows which operators those are.
+
 ## Additional Log Streams
 
 Beyond the main `"timely"` stream, there are typed log streams for deeper introspection:

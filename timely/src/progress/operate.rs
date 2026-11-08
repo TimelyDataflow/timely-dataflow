@@ -64,7 +64,7 @@ pub trait Operate<T: Timestamp> {
 }
 
 /// The ways in which an operator can express interest in activation when an input frontier changes.
-#[derive(Ord, PartialOrd, Eq, PartialEq, Copy, Clone, Debug)]
+#[derive(serde::Serialize, serde::Deserialize, columnar::Columnar, Ord, PartialOrd, Eq, PartialEq, Copy, Clone, Debug)]
 pub enum FrontierInterest {
     /// Never interested in frontier changes, as for example the `map()` and `filter()` operators.
     Never,

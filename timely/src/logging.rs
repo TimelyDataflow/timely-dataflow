@@ -22,7 +22,7 @@ use serde::{Deserialize, Serialize};
 use crate::Container;
 use crate::container::CapacityContainerBuilder;
 use crate::dataflow::operators::capture::{Event, EventPusher};
-use crate::progress::operate::Connectivity;
+use crate::progress::operate::{Connectivity, FrontierInterest};
 
 /// Logs events as a timely stream, with progress statements.
 pub struct BatchLogger<P, C> where P: EventPusher<Duration, C> {
@@ -78,6 +78,8 @@ pub struct OperatesSummaryEvent<TS> {
     pub id: usize,
     /// Timestamp action summaries for (input, output) pairs.
     pub summary: Connectivity<TS>,
+    /// Per input, when the operator asks to be scheduled as that input's frontier changes.
+    pub notify: Vec<FrontierInterest>,
 }
 
 #[derive(Serialize, Deserialize, Columnar, Debug, Clone, Hash, Eq, PartialEq, Ord, PartialOrd)]
