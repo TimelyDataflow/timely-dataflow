@@ -16,6 +16,9 @@ pub trait Inspect<T: Timestamp, C>: Sized {
     /// a singleton unless an upstream operator has stamped its messages with several times, or
     /// with none.
     ///
+    /// To observe frontiers the operator is scheduled whenever its input frontier changes, and
+    /// so is any region that contains it. Prefer `inspect` when frontiers are not needed.
+    ///
     /// # Examples
     /// ```
     /// use timely::dataflow::operators::{ToStream, Inspect};
@@ -35,6 +38,9 @@ pub trait Inspect<T: Timestamp, C>: Sized {
 
     /// Runs a supplied closure on each observed record.
     ///
+    /// Unlike `inspect_core`, the operator does not observe frontiers, and is scheduled only
+    /// when records arrive.
+    ///
     /// # Examples
     /// ```
     /// use timely::dataflow::operators::{ToStream, Inspect};
@@ -45,17 +51,10 @@ pub trait Inspect<T: Timestamp, C>: Sized {
     ///            .inspect(|x| println!("seen: {:?}", x));
     /// });
     /// ```
-    fn inspect<F>(self, mut func: F) -> Self
+    fn inspect<F>(self, func: F) -> Self
     where
         for<'a> &'a C: IntoIterator,
-        F: for<'a> FnMut(<&'a C as IntoIterator>::Item) + 'static,
-    {
-        self.inspect_core(move |event| {
-            if let Ok((_, data)) = event {
-                for datum in data.into_iter() { func(datum); }
-            }
-        })
-    }
+        F: for<'a> FnMut(<&'a C as IntoIterator>::Item) + 'static;
 }
 
 impl<T: Timestamp, C: Container> Inspect<T, C> for Stream<'_, T, C> {
@@ -72,6 +71,24 @@ impl<T: Timestamp, C: Container> Inspect<T, C> for Stream<'_, T, C> {
                 for data in data {
                     func(Ok((cap.stamp(), &*data)));
                     session.give_container(data);
+                }
+            });
+        })
+    }
+
+    fn inspect<F>(self, mut func: F) -> Self
+    where
+        for<'a> &'a C: IntoIterator,
+        F: for<'a> FnMut(<&'a C as IntoIterator>::Item) + 'static,
+    {
+        // `unary` rather than `unary_frontier`: an operator that never reads its frontier
+        // need not be scheduled when it changes, which lets an enclosing region sleep too.
+        self.unary(Pipeline, "Inspect", move |_,_| move |input, output| {
+            input.for_each_stamp(|cap, data| {
+                let mut session = output.session(&cap);
+                for container in data {
+                    for datum in (&*container).into_iter() { func(datum); }
+                    session.give_container(container);
                 }
             });
         })
