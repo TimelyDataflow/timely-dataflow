@@ -71,6 +71,8 @@ pub enum FrontierInterest {
     /// Never interested in frontier changes, as for example the `map()` and `filter()` operators.
     Never,
     /// Interested when a frontier change removes an element less or equal to a held capability.
+    /// Held capabilities are those of this worker's instance of the operator, not those of its
+    /// instances on other workers.
     ///
     /// Such a change is the only kind that can complete the time of a held capability, or a time
     /// greater than one. The operator is not woken for changes entirely above its capabilities,

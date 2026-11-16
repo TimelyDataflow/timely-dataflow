@@ -501,12 +501,18 @@ where
             // Targets are actionable, sources are not.
             if let crate::progress::Port::Target(port) = location.port {
                 // Activate based on expressed frontier interest for this input.
-                let activate = match self.children[location.node].notify[port] {
+                let child = &mut self.children[location.node];
+                let activate = match child.notify[port] {
                     FrontierInterest::Always => true,
                     FrontierInterest::IfCapability => { operators[location.node].cap_counts > 0 }
+                    // Judged against the capabilities this worker's instance holds. The tracker's
+                    // pointstamps sum all workers and trail this worker's own downgrades, so a
+                    // capability held here can sit above every element they show; the other
+                    // workers' downgrades arrive later as capability changes, which change no
+                    // frontier and so would not revisit a missed wake.
                     FrontierInterest::UpToCapability => {
-                        diff < 0 && operators[location.node].sources.iter().any(|source| {
-                            source.pointstamps.frontier().iter().any(|cap| time.less_equal(cap))
+                        diff < 0 && child.local_caps.as_mut().is_some_and(|caps| {
+                            caps.iter().any(|(cap, count)| *count > 0 && time.less_equal(cap))
                         })
                     }
                     FrontierInterest::Never => false,
@@ -645,6 +651,10 @@ struct PerOperatorState<T: Timestamp> {
 
     shared_progress: Rc<RefCell<SharedProgress<T>>>,
 
+    /// Capabilities this worker's instance holds, summed over its outputs and accumulated from its
+    /// internals. Kept only for operators with an `UpToCapability` input.
+    local_caps: Option<ChangeBatch<T>>,
+
     internal_summary: Connectivity<T::Summary>,   // from initialize; moved into the reachability builder.
 
     logging: Option<Logger>,
@@ -668,6 +678,7 @@ impl<T: Timestamp> PerOperatorState<T> {
             logging: None,
 
             shared_progress: Rc::new(RefCell::new(SharedProgress::new(inputs,outputs))),
+            local_caps: Some(ChangeBatch::new()),
             internal_summary: Vec::new(),
         }
     }
@@ -684,6 +695,8 @@ impl<T: Timestamp> PerOperatorState<T> {
         let inputs = scope.inputs();
         let outputs = scope.outputs();
         let notify = scope.notify_me().to_vec();
+
+        let local_caps = notify.contains(&FrontierInterest::UpToCapability).then(ChangeBatch::new);
 
         let (internal_summary, shared_progress, operator) = scope.initialize();
 
@@ -721,6 +734,7 @@ impl<T: Timestamp> PerOperatorState<T> {
             logging,
 
             shared_progress,
+            local_caps,
             internal_summary,
         }
     }
@@ -783,7 +797,7 @@ impl<T: Timestamp> PerOperatorState<T> {
     /// `outer_pushed` holds the enclosing scope's own output marks: a marked output wired to the
     /// scope's outputs (node zero) marks them in turn, so that records leaving nested scopes
     /// reach their recipients in the same pass however many scope boundaries they cross.
-    fn extract_progress(&self, pointstamps: &mut ChangeBatch<(Location, T)>, temp_active: &mut BinaryHeap<Reverse<usize>>, outer_pushed: &mut [bool]) {
+    fn extract_progress(&mut self, pointstamps: &mut ChangeBatch<(Location, T)>, temp_active: &mut BinaryHeap<Reverse<usize>>, outer_pushed: &mut [bool]) {
 
         let shared_progress = &mut *self.shared_progress.borrow_mut();
 
@@ -797,6 +811,7 @@ impl<T: Timestamp> PerOperatorState<T> {
         for (output, internal) in shared_progress.internals.iter_mut().enumerate() {
             let source = Location::new_source(self.index, output);
             for (time, delta) in internal.drain() {
+                if let Some(caps) = self.local_caps.as_mut() { caps.update(time.clone(), delta); }
                 pointstamps.update((source, time), delta);
             }
         }
