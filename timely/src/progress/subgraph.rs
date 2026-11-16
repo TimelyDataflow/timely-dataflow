@@ -194,6 +194,9 @@ where
         activations.borrow_mut().activate(&self.path[..]);
 
         // The subgraph's per-input interest is conservatively the max across all children's inputs.
+        // A child's `UpToCapability` interest is covered by the subgraph's own: path summaries do not
+        // decrease times, so a frontier change at or below a child's capability starts from a removed
+        // scope-input element at or below that capability's image at the scope outputs.
         let max_interest = children.iter()
             .flat_map(|c| c.notify.iter().copied())
             .max()
@@ -501,6 +504,11 @@ where
                 let activate = match self.children[location.node].notify[port] {
                     FrontierInterest::Always => true,
                     FrontierInterest::IfCapability => { operators[location.node].cap_counts > 0 }
+                    FrontierInterest::UpToCapability => {
+                        diff < 0 && operators[location.node].sources.iter().any(|source| {
+                            source.pointstamps.frontier().iter().any(|cap| time.less_equal(cap))
+                        })
+                    }
                     FrontierInterest::Never => false,
                 };
                 if activate { self.temp_active.push(Reverse(location.node)); }
@@ -651,7 +659,7 @@ impl<T: Timestamp> PerOperatorState<T> {
             index:      0,
             id:         usize::MAX,
             local:      false,
-            notify:     vec![FrontierInterest::IfCapability; inputs],
+            notify:     vec![FrontierInterest::UpToCapability; inputs],
             inputs,
             outputs,
 
