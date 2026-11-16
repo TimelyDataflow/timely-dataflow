@@ -54,8 +54,8 @@ fn interests(frontier: bool) -> Vec<(String, Vec<FrontierInterest>)> {
 fn summaries_report_frontier_interest() {
     let quiet = interests(false);
     assert!(quiet.contains(&("FlatMap".to_string(), vec![FrontierInterest::Never])), "{quiet:?}");
-    // A region is at least `IfCapability`: it may hold capabilities for messages it has yet to acknowledge.
-    assert!(quiet.contains(&("Region".to_string(), vec![FrontierInterest::IfCapability])), "{quiet:?}");
+    // A region is at least `UpToCapability`: it may hold capabilities for messages it has yet to acknowledge.
+    assert!(quiet.contains(&("Region".to_string(), vec![FrontierInterest::UpToCapability])), "{quiet:?}");
     let awake = interests(true);
     assert!(awake.contains(&("Inspect".to_string(), vec![FrontierInterest::Always])), "{awake:?}");
     assert!(awake.contains(&("Region".to_string(), vec![FrontierInterest::Always])), "{awake:?}");

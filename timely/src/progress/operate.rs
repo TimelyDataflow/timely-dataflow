@@ -64,11 +64,24 @@ pub trait Operate<T: Timestamp> {
 }
 
 /// The ways in which an operator can express interest in activation when an input frontier changes.
+///
+/// Variants are ordered from least to most interested.
 #[derive(serde::Serialize, serde::Deserialize, columnar::Columnar, Ord, PartialOrd, Eq, PartialEq, Copy, Clone, Debug)]
 pub enum FrontierInterest {
     /// Never interested in frontier changes, as for example the `map()` and `filter()` operators.
     Never,
-    /// Interested when the operator holds capabilities.
+    /// Interested when a frontier change removes an element less or equal to a held capability.
+    /// Held capabilities are those of this worker's instance of the operator, not those of its
+    /// instances on other workers.
+    ///
+    /// Such a change is the only kind that can complete the time of a held capability, or a time
+    /// greater than one. The operator is not woken for changes entirely above its capabilities,
+    /// which includes all changes once the frontier has passed every capability it holds.
+    /// Any time the operator waits on must be greater or equal to a held capability that the
+    /// frontier has not yet passed; a capability the frontier has passed does not keep the
+    /// operator awake for later times.
+    UpToCapability,
+    /// Interested in any frontier change while the operator holds capabilities.
     IfCapability,
     /// Always interested in frontier changes, as for example the `probe()` and `capture()` operators.
     Always,
