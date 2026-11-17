@@ -122,6 +122,22 @@ mod implementations {
     use serde::{Serialize, Deserialize};
     use crate::dataflow::channels::ContainerBytes;
 
+    // The columnar container (`timely_container::Column`) serializes to and borrows
+    // from its own aligned byte representation; received bytes are borrowed in place
+    // rather than deserialized. The container traits live in `timely_container`; the
+    // wire encoding is this crate's `ContainerBytes` trait, so it is implemented here.
+    impl<C: columnar::ContainerBytes> ContainerBytes for crate::container::Column<C> {
+        fn from_bytes(bytes: crate::bytes::arc::Bytes) -> Self {
+            columnar::bytes::stash::Stash::try_from_bytes(bytes).expect("invalid columnar data")
+        }
+        fn length_in_bytes(&self) -> usize {
+            columnar::bytes::stash::Stash::length_in_bytes(self)
+        }
+        fn into_bytes<W: Write>(&self, writer: &mut W) {
+            columnar::bytes::stash::Stash::write_bytes(self, writer).expect("write failed")
+        }
+    }
+
     impl<T: Serialize + for<'a> Deserialize<'a>> ContainerBytes for Vec<T> {
         fn from_bytes(bytes: crate::bytes::arc::Bytes) -> Self {
             ::bincode::deserialize(&bytes[..]).expect("bincode::deserialize() failed")
