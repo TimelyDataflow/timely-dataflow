@@ -20,6 +20,7 @@ The first thing to understand about timely dataflow is that *we are programming 
 #                  .probe()
 #                  .0
 #         );
+#         let mut input = input.with_default_builder();
 for round in 0..10 {
     input.send(round);
     input.advance_to(round + 1);

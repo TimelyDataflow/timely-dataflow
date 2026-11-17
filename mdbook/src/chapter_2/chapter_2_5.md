@@ -55,6 +55,7 @@ fn main() {
                  .inspect(|x| println!("seen: {:?}", x))
                  .probe_with(&mut probe);
         });
+        let mut input = input.with_default_builder();
 
         // feed the dataflow with data.
         for round in 0..10 {
@@ -97,6 +98,7 @@ The next step is to build a timely dataflow. Here we use `input` as a source of 
                  .inspect(|x| println!("seen: {:?}", x))
                  .probe_with(&mut probe);
         });
+#         let mut input = input.with_default_builder();
 #         input.send(("round".to_owned(), 1i64));
 #     }).unwrap();
 # }
@@ -104,7 +106,7 @@ The next step is to build a timely dataflow. Here we use `input` as a source of 
 
 This computation is pretty simple: it just prints out the inputs we send at it.
 
-Having constructed the dataflow, we feed it some data.
+Having constructed the dataflow, we add the default container builder with `let mut input = input.with_default_builder();` and feed it some data.
 
 ```rust
 # extern crate timely;
@@ -120,6 +122,7 @@ Having constructed the dataflow, we feed it some data.
 #                  .inspect(|x| println!("seen: {:?}", x))
 #                  .probe_with(&mut probe);
 #         });
+#         let mut input = input.with_default_builder();
         // feed the dataflow with data.
         for round in 0..10 {
             input.send(("round".to_owned(), 1));
@@ -167,6 +170,7 @@ Rather than repeat all the code up above, I'm just going to show you the fragmen
 #                  .inspect(|x| println!("seen: {:?}", x))
 #                  .probe_with(&mut probe);
 #         });
+#         let mut input = input.with_default_builder();
 #
 #         // feed the dataflow with data.
 #         for round in 0..10 {
@@ -273,6 +277,7 @@ As before, I'm just going to show you the new code, which now lives just after `
 #                  .inspect(|x| println!("seen: {:?}", x))
 #                  .probe_with(&mut probe);
 #         });
+#         let mut input = input.with_default_builder();
 #
 #         // feed the dataflow with data.
 #         for round in 0..10 {

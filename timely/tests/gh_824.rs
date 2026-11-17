@@ -16,6 +16,7 @@ fn gh_824() {
                 .probe()
                 .0
         });
+        let mut input = input.with_default_builder();
 
         if worker.index() == 0 {
             input.advance_to(1);

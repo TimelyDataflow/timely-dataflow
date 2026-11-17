@@ -31,6 +31,7 @@
 //!     // add an input and base computation off of it
 //!     let mut input = worker.dataflow(|scope| {
 //!         let (input, stream) = scope.new_input::<Vec<_>>();
+//!         let input = input.with_default_builder();
 //!         stream.inspect(|x| println!("hello {:?}", x));
 //!         input
 //!     });

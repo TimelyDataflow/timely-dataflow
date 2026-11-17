@@ -25,6 +25,7 @@ timely::execute_from_args(std::env::args(), |worker| {
              .probe()
              .0
     );
+    let mut input = input.with_default_builder();
 
     // introduce data and watch!
     for round in 0..10 {

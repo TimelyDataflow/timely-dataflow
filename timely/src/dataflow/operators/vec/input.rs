@@ -4,6 +4,7 @@ use crate::container::CapacityContainerBuilder;
 use crate::progress::Timestamp;
 use crate::dataflow::{StreamVec, Scope};
 use crate::dataflow::operators::core::{Input as InputCore};
+use crate::dataflow::operators::core::input::Handle as ContainerHandle;
 
 // TODO : This is an exogenous input, but it would be nice to wrap a Subgraph in something
 // TODO : more like a harness, with direct access to its inputs.
@@ -38,6 +39,7 @@ pub trait Input<'scope> {
     ///     // add an input and base computation off of it
     ///     let mut input = worker.dataflow(|scope| {
     ///         let (input, stream) = scope.new_input::<Vec<_>>();
+    ///         let input = input.with_default_builder();
     ///         stream.inspect(|x| println!("hello {:?}", x));
     ///         input
     ///     });
@@ -74,6 +76,7 @@ pub trait Input<'scope> {
     ///              .container::<Vec<_>>()
     ///              .inspect(|x| println!("hello {:?}", x));
     ///     });
+    ///     let mut input = input.with_default_builder();
     ///
     ///     // introduce input, advance computation
     ///     for round in 0..10 {
@@ -83,20 +86,21 @@ pub trait Input<'scope> {
     ///     }
     /// });
     /// ```
-    fn input_from<D: Clone+'static>(&self, handle: &mut Handle<Self::Timestamp, D>) -> StreamVec<'scope, Self::Timestamp, D>;
+    fn input_from<D: Clone+'static>(&self, handle: &mut ContainerHandle<Self::Timestamp, Vec<D>>) -> StreamVec<'scope, Self::Timestamp, D>;
 }
 
 use crate::order::TotalOrder;
 impl<'scope, T: Timestamp + TotalOrder> Input<'scope> for Scope<'scope, T> {
     type Timestamp = T;
     fn new_input<D: Clone+'static>(&self) -> (Handle<T, D>, StreamVec<'scope, T, D>) {
-        InputCore::new_input(self)
+        let (handle, stream) = InputCore::new_input(self);
+        (handle.with_default_builder(), stream)
     }
 
-    fn input_from<D: Clone+'static>(&self, handle: &mut Handle<T, D>) -> StreamVec<'scope, T, D> {
+    fn input_from<D: Clone+'static>(&self, handle: &mut ContainerHandle<T, Vec<D>>) -> StreamVec<'scope, T, D> {
         InputCore::input_from(self, handle)
     }
 }
 
 /// A handle to an input `StreamVec`, used to introduce data to a timely dataflow computation.
-pub type Handle<T, D> = crate::dataflow::operators::core::input::Handle<T, CapacityContainerBuilder<Vec<D>>>;
+pub type Handle<T, D> = crate::dataflow::operators::core::input::BufferedHandle<T, CapacityContainerBuilder<Vec<D>>>;

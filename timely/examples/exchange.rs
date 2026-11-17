@@ -18,6 +18,7 @@ fn main() {
                 .probe()
                 .0
         );
+        let mut input = input.with_default_builder();
 
 
         let timer = std::time::Instant::now();

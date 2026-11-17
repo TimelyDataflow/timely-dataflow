@@ -154,6 +154,7 @@ fn main() {
                 .connect_loop(handle);
 
         });
+        let mut input = input.with_default_builder();
 
         let nodes: usize = std::env::args().nth(1).unwrap().parse().unwrap();
         let edges: usize = std::env::args().nth(2).unwrap().parse().unwrap();
