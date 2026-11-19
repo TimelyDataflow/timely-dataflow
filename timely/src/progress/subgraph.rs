@@ -493,30 +493,32 @@ where
 
         // Drain propagated information into shared progress structure.
         let (pushed, operators) = self.pointstamp_tracker.pushed();
-        for ((location, time), diff) in pushed.drain() {
-            self.maybe_shutdown.push(location.node);
-            // Targets are actionable, sources are not.
-            if let crate::progress::Port::Target(port) = location.port {
-                // Activate based on expressed frontier interest for this input.
-                let activate = match self.children[location.node].notify[port] {
-                    FrontierInterest::Always => true,
-                    FrontierInterest::IfCapability => { operators[location.node].cap_counts > 0 }
-                    FrontierInterest::Never => false,
-                };
-                if activate { self.temp_active.push(Reverse(location.node)); }
+        while let Some((node, changes)) = pushed.pop() {
+            let child = &self.children[node];
+            // Changes that cancelled leave nothing to report, and no reason to revisit the operator.
+            if !changes.is_empty() { self.maybe_shutdown.push(node); }
+            for ((port, time), diff) in changes.drain() {
+                // Targets are actionable, sources are not.
+                if let crate::progress::Port::Target(port) = port {
+                    // Activate based on expressed frontier interest for this input.
+                    let activate = match child.notify[port] {
+                        FrontierInterest::Always => true,
+                        FrontierInterest::IfCapability => { operators[node].cap_counts > 0 }
+                        FrontierInterest::Never => false,
+                    };
+                    if activate { self.temp_active.push(Reverse(node)); }
 
-                // Keep this current independent of the interest.
-                self.children[location.node]
-                    .shared_progress
-                    .borrow_mut()
-                    .frontiers[port]
-                    .update(time, diff);
+                    // Keep this current independent of the interest.
+                    child
+                        .shared_progress
+                        .borrow_mut()
+                        .frontiers[port]
+                        .update(time, diff);
+                }
             }
         }
 
         // Consider scheduling each recipient of progress information to shut down.
-        self.maybe_shutdown.sort_unstable();
-        self.maybe_shutdown.dedup();
         for child_index in self.maybe_shutdown.drain(..) {
             let child_state = self.pointstamp_tracker.node_state(child_index);
             let frontiers_empty = child_state.targets.iter().all(|x| x.implications.is_empty());
