@@ -35,13 +35,14 @@
 //! // Propagate changes; until this call updates are simply buffered.
 //! tracker.propagate_all();
 //!
-//! let mut results =
-//! tracker
-//!     .pushed()
-//!     .0
-//!     .drain()
-//!     .filter(|((location, time), delta)| location.is_target())
-//!     .collect::<Vec<_>>();
+//! let mut results = Vec::new();
+//! let (pushed, _) = tracker.pushed();
+//! while let Some((node, changes)) = pushed.pop() {
+//!     for ((port, time), delta) in changes.drain() {
+//!         let location = Location { node, port };
+//!         if location.is_target() { results.push(((location, time), delta)); }
+//!     }
+//! }
 //!
 //! results.sort();
 //!
@@ -58,13 +59,14 @@
 //! // Propagate changes; until this call updates are simply buffered.
 //! tracker.propagate_all();
 //!
-//! let mut results =
-//! tracker
-//!     .pushed()
-//!     .0
-//!     .drain()
-//!     .filter(|((location, time), delta)| location.is_target())
-//!     .collect::<Vec<_>>();
+//! let mut results = Vec::new();
+//! let (pushed, _) = tracker.pushed();
+//! while let Some((node, changes)) = pushed.pop() {
+//!     for ((port, time), delta) in changes.drain() {
+//!         let location = Location { node, port };
+//!         if location.is_target() { results.push(((location, time), delta)); }
+//!     }
+//! }
 //!
 //! results.sort();
 //!
@@ -417,7 +419,7 @@ pub struct Tracker<T:Timestamp> {
     worklist: BinaryHeap<Reverse<(T, Location, i64)>>,
 
     /// Buffer of consequent changes.
-    pushed_changes: ChangeBatch<(Location, T)>,
+    pushed_changes: PushedChanges<T>,
 
     /// Compiled summaries from each internal location (not scope inputs) to each scope output.
     output_changes: Vec<ChangeBatch<T>>,
@@ -432,6 +434,44 @@ pub struct Tracker<T:Timestamp> {
 
     /// Optionally, a unique logging identifier and logging for tracking events.
     logger: Option<logging::TrackerLogger<T>>,
+}
+
+/// Changes to the frontiers at operator ports, grouped by operator.
+pub struct PushedChanges<T> {
+    /// Changes for each operator, by port and time.
+    changes: Vec<ChangeBatch<(Port, T)>>,
+    /// Operators that have received changes since they were last popped, each listed once.
+    pending: Vec<usize>,
+    /// For each operator, whether it is present in `pending`.
+    is_pending: Vec<bool>,
+}
+
+impl<T: Ord> PushedChanges<T> {
+    fn new(nodes: usize) -> Self {
+        Self {
+            changes: (0..nodes).map(|_| ChangeBatch::new()).collect(),
+            pending: Vec::new(),
+            is_pending: vec![false; nodes],
+        }
+    }
+
+    fn update(&mut self, location: Location, time: T, diff: i64) {
+        if !self.is_pending[location.node] {
+            self.is_pending[location.node] = true;
+            self.pending.push(location.node);
+        }
+        self.changes[location.node].update((location.port, time), diff);
+    }
+
+    /// Removes an operator with changes, and returns it with its changes.
+    ///
+    /// The changes are consolidated, and may be empty if they cancelled. Changes that are
+    /// not drained remain, and are presented again with the next changes for the operator.
+    pub fn pop(&mut self) -> Option<(usize, &mut ChangeBatch<(Port, T)>)> {
+        let node = self.pending.pop()?;
+        self.is_pending[node] = false;
+        Some((node, &mut self.changes[node]))
+    }
 }
 
 /// Target and source information for each operator.
@@ -610,6 +650,8 @@ impl<T:Timestamp> Tracker<T> {
         let scope_outputs = builder.shape[0].0;
         let output_changes = vec![ChangeBatch::new(); scope_outputs];
 
+        let pushed_changes = PushedChanges::new(per_operator.len());
+
         let tracker =
         Tracker {
             nodes,
@@ -620,7 +662,7 @@ impl<T:Timestamp> Tracker<T> {
             target_changes: ChangeBatch::new(),
             source_changes: ChangeBatch::new(),
             worklist: BinaryHeap::new(),
-            pushed_changes: ChangeBatch::new(),
+            pushed_changes,
             output_changes,
             total_counts: 0,
             logger,
@@ -734,7 +776,7 @@ impl<T:Timestamp> Tracker<T> {
                                     self.worklist.push(Reverse((new_time, source, diff)));
                                 }
                             }
-                            self.pushed_changes.update((location, time), diff);
+                            self.pushed_changes.update(location, time, diff);
                         }
                     }
                     // Update to an operator output.
@@ -755,7 +797,7 @@ impl<T:Timestamp> Tracker<T> {
                                     diff,
                                 )));
                             }
-                            self.pushed_changes.update((location, time), diff);
+                            self.pushed_changes.update(location, time, diff);
                         }
                     },
                 };
@@ -769,7 +811,7 @@ impl<T:Timestamp> Tracker<T> {
     }
 
     /// A mutable reference to the pushed results of changes.
-    pub fn pushed(&mut self) -> (&mut ChangeBatch<(Location, T)>, &[PerOperator<T>]) {
+    pub fn pushed(&mut self) -> (&mut PushedChanges<T>, &[PerOperator<T>]) {
         (&mut self.pushed_changes, &self.per_operator)
     }
 
